@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Палитра — WEB order management</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 24px;
+      max-width: 900px;
+    }
+    h1 { font-size: 1.25rem; margin-bottom: 8px; }
+    p { color: #5c5c5c; margin-top: 0; }
+    section { margin-bottom: 28px; }
+    h2 { font-size: 1rem; margin-bottom: 12px; }
+    .grid { display: flex; flex-wrap: wrap; gap: 16px; }
+    .swatch { text-align: center; width: 120px; }
+    .box {
+      width: 72px;
+      height: 72px;
+      border-radius: 10px;
+      margin: 0 auto 8px;
+      border: 1px solid #ccc;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .name { font-size: 12px; font-weight: 600; }
+    .hex { font-size: 11px; color: #5c5c5c; font-family: monospace; }
+    .demo-header {
+      background: #296b7a;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .demo-btn-red {
+      display: inline-block;
+      background: #ff1a26;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+    .demo-success {
+      background: #e8ffe8;
+      border: 1px solid #40ff40;
+      border-left: 4px solid #40ff40;
+      color: #1a8f1a;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+    .demo-error {
+      background: #ffe8e9;
+      border: 1px solid #ff1a26;
+      border-left: 4px solid #ff1a26;
+      color: #ff1a26;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Палитра — WEB order management</h1>
+  <p>CMYK → HEX. Используется в <code>src/order-management-web/src/index.css</code>.</p>
+
+  <div class="demo-header">Учёт заказов — шапка (бирюза)</div>
+  <span class="demo-btn-red">+ Новый товар</span>
+  <div class="demo-success">Успех: товар сохранён, статус «Активен»</div>
+  <div class="demo-error">Ошибка: не удалось сохранить</div>
+
+  <section>
+    <h2>Основные цвета</h2>
+    <div class="grid">
+      <div class="swatch"><div class="box" style="background:#CCCCCC"></div><div class="name">Серый K20</div><div class="hex">#CCCCCC</div></div>
+      <div class="swatch"><div class="box" style="background:#296B7A"></div><div class="name">Бирюза</div><div class="hex">#296B7A</div></div>
+      <div class="swatch"><div class="box" style="background:#40FF40"></div><div class="name">Успех</div><div class="hex">#40FF40</div></div>
+      <div class="swatch"><div class="box" style="background:#FF1A26"></div><div class="name">Ошибка / акцент</div><div class="hex">#FF1A26</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Применение в UI</h2>
+    <ul style="line-height:1.7;color:#333">
+      <li><strong>Бирюза</strong> — шапка, кнопки «Сохранить», вкладки, ссылки, импорт, подсказки типов</li>
+      <li><strong>Красный</strong> — «+ Новый товар», активный пункт меню (полоска), вкладка карточки, предупреждения, ошибки</li>
+      <li><strong>Ярко-зелёный</strong> — успешные сообщения, маркер «Активен», галочка «Товар активен»</li>
+      <li><strong>Серый</strong> — границы полей и таблиц</li>
+    </ul>
+  </section>
+</body>
+</html>

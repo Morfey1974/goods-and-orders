@@ -1,0 +1,134 @@
+.documents-page .documents-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.documents-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2.5rem;
+  align-items: flex-end;
+}
+
+.documents-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.documents-summary-item .label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.documents-summary-item .value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.documents-summary-item.receivable .value {
+  color: #d97706;
+}
+
+.documents-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.documents-toolbar input,
+.documents-toolbar select {
+  min-width: 120px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.documents-create-wrap {
+  position: relative;
+}
+
+.documents-create-menu {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 0;
+  z-index: 20;
+  min-width: 280px;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.documents-create-menu h3 {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.documents-create-menu button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 0.55rem 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.documents-create-menu button:hover {
+  background: #e8f4fa;
+}
+
+.documents-month-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text);
+}
+
+.documents-table .doc-number-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.doc-badge {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.doc-badge-draft { background: #f1f5f9; color: #64748b; }
+.doc-badge-sent { background: #dbeafe; color: #3b82f6; }
+.doc-badge-open { background: #ffedd5; color: #ea580c; }
+.doc-badge-paid { background: #d1fae5; color: #059669; }
+.doc-badge-closed { background: #ccfbf1; color: #0d9488; }
+.doc-badge-cancelled { background: #fee2e2; color: #dc2626; }
+
+.doc-type-quote { color: #0e7490; }
+.doc-type-charge { color: #6366f1; }
+.doc-type-receipt { color: #047857; }
+.doc-type-order { color: #475569; }
+
+.doc-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}

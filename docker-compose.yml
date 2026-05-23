@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ordermgmt-db
+    environment:
+      POSTGRES_USER: ordermgmt
+      POSTGRES_PASSWORD: ordermgmt_dev
+      POSTGRES_DB: ordermgmt
+    ports:
+      - "5432:5432"
+    volumes:
+      - ordermgmt_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ordermgmt -d ordermgmt"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: src/OrderManagement.Api/Dockerfile
+    container_name: ordermgmt-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=ordermgmt;Username=ordermgmt;Password=ordermgmt_dev
+      Jwt__Secret: ${JWT_SECRET:-DEV_ONLY_CHANGE_IN_PRODUCTION_MIN_32_CHARACTERS_LONG}
+      Subscription__EnforcementEnabled: ${SUBSCRIPTION_ENFORCEMENT:-false}
+      Subscription__TrialDays: 30
+      Cors__Origins__0: http://localhost:5173
+      Cors__Origins__1: http://localhost:3000
+      Uploads__Path: /app/uploads
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ordermgmt_uploads:/app/uploads
+
+volumes:
+  ordermgmt_pgdata:
+  ordermgmt_uploads:
