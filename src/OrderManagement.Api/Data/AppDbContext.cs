@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<BusinessDocument> BusinessDocuments => Set<BusinessDocument>();
     public DbSet<BusinessDocumentLine> BusinessDocumentLines => Set<BusinessDocumentLine>();
+    public DbSet<TenantComplianceDocument> TenantComplianceDocuments => Set<TenantComplianceDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,10 +26,41 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.BusinessName).HasMaxLength(256);
+            e.Property(x => x.BusinessNickname).HasMaxLength(64);
+            e.Property(x => x.BusinessCategory).HasMaxLength(128);
             e.Property(x => x.OwnerFullName).HasMaxLength(256);
             e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.Phone).HasMaxLength(64);
+            e.Property(x => x.MobilePhone).HasMaxLength(64);
+            e.Property(x => x.Fax).HasMaxLength(64);
+            e.Property(x => x.City).HasMaxLength(128);
+            e.Property(x => x.ZipCode).HasMaxLength(16);
+            e.Property(x => x.Website).HasMaxLength(256);
+            e.Property(x => x.BusinessField).HasMaxLength(128);
+            e.Property(x => x.BankCode).HasMaxLength(8);
+            e.Property(x => x.BankName).HasMaxLength(128);
+            e.Property(x => x.BankBranch).HasMaxLength(32);
+            e.Property(x => x.BankAccountNumber).HasMaxLength(32);
+            e.Property(x => x.BankSwift).HasMaxLength(32);
+            e.Property(x => x.BankAba).HasMaxLength(32);
+            e.Property(x => x.BankIban).HasMaxLength(64);
             e.Property(x => x.DefaultLanguage).HasMaxLength(8);
+            e.Property(x => x.LogoPath).HasMaxLength(512);
+            e.Property(x => x.SignaturePath).HasMaxLength(512);
             e.HasIndex(x => x.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<TenantComplianceDocument>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FilePath).HasMaxLength(512);
+            e.Property(x => x.OriginalFileName).HasMaxLength(256);
+            e.Property(x => x.ContentType).HasMaxLength(128);
+            e.HasIndex(x => new { x.TenantId, x.Kind }).IsUnique();
+            e.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<User>(e =>

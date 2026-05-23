@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
-import { catalogApi } from '../api/catalog';
+import { catalogApi, type Product } from '../api/catalog';
+import {
+  DocumentCreateWizard,
+  type WizardDocumentType,
+} from '../components/documents/DocumentCreateWizard';
+import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { documentsApi, type Document, type DocumentListResponse } from '../api/documents';
 import { useAuth } from '../context/AuthContext';
+import '../styles/products-catalog.css';
 import '../styles/documents.css';
 
 const STATUS_CLASS: Record<string, string> = {
@@ -31,6 +38,18 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
+function isWizardDocument(doc: Document) {
+  return doc.documentType === 'Quote' || doc.documentType === 'ChargeInvoice';
+}
+
+function canManageDocument(doc: Document) {
+  return isWizardDocument(doc) && !doc.orderId;
+}
+
+function documentHasActions(doc: Document) {
+  return canManageDocument(doc) || (doc.documentType === 'ChargeInvoice' && doc.status === 'Open');
+}
+
 function monthLabel(year: number, month: number) {
   const lang = i18n.language;
   const locale = lang === 'he' ? 'he-IL' : lang === 'ru' ? 'ru-RU' : 'en-US';
@@ -44,7 +63,14 @@ export function DocumentsPage() {
   const { token } = useAuth();
   const [data, setData] = useState<DocumentListResponse | null>(null);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
-  const [products, setProducts] = useState<{ id: string; articleCode: string; name: string }[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [wizardType, setWizardType] = useState<WizardDocumentType | null>(null);
+  const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
+  const [duplicateFromDocumentId, setDuplicateFromDocumentId] = useState<string | null>(null);
+  const [rowMenuDoc, setRowMenuDoc] = useState<Document | null>(null);
+  const rowMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
@@ -81,13 +107,31 @@ export function DocumentsPage() {
       setCustomers(c.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })))
     );
     catalogApi.products.list(token, undefined, true).then((p) =>
-      setProducts(p.filter((x) => x.isActive).map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
+      setProducts(p.filter((x) => x.isActive))
+    );
+  }, [token]);
+
+  const reloadCustomers = useCallback(() => {
+    if (!token) return;
+    catalogApi.customers.list(token, true).then((c) =>
+      setCustomers(c.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })))
     );
   }, [token]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      if (!el.closest('.row-menu-wrap') && !el.closest('.row-menu--portal')) {
+        setRowMenuDoc(null);
+      }
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
 
   const openCharges = useMemo(() => {
     if (!data) return [];
@@ -97,6 +141,14 @@ export function DocumentsPage() {
   }, [data]);
 
   const openCreate = (type: 'Quote' | 'ChargeInvoice' | 'Receipt') => {
+    setMenuOpen(false);
+    setError('');
+    if (type === 'Quote' || type === 'ChargeInvoice') {
+      setEditDocumentId(null);
+      setDuplicateFromDocumentId(null);
+      setWizardType(type);
+      return;
+    }
     setCreateType(type);
     setForm({
       customerId: '',
@@ -107,9 +159,7 @@ export function DocumentsPage() {
       parentDocumentId: openCharges[0]?.id ?? '',
       paymentMethod: '',
     });
-    setMenuOpen(false);
     setCreateOpen(true);
-    setError('');
   };
 
   const onCreate = async (e: React.FormEvent) => {
@@ -149,6 +199,55 @@ export function DocumentsPage() {
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
+    }
+  };
+
+  const toggleRowMenu = (doc: Document, btn: HTMLButtonElement) => {
+    if (rowMenuDoc?.id === doc.id) {
+      setRowMenuDoc(null);
+      return;
+    }
+    rowMenuAnchorRef.current = btn;
+    setRowMenuDoc(doc);
+  };
+
+  const closeWizard = () => {
+    setWizardType(null);
+    setEditDocumentId(null);
+    setDuplicateFromDocumentId(null);
+  };
+
+  const onEditDocument = (doc: Document) => {
+    if (!canManageDocument(doc)) return;
+    setRowMenuDoc(null);
+    setDuplicateFromDocumentId(null);
+    setEditDocumentId(doc.id);
+    setWizardType(doc.documentType as WizardDocumentType);
+    setError('');
+  };
+
+  const onDuplicateDocument = async (doc: Document) => {
+    if (!token || !canManageDocument(doc)) return;
+    setRowMenuDoc(null);
+    setEditDocumentId(null);
+    setError('');
+    setWizardType(doc.documentType as WizardDocumentType);
+    setDuplicateFromDocumentId(doc.id);
+  };
+
+  const confirmDelete = async () => {
+    if (!token || !deleteTarget) return;
+    setDeleteBusy(true);
+    setError('');
+    try {
+      await documentsApi.delete(token, deleteTarget.id);
+      setMessage(t('documents.deleted'));
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -205,14 +304,14 @@ export function DocumentsPage() {
           {menuOpen && (
             <div className="documents-create-menu">
               <h3>{t('documents.createNew')}</h3>
-              <button type="button" onClick={() => openCreate('Receipt')}>
-                {t('documents.types.Receipt')}
+              <button type="button" onClick={() => openCreate('Quote')}>
+                {t('documents.types.Quote')}
               </button>
               <button type="button" onClick={() => openCreate('ChargeInvoice')}>
                 {t('documents.types.ChargeInvoice')}
               </button>
-              <button type="button" onClick={() => openCreate('Quote')}>
-                {t('documents.types.Quote')}
+              <button type="button" onClick={() => openCreate('Receipt')}>
+                {t('documents.types.Receipt')}
               </button>
             </div>
           )}
@@ -245,7 +344,7 @@ export function DocumentsPage() {
       </div>
 
       {message && <div className="success-banner">{message}</div>}
-      {error && !createOpen && <div className="error-banner">{error}</div>}
+      {error && !createOpen && !wizardType && <div className="error-banner">{error}</div>}
 
       {!data?.groups.length && <p className="muted">{t('documents.empty')}</p>}
 
@@ -290,14 +389,21 @@ export function DocumentsPage() {
                     <td>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
                     <td>{formatMoney(doc.totalAmount)}</td>
                     <td className="doc-actions">
-                      {doc.documentType === 'ChargeInvoice' && doc.status === 'Open' && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost-inline"
-                          onClick={() => onPayment(doc)}
-                        >
-                          {t('documents.recordPayment')}
-                        </button>
+                      {documentHasActions(doc) && (
+                        <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
+                          <button
+                            type="button"
+                            className="row-menu-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRowMenu(doc, e.currentTarget);
+                            }}
+                            aria-label={t('products.actions')}
+                            aria-expanded={rowMenuDoc?.id === doc.id}
+                          >
+                            ⋮
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -307,6 +413,80 @@ export function DocumentsPage() {
           </div>
         </section>
       ))}
+
+      <CatalogRowMenu open={rowMenuDoc !== null} anchorRef={rowMenuAnchorRef}>
+        {rowMenuDoc && (
+          <>
+            {canManageDocument(rowMenuDoc) && (
+              <button
+                type="button"
+                onClick={() => onEditDocument(rowMenuDoc)}
+              >
+                {t('documents.actionEdit')}
+              </button>
+            )}
+            {canManageDocument(rowMenuDoc) && (
+              <button type="button" onClick={() => void onDuplicateDocument(rowMenuDoc)}>
+                {t('documents.actionDuplicate')}
+              </button>
+            )}
+            {rowMenuDoc.documentType === 'ChargeInvoice' && rowMenuDoc.status === 'Open' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRowMenuDoc(null);
+                  void onPayment(rowMenuDoc);
+                }}
+              >
+                {t('documents.recordPayment')}
+              </button>
+            )}
+            {canManageDocument(rowMenuDoc) && (
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  setRowMenuDoc(null);
+                  setDeleteTarget(rowMenuDoc);
+                }}
+              >
+                {t('documents.actionDelete')}
+              </button>
+            )}
+          </>
+        )}
+      </CatalogRowMenu>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t('documents.deleteConfirmTitle')}
+        message={t('documents.deleteConfirm', { number: deleteTarget?.documentNumber ?? '' })}
+        confirmLabel={t('documents.actionDelete')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        busy={deleteBusy}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => !deleteBusy && setDeleteTarget(null)}
+      />
+
+      {wizardType && token && (
+        <DocumentCreateWizard
+          open
+          documentType={wizardType}
+          token={token}
+          customers={customers}
+          products={products}
+          editDocumentId={editDocumentId}
+          duplicateFromDocumentId={duplicateFromDocumentId}
+          onClose={closeWizard}
+          onSuccess={(msg) => {
+            setMessage(msg);
+            closeWizard();
+            load();
+          }}
+          onCustomersUpdated={reloadCustomers}
+        />
+      )}
 
       {createOpen && (
         <div className="modal-overlay" onClick={() => setCreateOpen(false)}>

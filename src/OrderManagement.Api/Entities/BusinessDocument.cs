@@ -17,6 +17,10 @@ public class BusinessDocument
     public DateTime IssueDate { get; set; }
     public DateTime? DueDate { get; set; }
     public decimal TotalAmount { get; set; }
+    /// <summary>Document-level discount percent (0–100), mutually exclusive with <see cref="DiscountAmount"/>.</summary>
+    public decimal? DiscountPercent { get; set; }
+    /// <summary>Fixed discount amount in document currency.</summary>
+    public decimal? DiscountAmount { get; set; }
     public string? PaymentMethod { get; set; }
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

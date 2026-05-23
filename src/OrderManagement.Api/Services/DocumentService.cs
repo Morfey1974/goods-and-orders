@@ -69,6 +69,8 @@ public class DocumentService(
         Guid? parentDocumentId,
         Guid? orderId,
         IReadOnlyList<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines,
+        decimal? discountPercent,
+        decimal? discountAmount,
         CancellationToken ct)
     {
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.TenantId == tenantId, ct)
@@ -120,7 +122,15 @@ public class DocumentService(
                     SortOrder = sort++
                 });
             }
-            doc.TotalAmount = doc.Lines.Sum(l => l.LineTotal);
+            var subtotal = doc.Lines.Sum(l => l.LineTotal);
+            doc.DiscountPercent = discountPercent is > 0 ? discountPercent : null;
+            doc.DiscountAmount = discountAmount is > 0 && discountPercent is null or <= 0 ? discountAmount : null;
+            var discountValue = 0m;
+            if (doc.DiscountPercent is { } pct)
+                discountValue = Math.Round(subtotal * pct / 100m, 2);
+            else if (doc.DiscountAmount is { } amt)
+                discountValue = amt;
+            doc.TotalAmount = Math.Max(0, subtotal - discountValue);
         }
 
         if (type == DocumentType.ChargeInvoice && lines is { Count: > 0 })
@@ -153,6 +163,136 @@ public class DocumentService(
         await db.Entry(doc).Reference(d => d.Customer).LoadAsync(ct);
         await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
         return doc;
+    }
+
+    public async Task<BusinessDocument> UpdateAsync(
+        Guid tenantId,
+        Guid documentId,
+        string? description,
+        DateTime? issueDate,
+        DateTime? dueDate,
+        string? paymentMethod,
+        int version,
+        IReadOnlyList<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines,
+        decimal? discountPercent,
+        decimal? discountAmount,
+        CancellationToken ct)
+    {
+        var doc = await db.BusinessDocuments
+            .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        if (doc.Version != version)
+            throw new InvalidOperationException("Document was modified. Refresh and try again.");
+
+        if (doc.DocumentType is DocumentType.Receipt or DocumentType.Order)
+            throw new InvalidOperationException("This document type cannot be edited.");
+
+        if (doc.OrderId is not null)
+            throw new InvalidOperationException("Documents linked to an order cannot be edited here.");
+
+        var hasReceipt = await db.BusinessDocuments.AnyAsync(
+            d => d.ParentDocumentId == doc.Id && d.DocumentType == DocumentType.Receipt, ct);
+        if (hasReceipt)
+            throw new InvalidOperationException("Cannot edit: a receipt already exists for this document.");
+
+        if (lines is null or { Count: 0 })
+            throw new InvalidOperationException("At least one line is required.");
+
+        doc.Description = description?.Trim();
+        if (issueDate.HasValue)
+            doc.IssueDate = issueDate.Value.ToUniversalTime();
+        doc.DueDate = dueDate?.ToUniversalTime();
+        doc.PaymentMethod = paymentMethod?.Trim();
+
+        await db.BusinessDocumentLines.Where(l => l.DocumentId == doc.Id).ExecuteDeleteAsync(ct);
+
+        var sort = 0;
+        var newLines = new List<BusinessDocumentLine>();
+        foreach (var line in lines)
+        {
+            var total = Math.Round(line.UnitPrice * line.Qty, 2);
+            newLines.Add(new BusinessDocumentLine
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = doc.Id,
+                ProductId = line.ProductId,
+                Description = line.Description.Trim(),
+                Quantity = line.Qty,
+                UnitPrice = line.UnitPrice,
+                LineTotal = total,
+                SortOrder = sort++
+            });
+        }
+        db.BusinessDocumentLines.AddRange(newLines);
+        doc.Lines = newLines;
+
+        var subtotal = newLines.Sum(l => l.LineTotal);
+        doc.DiscountPercent = discountPercent is > 0 ? discountPercent : null;
+        doc.DiscountAmount = discountAmount is > 0 && discountPercent is null or <= 0 ? discountAmount : null;
+        var discountValue = 0m;
+        if (doc.DiscountPercent is { } pct)
+            discountValue = Math.Round(subtotal * pct / 100m, 2);
+        else if (doc.DiscountAmount is { } amt)
+            discountValue = amt;
+        doc.TotalAmount = Math.Max(0, subtotal - discountValue);
+
+        doc.Version++;
+        doc.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await db.Entry(doc).Reference(d => d.Customer).LoadAsync(ct);
+        await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
+        return doc;
+    }
+
+    public async Task DeleteAsync(Guid tenantId, Guid documentId, CancellationToken ct)
+    {
+        var doc = await db.BusinessDocuments
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        if (doc.OrderId is not null)
+            throw new InvalidOperationException("Documents linked to an order cannot be deleted here.");
+
+        var hasChildren = await db.BusinessDocuments.AnyAsync(d => d.ParentDocumentId == doc.Id, ct);
+        if (hasChildren)
+            throw new InvalidOperationException("Cannot delete: related documents exist.");
+
+        db.BusinessDocumentLines.RemoveRange(doc.Lines);
+        db.BusinessDocuments.Remove(doc);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<BusinessDocument> DuplicateAsync(Guid tenantId, Guid documentId, CancellationToken ct)
+    {
+        var source = await db.BusinessDocuments
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        if (source.DocumentType is DocumentType.Receipt or DocumentType.Order)
+            throw new InvalidOperationException("This document type cannot be duplicated.");
+
+        var lines = source.Lines
+            .OrderBy(l => l.SortOrder)
+            .Select(l => (l.ProductId, l.Description, l.Quantity, l.UnitPrice))
+            .ToList();
+
+        return await CreateAsync(
+            tenantId,
+            source.DocumentType,
+            source.CustomerId,
+            source.Description,
+            DateTime.UtcNow,
+            source.DueDate,
+            source.PaymentMethod,
+            null,
+            null,
+            lines,
+            source.DiscountPercent,
+            source.DiscountAmount,
+            ct);
     }
 
     public DocumentSummaryDto ComputeSummary(IEnumerable<BusinessDocument> docs)

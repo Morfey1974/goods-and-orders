@@ -25,6 +25,8 @@ public record DocumentDto(
     DateTime IssueDate,
     DateTime? DueDate,
     decimal TotalAmount,
+    decimal? DiscountPercent,
+    decimal? DiscountAmount,
     string? PaymentMethod,
     IReadOnlyList<DocumentLineDto> Lines,
     int Version,
@@ -52,6 +54,16 @@ public record DocumentLineInput(
     [Range(0.0001, double.MaxValue)] decimal Quantity,
     [Range(0, double.MaxValue)] decimal UnitPrice);
 
+public record UpdateDocumentRequest(
+    string? Description,
+    DateTime? IssueDate,
+    DateTime? DueDate,
+    string? PaymentMethod,
+    int Version,
+    [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines,
+    [Range(0, 100)] decimal? DiscountPercent = null,
+    [Range(0, double.MaxValue)] decimal? DiscountAmount = null);
+
 public record CreateDocumentRequest(
     [Required] string DocumentType,
     [Required] Guid CustomerId,
@@ -61,7 +73,9 @@ public record CreateDocumentRequest(
     string? PaymentMethod,
     Guid? ParentDocumentId,
     Guid? OrderId,
-    [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines);
+    [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines,
+    [Range(0, 100)] decimal? DiscountPercent = null,
+    [Range(0, double.MaxValue)] decimal? DiscountAmount = null);
 
 public record RecordPaymentRequest(
     string? PaymentMethod,
@@ -82,6 +96,8 @@ public static class DocumentMappers
         d.IssueDate,
         d.DueDate,
         d.TotalAmount,
+        d.DiscountPercent,
+        d.DiscountAmount,
         d.PaymentMethod,
         d.Lines.OrderBy(l => l.SortOrder).Select(l => new DocumentLineDto(
             l.Id,

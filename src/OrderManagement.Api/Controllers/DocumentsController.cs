@@ -139,7 +139,100 @@ public class DocumentsController(AppDbContext db, DocumentService documents) : C
                 request.ParentDocumentId,
                 request.OrderId,
                 lines,
+                request.DiscountPercent,
+                request.DiscountAmount,
                 ct);
+            return CreatedAtAction(nameof(Get), new { id = doc.Id }, DocumentMappers.ToDto(doc));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<DocumentDto>> Update(
+        Guid id,
+        [FromBody] UpdateDocumentRequest request,
+        CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        List<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines = null;
+        if (request.Lines is { Count: > 0 })
+        {
+            lines = [];
+            foreach (var line in request.Lines)
+            {
+                if (line.ProductId is { } pid)
+                {
+                    var product = await db.Products.FirstOrDefaultAsync(
+                        p => p.Id == pid && p.TenantId == tenantId, ct);
+                    if (product is null)
+                        return BadRequest(new { message = $"Product {pid} not found." });
+                    lines.Add((pid, line.Description.Trim().Length > 0 ? line.Description : product.Name,
+                        line.Quantity, line.UnitPrice > 0 ? line.UnitPrice : product.UnitPrice));
+                }
+                else
+                {
+                    lines.Add((null, line.Description.Trim(), line.Quantity, line.UnitPrice));
+                }
+            }
+        }
+
+        try
+        {
+            var doc = await documents.UpdateAsync(
+                tenantId.Value,
+                id,
+                request.Description,
+                request.IssueDate,
+                request.DueDate,
+                request.PaymentMethod,
+                request.Version,
+                lines,
+                request.DiscountPercent,
+                request.DiscountAmount,
+                ct);
+            return Ok(DocumentMappers.ToDto(doc));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "Document was modified. Refresh and try again." });
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            await documents.DeleteAsync(tenantId.Value, id, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:guid}/duplicate")]
+    public async Task<ActionResult<DocumentDto>> Duplicate(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            var doc = await documents.DuplicateAsync(tenantId.Value, id, ct);
             return CreatedAtAction(nameof(Get), new { id = doc.Id }, DocumentMappers.ToDto(doc));
         }
         catch (InvalidOperationException ex)
@@ -182,6 +275,8 @@ public class DocumentsController(AppDbContext db, DocumentService documents) : C
                 request.PaymentMethod ?? charge.PaymentMethod,
                 charge.Id,
                 charge.OrderId,
+                null,
+                null,
                 null,
                 ct);
             charge.Status = DocumentStatus.Paid;

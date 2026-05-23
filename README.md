@@ -1,9 +1,11 @@
 # WEB Order Management — учёт заказов (עוסק פטור)
 
-Первый релиз: **Этап A** — регистрация, вход, профиль бизнеса, i18n (RU/EN/HE), навигация, trial/subscription в коде.
+Веб-приложение для малого бизнеса в Израиле: клиенты, каталог, склад, заказы, документы (הצעת מחיר / חשבון חיוב / קבלה), профиль עוסק פטור.
 
 Подробный план: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)  
 Палитра цветов: [docs/color-palette.html](docs/color-palette.html)
+
+**Удалённый репозиторий:** https://github.com/Morfey1974/goods-and-orders
 
 ---
 
@@ -12,60 +14,40 @@
 | Компонент | Версия |
 |-----------|--------|
 | Windows 10/11 | |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | для БД и API в контейнерах |
-| [.NET 9 SDK](https://dotnet.microsoft.com/download) | локальный запуск API |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | PostgreSQL + API в контейнерах |
+| [.NET 9 SDK](https://dotnet.microsoft.com/download) | локальный запуск API (опционально) |
 | [Node.js 20+](https://nodejs.org/) | фронтенд |
 
 ---
 
-## Запуск без командной строки
+## Быстрый старт
 
-На **рабочем столе**:
-
-| Ярлык | Действие |
-|-------|----------|
-| **Zapusk - Uchet zakazov** | Запуск: Docker + API + веб + браузер |
-| **Ostanovit - Uchet zakazov** | Остановка Docker |
-
-Подпись под ярлыком — на латинице (так Windows не портит кириллицу). Имя ярлыка можно переименовать на русский вручную.
-
-Если снова «кракозябры» — удалите старые ярлыки и запустите `scripts\Установить ярлыки на рабочий стол.bat`.
-
-Перед запуском: откройте **Docker Desktop** и дождитесь **Engine running**.
-
-Если ярлыков нет — один раз двойной щелчок по файлу:  
-`scripts\Установить ярлыки на рабочий стол.bat`
-
----
-
-## Быстрый старт (рекомендуется)
-
-### 1. Запустить БД и API в Docker
+### 1. Клонировать и запустить API + БД (Docker)
 
 ```powershell
-cd "c:\Users\morfe\Documents\Проект Интерлок\WEB order management"
+git clone https://github.com/Morfey1974/goods-and-orders.git
+cd goods-and-orders
 
-# Опционально: скопировать секреты
-copy .env.example .env
+copy .env.example .env   # опционально: JWT_SECRET
 
 docker compose up -d --build
 ```
 
-Дождитесь готовности (30–60 сек). API применит миграции БД автоматически при старте.
+Дождитесь готовности (30–60 с). **Миграции БД применяются автоматически** при старте API.
 
 | Сервис | URL |
 |--------|-----|
 | API | http://localhost:8080 |
 | Swagger | http://localhost:8080/swagger |
 | Health | http://localhost:8080/api/health |
-| PostgreSQL | `localhost:5432` (user/pass/db: `ordermgmt` / `ordermgmt_dev` / `ordermgmt`) |
+| PostgreSQL | `localhost:5432` — `ordermgmt` / `ordermgmt_dev` / `ordermgmt` |
 
-### 2. Запустить фронтенд
+### 2. Фронтенд
 
 В **новом** окне PowerShell:
 
 ```powershell
-cd "c:\Users\morfe\Documents\Проект Интерлок\WEB order management\src\order-management-web"
+cd src\order-management-web
 npm install
 npm run dev
 ```
@@ -74,73 +56,76 @@ npm run dev
 |--------|-----|
 | Веб-интерфейс | http://localhost:5173 |
 
-Прокси `/api` → `http://localhost:8080` настроен в `vite.config.ts`.
+Прокси `/api` → `http://localhost:8080` задан в `vite.config.ts`.
 
 ### 3. Первый вход
 
-1. Откройте http://localhost:5173  
-2. **Регистрация** — email, пароль (мин. 8 символов), название бизнеса, ФИО  
-3. Заполните **Настройки** (מספר עוסק, телефон, банк и т.д.)  
-4. Переключите язык (עברית / Русский / English) — для иврита включается RTL
+1. http://localhost:5173 → **Регистрация**  
+2. **Настройки** — профиль, контакты, банк, логотип, подпись, PDF для клиентов  
+3. Язык: עברית / Русский / English (RTL для иврита)
 
 ---
 
-## Вариант 2 — API локально без Docker-образа API
+## После обновления кода (`git pull`)
 
-### Только PostgreSQL в Docker
+Обязательно **пересоберите контейнер API**, иначе новые эндпоинты (загрузка файлов и т.д.) вернут 404:
 
 ```powershell
-cd "c:\Users\morfe\Documents\Проект Интерлок\WEB order management"
-docker compose up -d db
+docker compose up -d --build api
 ```
 
-### API из Visual Studio / CLI
+Фронтенд при изменениях UI:
 
 ```powershell
-cd "c:\Users\morfe\Documents\Проект Интерлок\WEB order management\src\OrderManagement.Api"
-dotnet run
-```
-
-По умолчанию API: http://localhost:5000 (см. `Properties/launchSettings.json`).
-
-Для фронтенда укажите прокси:
-
-```powershell
-$env:VITE_API_PROXY="http://localhost:5000"
-cd ..\order-management-web
+cd src\order-management-web
+npm install
 npm run dev
 ```
 
-Или в `vite.config.ts` временно смените `target` на `http://localhost:5000`.
+---
 
-### Миграции вручную (если не используете auto-migrate при старте)
+## Запуск с рабочего стола (Windows)
 
-```powershell
-cd src\OrderManagement.Api
-dotnet ef database update
-```
+| Ярлык | Действие |
+|-------|----------|
+| **Zapusk - Uchet zakazov** | Docker + API + веб + браузер |
+| **Ostanovit - Uchet zakazov** | Остановка |
+
+Перед запуском: **Docker Desktop** → Engine running.  
+Ярлыки: `scripts\Установить ярлыки на рабочий стол.bat`
 
 ---
 
-## Остановка
+## Настройки бизнеса (вкладка «Настройки»)
 
-```powershell
-docker compose down
-```
+| Раздел | Содержание |
+|--------|------------|
+| Общие данные | Название, ת.ז., עוסק, категория, адрес |
+| Контакты | Email (редактируемый), телефоны, сайт, язык |
+| Логотип и подпись | JPG/PNG/WebP → для будущих PDF-документов |
+| Документы для клиентов | PDF: אישור חשבון, כרטיס חברה, ניהול ספרים, ניכוי מס — загрузка и **отправка по email** |
+| Банковские реквизиты | Код банка (справочник IL), филиал, счёт, SWIFT/ABA/IBAN |
 
-Удалить данные БД (осторожно):
-
-```powershell
-docker compose down -v
-```
+Файлы хранятся в Docker-volume `ordermgmt_uploads` (путь в контейнере: `/app/uploads`).
 
 ---
 
-## Настройки
-
-### Подписка / trial
+## Email (SMTP) — пока заглушка
 
 В `src/OrderManagement.Api/appsettings.json`:
+
+```json
+"Email": {
+  "Enabled": false
+}
+```
+
+При `Enabled: false` кнопка «Отправить файлы по email» **не шлёт письмо**, а показывает сообщение о режиме заглушки (запрос логируется на сервере).  
+Когда будут данные SMTP — установите `Enabled: true` и заполните `SmtpHost`, `SmtpPort`, `SmtpUser`, `SmtpPassword`, `FromAddress` (реализация отправки в `TenantEmailService`).
+
+---
+
+## Подписка / trial
 
 ```json
 "Subscription": {
@@ -149,17 +134,21 @@ docker compose down -v
 }
 ```
 
-| Переменная (Docker) | Значение |
-|---------------------|----------|
-| `SUBSCRIPTION_ENFORCEMENT` | `false` — отладка; `true` — блок после 30 дней |
+Docker: `SUBSCRIPTION_ENFORCEMENT=false` в `.env`.
 
-При `EnforcementEnabled: true` после trial:
-- **GET** — просмотр старых данных разрешён  
-- **POST/PUT/DELETE** — ответ `402` с кодом `SUBSCRIPTION_EXPIRED`
+---
 
-### JWT
+## Остановка Docker
 
-Смените `Jwt:Secret` в production (минимум 32 символа). В Docker: `JWT_SECRET` в `.env`.
+```powershell
+docker compose down
+```
+
+Удалить **все** данные (БД + загруженные файлы):
+
+```powershell
+docker compose down -v
+```
 
 ---
 
@@ -168,25 +157,29 @@ docker compose down -v
 ```
 ├── docker-compose.yml
 ├── docs/
-│   ├── IMPLEMENTATION_PLAN.md
-│   └── color-palette.html
+├── scripts/                    # ярлыки запуска
 ├── src/
-│   ├── OrderManagement.Api/     # .NET 9 Web API
-│   └── order-management-web/    # React + Vite + i18n
+│   ├── OrderManagement.Api/    # .NET 9 Web API
+│   └── order-management-web/   # React + Vite + i18n (ru/en/he)
 └── README.md
 ```
 
 ---
 
-## API (Этап A)
+## API (основное)
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET | `/api/health` | Проверка |
-| POST | `/api/auth/register` | Регистрация |
-| POST | `/api/auth/login` | Вход |
-| GET | `/api/tenant/profile` | Профиль (JWT) |
-| PUT | `/api/tenant/profile` | Обновление (JWT, version) |
+| POST | `/api/auth/register`, `/login` | Регистрация / вход |
+| GET/PUT | `/api/tenant/profile` | Профиль |
+| PUT | `/api/tenant/bank-details` | Банк |
+| GET | `/api/tenant/assets` | Сводка: лого, подпись, PDF |
+| POST/DELETE | `/api/tenant/assets/logo`, `/signature` | Брендинг |
+| POST/DELETE | `/api/tenant/assets/compliance/{kind}` | PDF (`AccountOwnership`, `BusinessCard`, `BooksManagement`, `WithholdingTax`) |
+| POST | `/api/tenant/assets/compliance/send-email` | Отправка PDF (SMTP stub) |
+| … | `/api/customers`, `/products`, `/orders`, `/documents` | Справочники и документы |
+
+Полный список — Swagger: http://localhost:8080/swagger
 
 ---
 
@@ -194,14 +187,15 @@ docker compose down -v
 
 | Проблема | Решение |
 |----------|---------|
-| Docker не запускается | Запустите Docker Desktop |
-| `connection refused` на API | `docker compose ps` — контейнер `api` должен быть Up |
-| Порт 5432 занят | Остановите другой PostgreSQL или смените порт в `docker-compose.yml` |
-| CORS | В `appsettings.json` добавьте origin фронтенда в `Cors:Origins` |
-| Иврит «ломает» layout | Выберите עברית — `dir=rtl` применяется автоматически |
+| Ошибка при загрузке PDF / 404 на `/api/tenant/assets` | `docker compose up -d --build api` |
+| `Only PDF files are allowed` при корректном PDF | Обновите API (см. выше); допускается `application/octet-stream` |
+| Docker не стартует | Запустите Docker Desktop |
+| API недоступен | `docker compose ps` — сервис `api` Up |
+| CORS | Добавьте origin в `Cors:Origins` в `appsettings.json` |
+| Порт 5432 занят | Смените порт в `docker-compose.yml` или остановите другой PostgreSQL |
 
 ---
 
-## Следующий этап (B)
+## Лицензия / разработка
 
-Справочники: клиенты, артикулы FG/CP/SV, BOM, склад.
+Частный проект. Вопросы и доработки — через issues в GitHub-репозитории.

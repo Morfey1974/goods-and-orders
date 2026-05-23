@@ -20,6 +20,7 @@ type AuthState = {
     ownerFullName: string;
     defaultLanguage: string;
   }) => Promise<void>;
+  patchSession: (patch: Partial<AuthResponse>) => void;
   logout: () => void;
 };
 
@@ -65,6 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => persist(null), [persist]);
 
+  const patchSession = useCallback(
+    (patch: Partial<AuthResponse>) => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, ...patch };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     api.health().catch(() => {
       /* API may be down during dev */
@@ -72,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ token, user, login, register, logout }),
-    [token, user, login, register, logout]
+    () => ({ token, user, login, register, patchSession, logout }),
+    [token, user, login, register, patchSession, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

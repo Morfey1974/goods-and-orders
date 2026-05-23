@@ -22,3 +22,10 @@ Thumbs.db
 # IDE
 .idea/
 *.swp
+
+# Uploads (tenant files, product images)
+uploads/
+
+# Local tool build output
+tools/**/bin/
+tools/**/obj/

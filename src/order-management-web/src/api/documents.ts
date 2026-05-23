@@ -23,6 +23,8 @@ export type Document = {
   issueDate: string;
   dueDate?: string;
   totalAmount: number;
+  discountPercent?: number | null;
+  discountAmount?: number | null;
   paymentMethod?: string;
   lines: DocumentLine[];
   version: number;
@@ -75,6 +77,8 @@ function mapDocument(raw: Record<string, unknown>): Document {
     issueDate: String(raw.issueDate ?? raw.IssueDate ?? ''),
     dueDate: (raw.dueDate ?? raw.DueDate) as string | undefined,
     totalAmount: Number(raw.totalAmount ?? raw.TotalAmount ?? 0),
+    discountPercent: (raw.discountPercent ?? raw.DiscountPercent) as number | null | undefined,
+    discountAmount: (raw.discountAmount ?? raw.DiscountAmount) as number | null | undefined,
     paymentMethod: (raw.paymentMethod ?? raw.PaymentMethod) as string | undefined,
     lines: Array.isArray(linesRaw) ? linesRaw.map(mapLine) : [],
     version: Number(raw.version ?? raw.Version ?? 1),
@@ -113,6 +117,29 @@ export const documentsApi = {
     const data = await request<Record<string, unknown>>(
       '/api/documents',
       { method: 'POST', body: JSON.stringify(body) },
+      token
+    );
+    return mapDocument(data);
+  },
+  get: async (token: string, id: string) => {
+    const data = await request<Record<string, unknown>>(`/api/documents/${id}`, {}, token);
+    return mapDocument(data);
+  },
+  update: async (token: string, id: string, body: object) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${id}`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      token
+    );
+    return mapDocument(data);
+  },
+  delete: async (token: string, id: string) => {
+    await request(`/api/documents/${id}`, { method: 'DELETE' }, token);
+  },
+  duplicate: async (token: string, id: string) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${id}/duplicate`,
+      { method: 'POST' },
       token
     );
     return mapDocument(data);
