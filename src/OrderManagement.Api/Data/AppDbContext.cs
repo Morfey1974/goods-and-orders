@@ -85,8 +85,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.DocumentName).HasMaxLength(256);
+            e.Property(x => x.Nickname).HasMaxLength(64);
+            e.Property(x => x.ContactPerson).HasMaxLength(256);
+            e.Property(x => x.OsekNumber).HasMaxLength(32);
+            e.Property(x => x.TeudatZehut).HasMaxLength(16);
+            e.Property(x => x.BusinessCategory).HasMaxLength(256);
+            e.Property(x => x.ExternalKey).HasMaxLength(64);
+            e.Property(x => x.PaymentTerms).HasMaxLength(128);
             e.Property(x => x.Email).HasMaxLength(256);
             e.Property(x => x.Phone).HasMaxLength(64);
+            e.Property(x => x.MobilePhone).HasMaxLength(64);
+            e.Property(x => x.Fax).HasMaxLength(64);
+            e.Property(x => x.Address).HasMaxLength(512);
+            e.Property(x => x.City).HasMaxLength(128);
+            e.Property(x => x.ZipCode).HasMaxLength(16);
+            e.Property(x => x.Website).HasMaxLength(256);
+            e.Property(x => x.BankCode).HasMaxLength(8);
+            e.Property(x => x.BankName).HasMaxLength(128);
+            e.Property(x => x.BankBranch).HasMaxLength(32);
+            e.Property(x => x.BankAccountNumber).HasMaxLength(32);
+            e.Property(x => x.BankSwift).HasMaxLength(32);
+            e.Property(x => x.BankAba).HasMaxLength(32);
+            e.Property(x => x.BankIban).HasMaxLength(64);
+            e.Property(x => x.BankBeneficiary).HasMaxLength(256);
+            e.Property(x => x.LogoPath).HasMaxLength(512);
+            e.Property(x => x.DefaultDiscountPercent).HasPrecision(5, 2);
             e.HasIndex(x => new { x.TenantId, x.Name });
         });
 

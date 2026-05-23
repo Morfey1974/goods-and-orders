@@ -8,6 +8,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CustomersPage } from './pages/CustomersPage';
+import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { WarehousePage } from './pages/WarehousePage';
 import { OrdersPage } from './pages/OrdersPage';
@@ -31,6 +32,8 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="customers" element={<CustomersPage />} />
+            <Route path="customers/new" element={<CustomerDetailPage />} />
+            <Route path="customers/:id" element={<CustomerDetailPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="warehouse" element={<WarehousePage />} />
             <Route path="documents" element={<DocumentsPage />} />

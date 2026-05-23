@@ -8,25 +8,90 @@ namespace OrderManagement.Api.Dto;
 public record CustomerDto(
     Guid Id,
     string Name,
+    string? DocumentName,
+    string? Nickname,
+    string? ContactPerson,
+    string? OsekNumber,
+    string? TeudatZehut,
+    string? BusinessCategory,
+    string? ExternalKey,
+    string? PaymentTerms,
     string? Email,
     string? Phone,
+    string? MobilePhone,
+    string? Fax,
     string? Address,
+    string? City,
+    string? ZipCode,
+    string? Website,
+    string? BankBeneficiary,
+    string? BankCode,
+    string? BankName,
+    string? BankBranch,
+    string? BankAccountNumber,
+    string? BankSwift,
+    string? BankAba,
+    string? BankIban,
+    bool HasLogo,
     decimal DefaultDiscountPercent,
     bool IsActive,
+    DateTime CreatedAt,
     int Version);
 
 public record CreateCustomerRequest(
     [Required][MinLength(1)] string Name,
+    string? DocumentName,
+    string? Nickname,
+    string? ContactPerson,
+    string? OsekNumber,
+    string? TeudatZehut,
+    string? BusinessCategory,
+    string? ExternalKey,
+    string? PaymentTerms,
     string? Email,
     string? Phone,
+    string? MobilePhone,
+    string? Fax,
     string? Address,
+    string? City,
+    string? ZipCode,
+    string? Website,
+    string? BankBeneficiary,
+    string? BankCode,
+    string? BankName,
+    string? BankBranch,
+    string? BankAccountNumber,
+    string? BankSwift,
+    string? BankAba,
+    string? BankIban,
     [Range(0, 100)] decimal DefaultDiscountPercent);
 
 public record UpdateCustomerRequest(
     [Required][MinLength(1)] string Name,
+    string? DocumentName,
+    string? Nickname,
+    string? ContactPerson,
+    string? OsekNumber,
+    string? TeudatZehut,
+    string? BusinessCategory,
+    string? ExternalKey,
+    string? PaymentTerms,
     string? Email,
     string? Phone,
+    string? MobilePhone,
+    string? Fax,
     string? Address,
+    string? City,
+    string? ZipCode,
+    string? Website,
+    string? BankBeneficiary,
+    string? BankCode,
+    string? BankName,
+    string? BankBranch,
+    string? BankAccountNumber,
+    string? BankSwift,
+    string? BankAba,
+    string? BankIban,
     [Range(0, 100)] decimal DefaultDiscountPercent,
     bool IsActive,
     int Version);
@@ -182,8 +247,98 @@ public record OrderLineInput(
 public static class CatalogMappers
 {
     public static CustomerDto ToDto(Customer c) => new(
-        c.Id, c.Name, c.Email, c.Phone, c.Address,
-        c.DefaultDiscountPercent, c.IsActive, c.Version);
+        c.Id,
+        c.Name,
+        c.DocumentName,
+        c.Nickname,
+        c.ContactPerson,
+        c.OsekNumber,
+        c.TeudatZehut,
+        c.BusinessCategory,
+        c.ExternalKey,
+        c.PaymentTerms,
+        c.Email,
+        c.Phone,
+        c.MobilePhone,
+        c.Fax,
+        c.Address,
+        c.City,
+        c.ZipCode,
+        c.Website,
+        c.BankBeneficiary,
+        c.BankCode,
+        c.BankName,
+        c.BankBranch,
+        c.BankAccountNumber,
+        c.BankSwift,
+        c.BankAba,
+        c.BankIban,
+        !string.IsNullOrEmpty(c.LogoPath),
+        c.DefaultDiscountPercent,
+        c.IsActive,
+        c.CreatedAt,
+        c.Version);
+
+    public static void ApplyCustomerFields(Customer c, CreateCustomerRequest request)
+    {
+        c.Name = request.Name.Trim();
+        c.DocumentName = request.DocumentName?.Trim();
+        c.Nickname = request.Nickname?.Trim();
+        c.ContactPerson = request.ContactPerson?.Trim();
+        c.OsekNumber = request.OsekNumber?.Trim();
+        c.TeudatZehut = request.TeudatZehut?.Trim();
+        c.BusinessCategory = request.BusinessCategory?.Trim();
+        c.ExternalKey = request.ExternalKey?.Trim();
+        c.PaymentTerms = request.PaymentTerms?.Trim();
+        c.Email = request.Email?.Trim();
+        c.Phone = request.Phone?.Trim();
+        c.MobilePhone = request.MobilePhone?.Trim();
+        c.Fax = request.Fax?.Trim();
+        c.Address = request.Address?.Trim();
+        c.City = request.City?.Trim();
+        c.ZipCode = request.ZipCode?.Trim();
+        c.Website = request.Website?.Trim();
+        c.BankBeneficiary = request.BankBeneficiary?.Trim();
+        c.BankCode = request.BankCode?.Trim();
+        c.BankName = request.BankName?.Trim();
+        c.BankBranch = request.BankBranch?.Trim();
+        c.BankAccountNumber = request.BankAccountNumber?.Trim();
+        c.BankSwift = request.BankSwift?.Trim();
+        c.BankAba = request.BankAba?.Trim();
+        c.BankIban = request.BankIban?.Trim();
+        c.DefaultDiscountPercent = request.DefaultDiscountPercent;
+    }
+
+    public static void ApplyCustomerFields(Customer c, UpdateCustomerRequest request)
+    {
+        c.Name = request.Name.Trim();
+        c.DocumentName = request.DocumentName?.Trim();
+        c.Nickname = request.Nickname?.Trim();
+        c.ContactPerson = request.ContactPerson?.Trim();
+        c.OsekNumber = request.OsekNumber?.Trim();
+        c.TeudatZehut = request.TeudatZehut?.Trim();
+        c.BusinessCategory = request.BusinessCategory?.Trim();
+        c.ExternalKey = request.ExternalKey?.Trim();
+        c.PaymentTerms = request.PaymentTerms?.Trim();
+        c.Email = request.Email?.Trim();
+        c.Phone = request.Phone?.Trim();
+        c.MobilePhone = request.MobilePhone?.Trim();
+        c.Fax = request.Fax?.Trim();
+        c.Address = request.Address?.Trim();
+        c.City = request.City?.Trim();
+        c.ZipCode = request.ZipCode?.Trim();
+        c.Website = request.Website?.Trim();
+        c.BankBeneficiary = request.BankBeneficiary?.Trim();
+        c.BankCode = request.BankCode?.Trim();
+        c.BankName = request.BankName?.Trim();
+        c.BankBranch = request.BankBranch?.Trim();
+        c.BankAccountNumber = request.BankAccountNumber?.Trim();
+        c.BankSwift = request.BankSwift?.Trim();
+        c.BankAba = request.BankAba?.Trim();
+        c.BankIban = request.BankIban?.Trim();
+        c.DefaultDiscountPercent = request.DefaultDiscountPercent;
+        c.IsActive = request.IsActive;
+    }
 
     public static ProductType ParseProductType(string value) =>
         Enum.TryParse<ProductType>(value, true, out var t) ? t : throw new ArgumentException("Invalid product type.");

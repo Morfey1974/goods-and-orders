@@ -4,13 +4,72 @@ import { request } from './http';
 export type Customer = {
   id: string;
   name: string;
+  documentName?: string;
+  nickname?: string;
+  contactPerson?: string;
+  osekNumber?: string;
+  teudatZehut?: string;
+  businessCategory?: string;
+  externalKey?: string;
+  paymentTerms?: string;
   email?: string;
   phone?: string;
+  mobilePhone?: string;
+  fax?: string;
   address?: string;
+  city?: string;
+  zipCode?: string;
+  website?: string;
+  bankBeneficiary?: string;
+  bankCode?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountNumber?: string;
+  bankSwift?: string;
+  bankAba?: string;
+  bankIban?: string;
+  hasLogo: boolean;
   defaultDiscountPercent: number;
   isActive: boolean;
+  createdAt: string;
   version: number;
 };
+
+function mapCustomer(raw: Record<string, unknown>): Customer {
+  return {
+    id: String(raw.id ?? raw.Id),
+    name: String(raw.name ?? raw.Name ?? ''),
+    documentName: (raw.documentName ?? raw.DocumentName) as string | undefined,
+    nickname: (raw.nickname ?? raw.Nickname) as string | undefined,
+    contactPerson: (raw.contactPerson ?? raw.ContactPerson) as string | undefined,
+    osekNumber: (raw.osekNumber ?? raw.OsekNumber) as string | undefined,
+    teudatZehut: (raw.teudatZehut ?? raw.TeudatZehut) as string | undefined,
+    businessCategory: (raw.businessCategory ?? raw.BusinessCategory) as string | undefined,
+    externalKey: (raw.externalKey ?? raw.ExternalKey) as string | undefined,
+    paymentTerms: (raw.paymentTerms ?? raw.PaymentTerms) as string | undefined,
+    email: (raw.email ?? raw.Email) as string | undefined,
+    phone: (raw.phone ?? raw.Phone) as string | undefined,
+    mobilePhone: (raw.mobilePhone ?? raw.MobilePhone) as string | undefined,
+    fax: (raw.fax ?? raw.Fax) as string | undefined,
+    address: (raw.address ?? raw.Address) as string | undefined,
+    city: (raw.city ?? raw.City) as string | undefined,
+    zipCode: (raw.zipCode ?? raw.ZipCode) as string | undefined,
+    website: (raw.website ?? raw.Website) as string | undefined,
+    bankBeneficiary: (raw.bankBeneficiary ?? raw.BankBeneficiary) as string | undefined,
+    bankCode: (raw.bankCode ?? raw.BankCode) as string | undefined,
+    bankName: (raw.bankName ?? raw.BankName) as string | undefined,
+    bankBranch: (raw.bankBranch ?? raw.BankBranch) as string | undefined,
+    bankAccountNumber: (raw.bankAccountNumber ?? raw.BankAccountNumber) as string | undefined,
+    bankSwift: (raw.bankSwift ?? raw.BankSwift) as string | undefined,
+    bankAba: (raw.bankAba ?? raw.BankAba) as string | undefined,
+    bankIban: (raw.bankIban ?? raw.BankIban) as string | undefined,
+    hasLogo: Boolean(raw.hasLogo ?? raw.HasLogo),
+    defaultDiscountPercent: Number(raw.defaultDiscountPercent ?? raw.DefaultDiscountPercent ?? 0),
+    isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
+    createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
+    version: Number(raw.version ?? raw.Version ?? 1),
+  };
+}
 
 export type BomLine = {
   componentProductId: string;
@@ -112,12 +171,63 @@ export const PRODUCT_TYPES = [
 
 export const catalogApi = {
   customers: {
-    list: (token: string, includeInactive = false) =>
-      request<Customer[]>(`/api/customers?includeInactive=${includeInactive}`, {}, token),
-    create: (token: string, body: object) =>
-      request<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(body) }, token),
-    update: (token: string, id: string, body: object) =>
-      request<Customer>(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(body) }, token),
+    list: async (token: string, includeInactive = false) => {
+      const data = await request<Record<string, unknown>[]>(
+        `/api/customers?includeInactive=${includeInactive}`,
+        {},
+        token
+      );
+      return data.map(mapCustomer);
+    },
+    get: async (token: string, id: string) => {
+      const data = await request<Record<string, unknown>>(`/api/customers/${id}`, {}, token);
+      return mapCustomer(data);
+    },
+    create: async (token: string, body: object) => {
+      const data = await request<Record<string, unknown>>(
+        '/api/customers',
+        { method: 'POST', body: JSON.stringify(body) },
+        token
+      );
+      return mapCustomer(data);
+    },
+    update: async (token: string, id: string, body: object) => {
+      const data = await request<Record<string, unknown>>(
+        `/api/customers/${id}`,
+        { method: 'PUT', body: JSON.stringify(body) },
+        token
+      );
+      return mapCustomer(data);
+    },
+    fetchLogoBlob: async (token: string, id: string) => {
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const res = await fetch(`${base}/api/customers/${id}/logo`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(res.statusText);
+      return res.blob();
+    },
+    uploadLogo: async (token: string, id: string, file: File) => {
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${base}/api/customers/${id}/logo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { message?: string }).message ?? res.statusText);
+      return mapCustomer(data as Record<string, unknown>);
+    },
+    deleteLogo: async (token: string, id: string) => {
+      const data = await request<Record<string, unknown>>(
+        `/api/customers/${id}/logo`,
+        { method: 'DELETE' },
+        token
+      );
+      return mapCustomer(data);
+    },
   },
   products: {
     list: async (token: string, productType?: string, includeInactive = true) => {

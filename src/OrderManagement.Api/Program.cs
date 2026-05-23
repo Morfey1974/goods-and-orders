@@ -30,6 +30,7 @@ builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddSingleton<ProductImageService>();
 builder.Services.AddSingleton<TenantFileService>();
+builder.Services.AddSingleton<CustomerLogoService>();
 builder.Services.AddScoped<TenantEmailService>();
 builder.Services.AddSingleton<SubscriptionService>();
 

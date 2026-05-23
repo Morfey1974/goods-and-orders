@@ -1,0 +1,193 @@
+.customers-page {
+  max-width: 1200px;
+}
+
+.customers-page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.customers-page-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.customers-page-title-row h1 {
+  margin: 0;
+}
+
+.customers-count-badge {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--palette-turquoise-light) 50%, var(--surface));
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+}
+
+.customers-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.customers-search {
+  flex: 1;
+  min-width: 12rem;
+  margin: 0;
+}
+
+.customers-search input {
+  width: 100%;
+}
+
+.customers-filter-active {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.customers-table-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+
+.customers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.customers-table thead th {
+  text-align: start;
+  padding: 0.55rem 0.65rem;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 45%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.customers-table tbody td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.customers-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.customers-table tbody tr:hover {
+  background: color-mix(in srgb, var(--palette-turquoise-light) 25%, transparent);
+}
+
+.customers-row--inactive {
+  opacity: 0.72;
+}
+
+.customers-cell-name {
+  min-width: 10rem;
+}
+
+.customers-name-link {
+  font-weight: 600;
+  color: var(--palette-turquoise-dark);
+}
+
+.customers-badge {
+  display: inline-block;
+  margin-inline-start: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.customers-badge--active {
+  background: color-mix(in srgb, #22a06b 25%, white);
+  color: #166534;
+}
+
+.customers-badge--inactive {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.customers-cell-actions {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.customers-empty {
+  padding: 1.25rem;
+  text-align: center;
+}
+
+/* Customer detail card */
+.customer-detail-page .customer-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.customer-detail-page .customer-detail-head h1 {
+  margin: 0;
+  flex: 1;
+}
+
+.customer-back-link {
+  text-decoration: none;
+}
+
+.customer-logo-section .settings-section-body {
+  padding: 0.75rem 1rem;
+}
+
+.customer-logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.customer-logo-preview {
+  width: 6.5rem;
+  height: 6.5rem;
+  border: 1px dashed color-mix(in srgb, var(--palette-turquoise) 35%, var(--border));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 25%, var(--surface));
+}
+
+.customer-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.customer-logo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.customer-active-toggle .settings-bank-toggle {
+  margin-top: 0.35rem;
+}

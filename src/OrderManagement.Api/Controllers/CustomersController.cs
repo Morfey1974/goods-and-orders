@@ -5,13 +5,14 @@ using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
 using OrderManagement.Api.Extensions;
+using OrderManagement.Api.Services;
 
 namespace OrderManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class CustomersController(AppDbContext db) : ControllerBase
+public class CustomersController(AppDbContext db, CustomerLogoService logoService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CustomerDto>>> List(
@@ -50,14 +51,10 @@ public class CustomersController(AppDbContext db) : ControllerBase
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId.Value,
-            Name = request.Name.Trim(),
-            Email = request.Email?.Trim(),
-            Phone = request.Phone?.Trim(),
-            Address = request.Address?.Trim(),
-            DefaultDiscountPercent = request.DefaultDiscountPercent,
             CreatedAt = now,
             UpdatedAt = now
         };
+        CatalogMappers.ApplyCustomerFields(customer, request);
 
         db.Customers.Add(customer);
         await db.SaveChangesAsync(ct);
@@ -78,16 +75,68 @@ public class CustomersController(AppDbContext db) : ControllerBase
         if (c.Version != request.Version)
             return Conflict(new { message = "Data was modified. Refresh and try again.", code = "VERSION_CONFLICT" });
 
-        c.Name = request.Name.Trim();
-        c.Email = request.Email?.Trim();
-        c.Phone = request.Phone?.Trim();
-        c.Address = request.Address?.Trim();
-        c.DefaultDiscountPercent = request.DefaultDiscountPercent;
-        c.IsActive = request.IsActive;
+        CatalogMappers.ApplyCustomerFields(c, request);
         c.Version++;
         c.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
+        return Ok(CatalogMappers.ToDto(c));
+    }
+
+    [HttpGet("{id:guid}/logo")]
+    public async Task<IActionResult> GetLogo(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var c = await db.Customers.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+        if (c is null || string.IsNullOrEmpty(c.LogoPath)) return NotFound();
+
+        var absolute = logoService.GetAbsolutePath(c.LogoPath);
+        if (!System.IO.File.Exists(absolute)) return NotFound();
+        return PhysicalFile(absolute, logoService.GetContentType(c.LogoPath));
+    }
+
+    [HttpPost("{id:guid}/logo")]
+    [RequestSizeLimit(CustomerLogoService.MaxBytes)]
+    public async Task<ActionResult<CustomerDto>> UploadLogo(Guid id, IFormFile file, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var c = await db.Customers.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+        if (c is null) return NotFound();
+
+        try
+        {
+            c.LogoPath = await logoService.SaveAsync(tenantId.Value, c.Id, file, c.LogoPath, ct);
+            c.Version++;
+            c.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        return Ok(CatalogMappers.ToDto(c));
+    }
+
+    [HttpDelete("{id:guid}/logo")]
+    public async Task<ActionResult<CustomerDto>> DeleteLogo(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var c = await db.Customers.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+        if (c is null) return NotFound();
+
+        logoService.DeleteFile(c.LogoPath);
+        c.LogoPath = null;
+        c.Version++;
+        c.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
         return Ok(CatalogMappers.ToDto(c));
     }
 }
