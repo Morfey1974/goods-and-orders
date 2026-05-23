@@ -24,7 +24,6 @@ function emptyForm(): CustomerForm {
     osekNumber: '',
     teudatZehut: '',
     businessCategory: '',
-    externalKey: '',
     paymentTerms: '',
     email: '',
     phone: '',
@@ -57,7 +56,6 @@ function customerToForm(c: Customer): CustomerForm {
     osekNumber: c.osekNumber ?? '',
     teudatZehut: c.teudatZehut ?? '',
     businessCategory: c.businessCategory ?? '',
-    externalKey: c.externalKey ?? '',
     paymentTerms: c.paymentTerms ?? '',
     email: c.email ?? '',
     phone: c.phone ?? '',
@@ -91,7 +89,6 @@ function formToPayload(form: CustomerForm, lang: string, version?: number) {
     osekNumber: form.osekNumber?.trim() || null,
     teudatZehut: form.teudatZehut?.trim() || null,
     businessCategory: form.businessCategory?.trim() || null,
-    externalKey: form.externalKey?.trim() || null,
     paymentTerms: form.paymentTerms?.trim() || null,
     email: form.email?.trim() || null,
     phone: form.phone?.trim() || null,
@@ -249,13 +246,24 @@ export function CustomerDetailPage() {
         {message && <div className="success-banner">{message}</div>}
 
         <section className="card settings-section customer-logo-section">
-          <div className="settings-section-body">
+          <div className="settings-section-body customer-logo-section-body">
+            <div className="customer-logo-status">
+              <span className="customer-logo-status-label">{t('customers.status')}</span>
+              <label className="settings-bank-toggle customer-status-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                />
+                <span>{form.isActive ? t('customers.active') : t('customers.inactive')}</span>
+              </label>
+            </div>
             <div className="customer-logo-row">
               <div className="customer-logo-preview">
                 {logoPreview ? (
                   <img src={logoPreview} alt="" />
                 ) : (
-                  <span className="muted">{t('customers.logoEmpty')}</span>
+                  <span className="customer-logo-placeholder">{t('customers.logoEmpty')}</span>
                 )}
               </div>
               <div className="customer-logo-actions">
@@ -335,13 +343,6 @@ export function CustomerDetailPage() {
                   />
                 </label>
                 <label className="settings-field field-flex-1">
-                  <span className="settings-field-label-row">{t('customers.externalKey')}</span>
-                  <input
-                    value={form.externalKey}
-                    onChange={(e) => setForm({ ...form, externalKey: e.target.value })}
-                  />
-                </label>
-                <label className="settings-field field-flex-1">
                   <span className="settings-field-label-row">{t('customers.paymentTerms')}</span>
                   <input
                     value={form.paymentTerms}
@@ -373,7 +374,7 @@ export function CustomerDetailPage() {
                   />
                 </label>
               </div>
-              <div className="settings-row settings-row--full">
+              <div className="settings-row settings-row--full settings-row--category customer-category-row">
                 <label className="settings-field field-flex-grow">
                   <span className="settings-field-label-row">{t('settings.businessCategory')}</span>
                   <textarea
@@ -395,17 +396,6 @@ export function CustomerDetailPage() {
                       setForm({ ...form, defaultDiscountPercent: Number(e.target.value) })
                     }
                   />
-                </label>
-                <label className="settings-field field-flex-compact customer-active-toggle">
-                  <span className="settings-field-label-row">{t('customers.status')}</span>
-                  <label className="settings-bank-toggle">
-                    <input
-                      type="checkbox"
-                      checked={form.isActive}
-                      onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                    />
-                    {form.isActive ? t('customers.active') : t('customers.inactive')}
-                  </label>
                 </label>
               </div>
             </div>

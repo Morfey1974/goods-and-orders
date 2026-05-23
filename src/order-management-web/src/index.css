@@ -1,3 +1,5 @@
+@import './styles/app-modal.css';
+
 :root {
   /* Палитра бренда (CMYK) */
   --palette-gray: #cccccc;
@@ -220,6 +222,7 @@ a {
   font-size: 0.9rem;
 }
 
+/* Legacy — prefer <AppModal>. Kept for any stragglers. */
 .modal-overlay {
   position: fixed;
   inset: 0;

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { catalogApi, type Customer } from '../api/catalog';
+import { AppModal } from '../components/ui/AppModal';
 import { useAuth } from '../context/AuthContext';
 import '../styles/customers.css';
 
@@ -23,6 +24,12 @@ export function CustomersPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -47,12 +54,44 @@ export function CustomersPage() {
           (c.mobilePhone ?? '').includes(q) ||
           (c.phone ?? '').includes(q) ||
           (c.email ?? '').toLowerCase().includes(q) ||
-          (c.externalKey ?? '').toLowerCase().includes(q) ||
           (c.city ?? '').toLowerCase().includes(q)
       );
     }
     return [...rows].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [list, search]);
+
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    e.target.value = '';
+    setImporting(true);
+    setImportResult(null);
+    setImportSuccess(false);
+    setError('');
+    try {
+      const r = await catalogApi.customers.importCsv(token, file, updateExisting);
+      setImportResult(
+        t('customers.importDone', {
+          imported: r.importedCount,
+          updated: r.updatedCount,
+          skipped: r.skippedCount,
+          errors: r.errorCount,
+        })
+      );
+      setImportSuccess(r.importedCount > 0 || r.updatedCount > 0);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportResult(null);
+    setImportSuccess(false);
+  };
 
   return (
     <div className="page customers-page">
@@ -63,12 +102,22 @@ export function CustomersPage() {
             {t('customers.resultsCount', { count: filtered.length })}
           </span>
         </div>
-        <Link to="/customers/new" className="btn btn-primary customers-add-btn">
-          + {t('customers.add')}
-        </Link>
+        <div className="customers-page-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            title={t('customers.import')}
+            onClick={() => setImportOpen(true)}
+          >
+            ⬇ {t('customers.import')}
+          </button>
+          <Link to="/customers/new" className="btn btn-primary customers-add-btn">
+            + {t('customers.add')}
+          </Link>
+        </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && !importOpen && <div className="error-banner">{error}</div>}
 
       <div className="customers-filters card">
         <label className="customers-search">
@@ -96,7 +145,6 @@ export function CustomersPage() {
             <tr>
               <th>{t('customers.colName')}</th>
               <th>{t('customers.documentName')}</th>
-              <th>{t('customers.externalKey')}</th>
               <th>{t('customers.colMobile')}</th>
               <th>{t('customers.colId')}</th>
               <th>{t('customers.paymentTerms')}</th>
@@ -121,7 +169,6 @@ export function CustomersPage() {
                   )}
                 </td>
                 <td>{c.documentName || c.name}</td>
-                <td>{c.externalKey || '—'}</td>
                 <td>{c.mobilePhone || c.phone || '—'}</td>
                 <td>{idDisplay(c)}</td>
                 <td>{c.paymentTerms || '—'}</td>
@@ -145,6 +192,49 @@ export function CustomersPage() {
         </table>
         {filtered.length === 0 && <p className="muted customers-empty">{t('customers.empty')}</p>}
       </div>
+
+      <AppModal
+        open={importOpen}
+        onClose={closeImport}
+        preventClose={importing}
+        size="md"
+        className="customers-import-modal"
+        overlayClassName="customers-import-overlay"
+      >
+            <h2>{t('customers.importTitle')}</h2>
+            <p className="muted">{t('customers.importHint')}</p>
+            <label className="customers-import-option">
+              <input
+                type="checkbox"
+                checked={updateExisting}
+                onChange={(e) => setUpdateExisting(e.target.checked)}
+              />
+              {t('customers.importUpdateExisting')}
+            </label>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              onChange={onImportFile}
+            />
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {importing ? t('customers.importing') : t('customers.importChooseFile')}
+            </button>
+            {importResult && (
+              <div className={importSuccess ? 'success-banner' : 'error-banner'}>{importResult}</div>
+            )}
+            <div className="customers-import-modal-actions">
+              <button type="button" className="btn btn-ghost-inline" onClick={closeImport}>
+                {t('settings.cancel')}
+              </button>
+            </div>
+      </AppModal>
     </div>
   );
 }

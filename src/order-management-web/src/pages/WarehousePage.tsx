@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi, type StockBalance, type StockMovement, type Warehouse } from '../api/warehouse';
+import { AppModal } from '../components/ui/AppModal';
 import { WarehouseManageModal } from '../components/WarehouseManageModal';
 import { formatStockQuantity, normalizeStockQuantity } from '../lib/stockQuantity';
 import { useAuth } from '../context/AuthContext';
@@ -190,9 +191,7 @@ export function WarehousePage() {
         }}
       />
 
-      {receiptOpen && (
-        <div className="modal-overlay" onClick={() => setReceiptOpen(false)}>
-          <div className="modal card" onClick={(e) => e.stopPropagation()}>
+      <AppModal open={receiptOpen} onClose={() => setReceiptOpen(false)} size="md">
             <h2>{t('warehouse.receipt')}</h2>
             <p className="muted">{t('warehouse.receiptHint')}</p>
             <form className="form-grid" onSubmit={onReceipt}>
@@ -253,9 +252,7 @@ export function WarehousePage() {
                 <button type="submit" className="btn btn-primary">{t('submit')}</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </AppModal>
     </div>
   );
 }

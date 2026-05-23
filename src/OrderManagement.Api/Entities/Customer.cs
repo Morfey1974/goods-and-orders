@@ -16,7 +16,6 @@ public class Customer
     public string? OsekNumber { get; set; }
     public string? TeudatZehut { get; set; }
     public string? BusinessCategory { get; set; }
-    public string? ExternalKey { get; set; }
     public string? PaymentTerms { get; set; }
 
     public string? Email { get; set; }

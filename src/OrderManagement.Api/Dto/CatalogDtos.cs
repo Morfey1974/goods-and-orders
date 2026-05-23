@@ -14,7 +14,6 @@ public record CustomerDto(
     string? OsekNumber,
     string? TeudatZehut,
     string? BusinessCategory,
-    string? ExternalKey,
     string? PaymentTerms,
     string? Email,
     string? Phone,
@@ -46,7 +45,6 @@ public record CreateCustomerRequest(
     string? OsekNumber,
     string? TeudatZehut,
     string? BusinessCategory,
-    string? ExternalKey,
     string? PaymentTerms,
     string? Email,
     string? Phone,
@@ -74,7 +72,6 @@ public record UpdateCustomerRequest(
     string? OsekNumber,
     string? TeudatZehut,
     string? BusinessCategory,
-    string? ExternalKey,
     string? PaymentTerms,
     string? Email,
     string? Phone,
@@ -100,6 +97,13 @@ public record BomLineDto(Guid ComponentProductId, string ComponentArticleCode, s
 
 public record ProductImportResultDto(
     int ImportedCount,
+    int SkippedCount,
+    int ErrorCount,
+    IReadOnlyList<ProductImportErrorDto> Errors);
+
+public record CustomerImportResultDto(
+    int ImportedCount,
+    int UpdatedCount,
     int SkippedCount,
     int ErrorCount,
     IReadOnlyList<ProductImportErrorDto> Errors);
@@ -255,7 +259,6 @@ public static class CatalogMappers
         c.OsekNumber,
         c.TeudatZehut,
         c.BusinessCategory,
-        c.ExternalKey,
         c.PaymentTerms,
         c.Email,
         c.Phone,
@@ -288,7 +291,6 @@ public static class CatalogMappers
         c.OsekNumber = request.OsekNumber?.Trim();
         c.TeudatZehut = request.TeudatZehut?.Trim();
         c.BusinessCategory = request.BusinessCategory?.Trim();
-        c.ExternalKey = request.ExternalKey?.Trim();
         c.PaymentTerms = request.PaymentTerms?.Trim();
         c.Email = request.Email?.Trim();
         c.Phone = request.Phone?.Trim();
@@ -318,7 +320,6 @@ public static class CatalogMappers
         c.OsekNumber = request.OsekNumber?.Trim();
         c.TeudatZehut = request.TeudatZehut?.Trim();
         c.BusinessCategory = request.BusinessCategory?.Trim();
-        c.ExternalKey = request.ExternalKey?.Trim();
         c.PaymentTerms = request.PaymentTerms?.Trim();
         c.Email = request.Email?.Trim();
         c.Phone = request.Phone?.Trim();

@@ -102,11 +102,48 @@ npm run dev
 |--------|------------|
 | Общие данные | Название, ת.ז., עוסק, категория, адрес |
 | Контакты | Email (редактируемый), телефоны, сайт, язык |
-| Логотип и подпись | JPG/PNG/WebP → для будущих PDF-документов |
+| Логотип и подпись | JPG/PNG/WebP → PDF הצעת מחיר и другие документы |
 | Документы для клиентов | PDF: אישור חשבון, כרטיס חברה, ניהול ספרים, ניכוי מס — загрузка и **отправка по email** |
 | Банковские реквизиты | Код банка (справочник IL), филиал, счёт, SWIFT/ABA/IBAN |
 
 Файлы хранятся в Docker-volume `ordermgmt_uploads` (путь в контейнере: `/app/uploads`).
+
+---
+
+## Клиенты
+
+| Возможность | Описание |
+|-------------|----------|
+| Карточка клиента | Полные поля, логотип, контакты |
+| Импорт CSV | Кнопка на странице «לקוחות» — экспорт из Yesh (`yesh_export_customers_*.csv`), опция обновления существующих по имени |
+| Дедупликация | Совпадение по нормализованному имени (без поля «מפתח זר») |
+
+---
+
+## Документы
+
+| Тип | PDF |
+|-----|-----|
+| הצעת מחיר (Quote) | Генерация на сервере (QuestPDF + шрифты Noto Sans Hebrew), предпросмотр в модальном окне, скачивание |
+| חשבון חיוב / קבלה | Пока без PDF-шаблона (в плане) |
+
+В списке документов клик по номеру הצעה открывает превью PDF. Размер окна превью запоминается в браузере.
+
+Мастер создания документа — полноэкранный wizard; простые формы и диалоги используют общий компонент **`AppModal`** (закрытие по фону без ложных срабатываний при ресайзе, Escape, опциональный ресайз с `localStorage`).
+
+---
+
+## Фронтенд: модальные окна (`AppModal`)
+
+Новые диалоги оборачиваются в `src/order-management-web/src/components/ui/AppModal.tsx`:
+
+```tsx
+<AppModal open={open} onClose={() => setOpen(false)} size="md">
+  …содержимое…
+</AppModal>
+```
+
+Для крупных окон с запоминанием размера — проп `resize` с уникальным `storageKey` (см. PDF-превью, карточка товара, банк в настройках).
 
 ---
 
@@ -159,8 +196,8 @@ docker compose down -v
 ├── docs/
 ├── scripts/                    # ярлыки запуска
 ├── src/
-│   ├── OrderManagement.Api/    # .NET 9 Web API
-│   └── order-management-web/   # React + Vite + i18n (ru/en/he)
+│   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов
+│   └── order-management-web/   # React + Vite + i18n (ru/en/he), AppModal
 └── README.md
 ```
 
@@ -177,9 +214,13 @@ docker compose down -v
 | POST/DELETE | `/api/tenant/assets/logo`, `/signature` | Брендинг |
 | POST/DELETE | `/api/tenant/assets/compliance/{kind}` | PDF (`AccountOwnership`, `BusinessCard`, `BooksManagement`, `WithholdingTax`) |
 | POST | `/api/tenant/assets/compliance/send-email` | Отправка PDF (SMTP stub) |
+| POST | `/api/customers/import` | Импорт клиентов из CSV (`updateExisting` в query) |
 | … | `/api/customers`, `/products`, `/orders`, `/documents` | Справочники и документы |
+| GET | `/api/documents/{id}/pdf` | PDF הצעת מחיר (только Quote) |
 
 Полный список — Swagger: http://localhost:8080/swagger
+
+Пример CSV для товаров: [docs/import-products-example.csv](docs/import-products-example.csv)
 
 ---
 
@@ -193,6 +234,8 @@ docker compose down -v
 | API недоступен | `docker compose ps` — сервис `api` Up |
 | CORS | Добавьте origin в `Cors:Origins` в `appsettings.json` |
 | Порт 5432 занят | Смените порт в `docker-compose.yml` или остановите другой PostgreSQL |
+| PDF הצעה не открывается / 500 | Пересоберите API; в контейнере должны быть шрифты `Assets/Fonts/NotoSansHebrew-*.ttf` |
+| Модальное окно закрывается при ресайзе | Обновите фронтенд — используется `AppModal`, не сырой `onClick` на overlay |
 
 ---
 

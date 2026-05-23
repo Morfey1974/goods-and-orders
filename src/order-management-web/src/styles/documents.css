@@ -106,6 +106,79 @@
   flex-wrap: wrap;
 }
 
+.doc-number-link {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--primary, #0e7490);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.doc-number-link:hover code {
+  color: inherit;
+}
+
+.doc-pdf-preview-overlay {
+  z-index: 1200;
+}
+
+.doc-pdf-preview-modal {
+  display: flex;
+  flex-direction: column;
+  width: 1000px;
+  height: 780px;
+  min-width: 640px;
+  min-height: 480px;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  background: var(--surface, #fff);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.doc-pdf-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-pdf-preview-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.doc-pdf-preview-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.doc-pdf-preview-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0.5rem 1rem 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-pdf-preview-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #525659;
+}
+
 .doc-badge {
   display: inline-block;
   padding: 0.12rem 0.45rem;

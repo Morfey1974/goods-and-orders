@@ -152,4 +152,26 @@ export const documentsApi = {
     );
     return mapDocument(data);
   },
+  fetchPdfBlob: async (token: string, id: string) => {
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const res = await fetch(`${API_BASE}/api/documents/${id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const body = data as { message?: string };
+      throw new Error(body.message ?? res.statusText);
+    }
+    return res.blob();
+  },
+
+  downloadPdf: async (token: string, id: string, fileName: string) => {
+    const blob = await documentsApi.fetchPdfBlob(token, id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

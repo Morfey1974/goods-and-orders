@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { catalogApi, PRODUCT_TYPES, type Product } from '../api/catalog';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { AppModal } from '../components/ui/AppModal';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ProductEditModal } from '../components/products/ProductEditModal';
 import { ProductPhoto } from '../components/products/ProductPhoto';
@@ -652,9 +653,7 @@ export function ProductsPage() {
         )}
       </div>
 
-      {importOpen && (
-        <div className="modal-overlay" onClick={() => !importing && closeImport()}>
-          <div className="modal card" onClick={(e) => e.stopPropagation()}>
+      <AppModal open={importOpen} onClose={closeImport} preventClose={importing} size="md">
             <h2>{t('products.importTitle')}</h2>
             <p className="muted">{t('products.importHint')}</p>
             <label className="checkbox-row">
@@ -699,9 +698,7 @@ export function ProductsPage() {
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
+      </AppModal>
 
       <ConfirmDialog
         open={deleteTarget !== null}

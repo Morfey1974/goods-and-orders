@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppModal } from './ui/AppModal';
 import { warehouseApi, type Warehouse } from '../api/warehouse';
 
 type Props = {
@@ -83,11 +84,8 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal card warehouse-manage-modal" onClick={(e) => e.stopPropagation()}>
+    <AppModal open={open} onClose={onClose} size="lg" className="warehouse-manage-modal">
         <div className="warehouse-manage-header">
           <div>
             <h2>{t('warehouse.manageTitle')}</h2>
@@ -190,7 +188,6 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </AppModal>
   );
 }

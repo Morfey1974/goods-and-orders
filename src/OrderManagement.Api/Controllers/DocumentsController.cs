@@ -6,13 +6,17 @@ using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
 using OrderManagement.Api.Extensions;
 using OrderManagement.Api.Services;
+using OrderManagement.Api.Services.Pdf;
 
 namespace OrderManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class DocumentsController(AppDbContext db, DocumentService documents) : ControllerBase
+public class DocumentsController(
+    AppDbContext db,
+    DocumentService documents,
+    QuotePdfService quotePdf) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<DocumentListResponseDto>> List(
@@ -71,6 +75,29 @@ public class DocumentsController(AppDbContext db, DocumentService documents) : C
             .ToList();
 
         return Ok(new DocumentListResponseDto(summary, groups));
+    }
+
+    [HttpGet("{id:guid}/pdf")]
+    public async Task<IActionResult> DownloadPdf(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            var pdf = await quotePdf.GenerateAsync(tenantId.Value, id, ct);
+            var doc = await db.BusinessDocuments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == id && d.TenantId == tenantId, ct);
+            var fileName = doc is null
+                ? "quote.pdf"
+                : $"quote-{QuotePdfBuilder.StripDocumentPrefix(doc.DocumentNumber)}.pdf";
+            return File(pdf, "application/pdf", fileName, enableRangeProcessing: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}")]

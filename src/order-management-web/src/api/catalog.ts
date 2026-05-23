@@ -10,7 +10,6 @@ export type Customer = {
   osekNumber?: string;
   teudatZehut?: string;
   businessCategory?: string;
-  externalKey?: string;
   paymentTerms?: string;
   email?: string;
   phone?: string;
@@ -45,7 +44,6 @@ function mapCustomer(raw: Record<string, unknown>): Customer {
     osekNumber: (raw.osekNumber ?? raw.OsekNumber) as string | undefined,
     teudatZehut: (raw.teudatZehut ?? raw.TeudatZehut) as string | undefined,
     businessCategory: (raw.businessCategory ?? raw.BusinessCategory) as string | undefined,
-    externalKey: (raw.externalKey ?? raw.ExternalKey) as string | undefined,
     paymentTerms: (raw.paymentTerms ?? raw.PaymentTerms) as string | undefined,
     email: (raw.email ?? raw.Email) as string | undefined,
     phone: (raw.phone ?? raw.Phone) as string | undefined,
@@ -80,6 +78,14 @@ export type BomLine = {
 
 export type ProductImportResult = {
   importedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  errors: { line: number; message: string }[];
+};
+
+export type CustomerImportResult = {
+  importedCount: number;
+  updatedCount: number;
   skippedCount: number;
   errorCount: number;
   errors: { line: number; message: string }[];
@@ -227,6 +233,30 @@ export const catalogApi = {
         token
       );
       return mapCustomer(data);
+    },
+    importCsv: async (token: string, file: File, updateExisting = false) => {
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const q = new URLSearchParams({ updateExisting: String(updateExisting) });
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${base}/api/customers/import?${q}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { message?: string }).message ?? res.statusText);
+      const raw = data as Record<string, unknown>;
+      return {
+        importedCount: Number(raw.importedCount ?? 0),
+        updatedCount: Number(raw.updatedCount ?? 0),
+        skippedCount: Number(raw.skippedCount ?? 0),
+        errorCount: Number(raw.errorCount ?? 0),
+        errors: ((raw.errors as { line?: number; message?: string }[]) ?? []).map((e) => ({
+          line: Number(e.line ?? 0),
+          message: String(e.message ?? ''),
+        })),
+      } satisfies CustomerImportResult;
     },
   },
   products: {

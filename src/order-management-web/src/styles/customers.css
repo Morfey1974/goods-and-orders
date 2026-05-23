@@ -1,5 +1,14 @@
 .customers-page {
-  max-width: 1200px;
+  width: min(96vw, 1480px);
+  max-width: 1480px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+.customers-page .customers-filters,
+.customers-page .customers-table-wrap,
+.customers-page .customers-page-toolbar {
+  width: 100%;
 }
 
 .customers-page-toolbar {
@@ -9,6 +18,36 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+}
+
+.customers-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.customers-import-modal {
+  width: min(28rem, 96vw);
+  padding: 1.1rem 1.25rem;
+}
+
+.customers-import-modal h2 {
+  margin: 0 0 0.5rem;
+}
+
+.customers-import-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.customers-import-modal-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .customers-page-title-row {
@@ -60,6 +99,7 @@
 .customers-table-wrap {
   overflow-x: auto;
   padding: 0;
+  width: 100%;
 }
 
 .customers-table {
@@ -70,7 +110,7 @@
 
 .customers-table thead th {
   text-align: start;
-  padding: 0.55rem 0.65rem;
+  padding: 0.6rem 0.85rem;
   background: color-mix(in srgb, var(--palette-turquoise-light) 45%, var(--surface));
   border-bottom: 1px solid var(--border);
   font-weight: 600;
@@ -78,7 +118,7 @@
 }
 
 .customers-table tbody td {
-  padding: 0.5rem 0.65rem;
+  padding: 0.55rem 0.85rem;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -97,7 +137,17 @@
 }
 
 .customers-cell-name {
-  min-width: 10rem;
+  min-width: 12rem;
+}
+
+.customers-table th:nth-child(2),
+.customers-table td:nth-child(2) {
+  min-width: 11rem;
+}
+
+.customers-table th:nth-child(5),
+.customers-table td:nth-child(5) {
+  min-width: 8rem;
 }
 
 .customers-name-link {
@@ -153,8 +203,32 @@
   text-decoration: none;
 }
 
-.customer-logo-section .settings-section-body {
-  padding: 0.75rem 1rem;
+.customer-logo-section-body {
+  position: relative;
+  padding: 0.85rem 1rem 0.75rem;
+  min-height: 7.5rem;
+}
+
+.customer-logo-status {
+  position: absolute;
+  top: 0.85rem;
+  inset-inline-end: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  z-index: 1;
+}
+
+.customer-logo-status-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.customer-status-toggle {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .customer-logo-row {
@@ -162,11 +236,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 1.25rem;
+  padding-inline-end: min(10rem, 28%);
 }
 
 .customer-logo-preview {
   width: 6.5rem;
   height: 6.5rem;
+  flex-shrink: 0;
   border: 1px dashed color-mix(in srgb, var(--palette-turquoise) 35%, var(--border));
   border-radius: 50%;
   display: flex;
@@ -182,12 +258,24 @@
   object-fit: cover;
 }
 
+.customer-logo-placeholder {
+  display: block;
+  width: 100%;
+  padding: 0 0.65rem;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
 .customer-logo-actions {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.customer-active-toggle .settings-bank-toggle {
-  margin-top: 0.35rem;
+.customer-detail-page .customer-category-row {
+  grid-template-columns: 1fr minmax(5.5rem, 7rem);
 }

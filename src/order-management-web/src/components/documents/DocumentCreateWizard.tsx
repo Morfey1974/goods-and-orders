@@ -191,6 +191,7 @@ export function DocumentCreateWizard({
   const [editVersion, setEditVersion] = useState(1);
   const [editTitle, setEditTitle] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const isEdit = Boolean(editDocumentId);
   const isDuplicateDraft = Boolean(duplicateFromDocumentId);
@@ -714,6 +715,25 @@ export function DocumentCreateWizard({
               <button type="button" className="btn btn-ghost-inline" onClick={handleClose} disabled={busy}>
                 {t('settings.cancel')}
               </button>
+              {isEdit && documentType === 'Quote' && editDocumentId && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={pdfBusy || busy}
+                  onClick={() => {
+                    if (!token || !editDocumentId) return;
+                    setPdfBusy(true);
+                    setError('');
+                    const num = editTitle.replace(/^[A-Z]+-/, '') || editDocumentId.slice(0, 8);
+                    void documentsApi
+                      .downloadPdf(token, editDocumentId, `quote-${num}.pdf`)
+                      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
+                      .finally(() => setPdfBusy(false));
+                  }}
+                >
+                  {pdfBusy ? '…' : t('documents.downloadPdf')}
+                </button>
+              )}
               <button type="submit" className="btn btn-primary" form="doc-create-form" disabled={busy || loadingEdit}>
                 {busy ? '…' : isEdit ? t('documents.save') : t('documents.generate')}
               </button>

@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { AppModal } from './ui/AppModal';
 
 type Props = {
   open: boolean;
@@ -24,43 +23,32 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, busy, onCancel]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className="confirm-dialog-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-      onClick={() => !busy && onCancel()}
+  return (
+    <AppModal
+      open={open}
+      onClose={onCancel}
+      preventClose={busy}
+      size="sm"
+      zIndex={2600}
+      overlayClassName="confirm-dialog-overlay"
+      className="confirm-dialog"
+      labelledBy="confirm-dialog-title"
     >
-      <div className="confirm-dialog card" onClick={(e) => e.stopPropagation()}>
-        <h2 id="confirm-dialog-title">{title}</h2>
-        <p className="confirm-dialog-message">{message}</p>
-        <div className="modal-actions">
-          <button type="button" className="btn btn-ghost-inline" onClick={onCancel} disabled={busy}>
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={danger ? 'btn btn-danger' : 'btn btn-primary'}
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      <h2 id="confirm-dialog-title">{title}</h2>
+      <p className="confirm-dialog-message">{message}</p>
+      <div className="modal-actions">
+        <button type="button" className="btn btn-ghost-inline" onClick={onCancel} disabled={busy}>
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          className={danger ? 'btn btn-danger' : 'btn btn-primary'}
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          {confirmLabel}
+        </button>
       </div>
-    </div>,
-    document.body
+    </AppModal>
   );
 }

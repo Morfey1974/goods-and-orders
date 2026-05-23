@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { AppModal } from '../components/ui/AppModal';
 import { useTranslation } from 'react-i18next';
 import { api, type TenantProfile } from '../api/client';
 import {
@@ -64,52 +65,6 @@ function websiteLinkLabel(href: string): string {
   }
 }
 
-const BANK_MODAL_SIZE_KEY = 'ordermgmt.bank-modal-size';
-const BANK_MODAL_MIN_WIDTH = 640;
-const BANK_MODAL_MIN_HEIGHT = 420;
-
-function clampBankModalSize(width: number, height: number) {
-  const maxW = Math.floor(window.innerWidth * 0.96);
-  const maxH = Math.floor(window.innerHeight * 0.92);
-  return {
-    width: Math.min(Math.max(width, BANK_MODAL_MIN_WIDTH), maxW),
-    height: Math.min(Math.max(height, BANK_MODAL_MIN_HEIGHT), maxH),
-  };
-}
-
-function loadSavedBankModalSize() {
-  try {
-    const raw = localStorage.getItem(BANK_MODAL_SIZE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { width?: number; height?: number };
-    if (typeof parsed.width !== 'number' || typeof parsed.height !== 'number') return null;
-    return clampBankModalSize(parsed.width, parsed.height);
-  } catch {
-    return null;
-  }
-}
-
-function saveBankModalSize(width: number, height: number) {
-  if (width < BANK_MODAL_MIN_WIDTH || height < BANK_MODAL_MIN_HEIGHT) return;
-  localStorage.setItem(BANK_MODAL_SIZE_KEY, JSON.stringify(clampBankModalSize(width, height)));
-}
-
-function applySavedBankModalSize(el: HTMLElement) {
-  const saved = loadSavedBankModalSize();
-  if (saved) {
-    el.style.width = `${saved.width}px`;
-    el.style.height = `${saved.height}px`;
-  } else {
-    el.style.width = '';
-    el.style.height = '';
-  }
-}
-
-function persistBankModalSizeFromElement(el: HTMLElement | null) {
-  if (!el) return;
-  saveBankModalSize(el.offsetWidth, el.offsetHeight);
-}
-
 function formatBankPreview(p: TenantProfile) {
   const parts: string[] = [];
   if (p.bankCode) parts.push(p.bankCode);
@@ -144,45 +99,7 @@ export function SettingsPage() {
   const [assetsSummary, setAssetsSummary] = useState<TenantAssetsSummary | null>(null);
   const [assetsError, setAssetsError] = useState('');
   const [assetsMessage, setAssetsMessage] = useState('');
-  const bankModalRef = useRef<HTMLDivElement>(null);
-  const ignoreBankResizeSaveRef = useRef(false);
-
-  useLayoutEffect(() => {
-    if (!bankModalOpen) return;
-    const el = bankModalRef.current;
-    if (!el) return;
-    ignoreBankResizeSaveRef.current = true;
-    applySavedBankModalSize(el);
-    requestAnimationFrame(() => {
-      ignoreBankResizeSaveRef.current = false;
-    });
-  }, [bankModalOpen]);
-
-  useEffect(() => {
-    if (!bankModalOpen) return;
-    const el = bankModalRef.current;
-    if (!el) return;
-    let saveTimer: ReturnType<typeof setTimeout> | undefined;
-    const observer = new ResizeObserver(() => {
-      if (ignoreBankResizeSaveRef.current) return;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        if (!el.isConnected) return;
-        saveBankModalSize(el.offsetWidth, el.offsetHeight);
-      }, 150);
-    });
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      clearTimeout(saveTimer);
-      persistBankModalSizeFromElement(el);
-    };
-  }, [bankModalOpen]);
-
-  const closeBankModal = () => {
-    persistBankModalSizeFromElement(bankModalRef.current);
-    setBankModalOpen(false);
-  };
+  const closeBankModal = () => setBankModalOpen(false);
 
   useEffect(() => {
     if (!token) return;
@@ -616,14 +533,21 @@ export function SettingsPage() {
       </form>
 
       {bankModalOpen && bankForm && (
-        <div className="modal-overlay settings-bank-overlay" role="presentation">
-          <div
-            ref={bankModalRef}
-            className="modal card settings-bank-modal settings-page"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-bank-modal-title"
-          >
+        <AppModal
+          open={bankModalOpen}
+          onClose={closeBankModal}
+          className="settings-bank-modal settings-page"
+          overlayClassName="settings-bank-overlay"
+          closeOnBackdrop={false}
+          labelledBy="settings-bank-modal-title"
+          resize={{
+            storageKey: 'ordermgmt.bank-modal-size',
+            defaultSize: { width: 860, height: 680 },
+            minWidth: 640,
+            minHeight: 420,
+            applyDefaultWhenEmpty: false,
+          }}
+        >
             <div className="settings-bank-modal-head">
               <h2 id="settings-bank-modal-title" className="settings-section-title">
                 {t('settings.bankModalTitle')}
@@ -764,8 +688,7 @@ export function SettingsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </AppModal>
       )}
     </div>
   );

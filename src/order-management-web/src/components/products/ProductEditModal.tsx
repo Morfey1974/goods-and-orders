@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppModal } from '../ui/AppModal';
 import {
   catalogApi,
   type Product,
@@ -12,39 +12,7 @@ import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
 
 const PRODUCT_FORM_ID = 'product-card-form';
-const MODAL_SIZE_STORAGE_KEY = 'ordermgmt.product-card-modal-size';
-const MODAL_MIN_WIDTH = 420;
-const MODAL_MIN_HEIGHT = 380;
-
-type SavedModalSize = { width: number; height: number };
-
-function clampModalSize(width: number, height: number): SavedModalSize {
-  const maxW = window.innerWidth * 0.95;
-  const maxH = window.innerHeight * 0.92;
-  return {
-    width: Math.round(Math.min(maxW, Math.max(MODAL_MIN_WIDTH, width))),
-    height: Math.round(Math.min(maxH, Math.max(MODAL_MIN_HEIGHT, height))),
-  };
-}
-
-function loadSavedModalSize(): SavedModalSize | null {
-  try {
-    const raw = localStorage.getItem(MODAL_SIZE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedModalSize;
-    if (
-      typeof parsed.width !== 'number' ||
-      typeof parsed.height !== 'number' ||
-      parsed.width < MODAL_MIN_WIDTH ||
-      parsed.height < MODAL_MIN_HEIGHT
-    ) {
-      return null;
-    }
-    return clampModalSize(parsed.width, parsed.height);
-  } catch {
-    return null;
-  }
-}
+const PRODUCT_CARD_SIZE_KEY = 'ordermgmt.product-card-modal-size';
 
 function tracksStockType(type: string) {
   return ['ComponentPart', 'FinishedGood', 'Bundle', 'Spare'].includes(type);
@@ -91,7 +59,6 @@ export function ProductEditModal({
   onProductUpdated,
 }: Props) {
   const { t } = useTranslation();
-  const modalRef = useRef<HTMLDivElement>(null);
   const [modalError, setModalError] = useState('');
   const [savingActive, setSavingActive] = useState(false);
   const [savedProduct, setSavedProduct] = useState<Product | null>(null);
@@ -112,41 +79,6 @@ export function ProductEditModal({
     showBomInInvoice: false,
     bomLines: [] as BomInput[],
   });
-
-  useEffect(() => {
-    if (!open) return;
-    const el = modalRef.current;
-    if (!el) return;
-    const saved = loadSavedModalSize();
-    if (saved) {
-      el.style.width = `${saved.width}px`;
-      el.style.height = `${saved.height}px`;
-    } else {
-      el.style.width = '';
-      el.style.height = '';
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const el = modalRef.current;
-    if (!el) return;
-    let saveTimer: ReturnType<typeof setTimeout> | undefined;
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[0]?.contentRect;
-      if (!box?.width || !box?.height) return;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        const size = clampModalSize(box.width, box.height);
-        localStorage.setItem(MODAL_SIZE_STORAGE_KEY, JSON.stringify(size));
-      }, 150);
-    });
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      clearTimeout(saveTimer);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -320,11 +252,21 @@ export function ProductEditModal({
     }
   };
 
-  if (!open) return null;
-
-  return createPortal(
-    <div className="modal-overlay product-card-overlay">
-      <div ref={modalRef} className="product-card-modal">
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      className="product-card-modal"
+      overlayClassName="product-card-overlay"
+      noCard
+      resize={{
+        storageKey: PRODUCT_CARD_SIZE_KEY,
+        defaultSize: { width: 720, height: 680 },
+        minWidth: 420,
+        minHeight: 380,
+        applyDefaultWhenEmpty: false,
+      }}
+    >
         <div className="product-card-header">
           <h2>{t('products.cardTitle')}</h2>
           <button type="button" className="product-card-close" onClick={onClose} aria-label={t('products.close')}>
@@ -608,8 +550,6 @@ export function ProductEditModal({
           </div>
           </>
         )}
-      </div>
-    </div>,
-    document.body
+    </AppModal>
   );
 }

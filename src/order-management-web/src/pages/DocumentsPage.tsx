@@ -8,6 +8,8 @@ import {
 } from '../components/documents/DocumentCreateWizard';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { AppModal } from '../components/ui/AppModal';
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { documentsApi, type Document, type DocumentListResponse } from '../api/documents';
 import { useAuth } from '../context/AuthContext';
 import '../styles/products-catalog.css';
@@ -47,7 +49,11 @@ function canManageDocument(doc: Document) {
 }
 
 function documentHasActions(doc: Document) {
-  return canManageDocument(doc) || (doc.documentType === 'ChargeInvoice' && doc.status === 'Open');
+  return (
+    canManageDocument(doc) ||
+    doc.documentType === 'Quote' ||
+    (doc.documentType === 'ChargeInvoice' && doc.status === 'Open')
+  );
 }
 
 function monthLabel(year: number, month: number) {
@@ -88,6 +94,10 @@ export function DocumentsPage() {
     parentDocumentId: '',
     paymentMethod: '',
   });
+  const [pdfPreviewDoc, setPdfPreviewDoc] = useState<Document | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -251,6 +261,60 @@ export function DocumentsPage() {
     }
   };
 
+  const quotePdfFileName = (doc: Document) => {
+    const num = doc.documentNumber.replace(/^[A-Z]+-/, '');
+    return `quote-${num}.pdf`;
+  };
+
+  const closePdfPreview = useCallback(() => {
+    setPdfPreviewDoc(null);
+    setPdfPreviewError(null);
+    setPdfPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+  }, []);
+
+  useEffect(() => () => {
+    setPdfPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+  }, []);
+
+  const openPdfPreview = async (doc: Document) => {
+    if (!token || doc.documentType !== 'Quote') return;
+    setRowMenuDoc(null);
+    setError('');
+    setPdfPreviewDoc(doc);
+    setPdfPreviewLoading(true);
+    setPdfPreviewError(null);
+    setPdfPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+    try {
+      const blob = await documentsApi.fetchPdfBlob(token, doc.id);
+      const url = URL.createObjectURL(blob);
+      setPdfPreviewUrl(url);
+    } catch (err) {
+      setPdfPreviewError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setPdfPreviewLoading(false);
+    }
+  };
+
+  const onDownloadPdf = async (doc: Document) => {
+    if (!token || doc.documentType !== 'Quote') return;
+    setRowMenuDoc(null);
+    setError('');
+    try {
+      await documentsApi.downloadPdf(token, doc.id, quotePdfFileName(doc));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    }
+  };
+
   const onPayment = async (doc: Document) => {
     if (!token) return;
     if (!window.confirm(t('documents.paymentConfirm', { number: doc.documentNumber }))) return;
@@ -371,7 +435,18 @@ export function DocumentsPage() {
                   <tr key={doc.id}>
                     <td>
                       <div className="doc-number-cell">
-                        <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+                        {doc.documentType === 'Quote' ? (
+                          <button
+                            type="button"
+                            className="doc-number-link"
+                            onClick={() => void openPdfPreview(doc)}
+                            title={t('documents.previewPdf')}
+                          >
+                            <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+                          </button>
+                        ) : (
+                          <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+                        )}
                         <span className={`doc-badge doc-badge-${STATUS_CLASS[doc.status] ?? 'draft'}`}>
                           {t(`documents.statuses.${STATUS_CLASS[doc.status] ?? 'draft'}`)}
                         </span>
@@ -417,6 +492,16 @@ export function DocumentsPage() {
       <CatalogRowMenu open={rowMenuDoc !== null} anchorRef={rowMenuAnchorRef}>
         {rowMenuDoc && (
           <>
+            {rowMenuDoc.documentType === 'Quote' && (
+              <>
+                <button type="button" onClick={() => void openPdfPreview(rowMenuDoc)}>
+                  {t('documents.previewPdf')}
+                </button>
+                <button type="button" onClick={() => void onDownloadPdf(rowMenuDoc)}>
+                  {t('documents.downloadPdf')}
+                </button>
+              </>
+            )}
             {canManageDocument(rowMenuDoc) && (
               <button
                 type="button"
@@ -457,6 +542,24 @@ export function DocumentsPage() {
         )}
       </CatalogRowMenu>
 
+      <DocumentPdfPreviewModal
+        open={pdfPreviewDoc !== null}
+        title={
+          pdfPreviewDoc
+            ? `${t('documents.types.Quote')} ${pdfPreviewDoc.documentNumber.replace(/^[A-Z]+-/, '')}`
+            : ''
+        }
+        pdfUrl={pdfPreviewUrl}
+        loading={pdfPreviewLoading}
+        error={pdfPreviewError}
+        onClose={closePdfPreview}
+        onDownload={
+          pdfPreviewDoc && token
+            ? () => void documentsApi.downloadPdf(token, pdfPreviewDoc.id, quotePdfFileName(pdfPreviewDoc))
+            : undefined
+        }
+      />
+
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t('documents.deleteConfirmTitle')}
@@ -488,9 +591,7 @@ export function DocumentsPage() {
         />
       )}
 
-      {createOpen && (
-        <div className="modal-overlay" onClick={() => setCreateOpen(false)}>
-          <div className="modal card" onClick={(e) => e.stopPropagation()}>
+      <AppModal open={createOpen} onClose={() => setCreateOpen(false)} size="md">
             <h2>{t(`documents.types.${createType}`)}</h2>
             <form className="form-grid" onSubmit={onCreate}>
               {error && <div className="error-banner">{error}</div>}
@@ -585,9 +686,7 @@ export function DocumentsPage() {
                 <button type="submit" className="btn btn-primary">{t('submit')}</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </AppModal>
     </div>
   );
 }

@@ -1,0 +1,79 @@
+/* Shared modal shell — use <AppModal> instead of raw .modal-overlay */
+
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.app-modal-shell {
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.app-modal__panel {
+  position: relative;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.app-modal__panel--sm {
+  max-width: 440px;
+}
+
+.app-modal__panel--md {
+  max-width: 480px;
+}
+
+.app-modal__panel--lg {
+  max-width: 720px;
+}
+
+.app-modal__panel--xl {
+  max-width: 960px;
+}
+
+.app-modal__panel--fit {
+  max-width: min(96vw, 100%);
+}
+
+.app-modal__panel--resizable {
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: hidden;
+}
+
+.app-modal__resize-handle {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  z-index: 5;
+  touch-action: none;
+  opacity: 0.55;
+  background: linear-gradient(
+    135deg,
+    transparent 0 42%,
+    var(--palette-turquoise-dark, #0e7490) 42% 52%,
+    transparent 52% 62%,
+    var(--palette-turquoise-dark, #0e7490) 62% 72%,
+    transparent 72%
+  );
+}
+
+.app-modal__resize-handle:hover {
+  opacity: 0.85;
+}
+
+.app-modal__panel h2:first-child {
+  margin-top: 0;
+}

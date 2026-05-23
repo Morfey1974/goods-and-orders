@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppModal } from '../ui/AppModal';
 import {
   COMPLIANCE_DOCUMENT_KINDS,
   findComplianceDoc,
@@ -72,13 +73,15 @@ export function ComplianceEmailModal({
   };
 
   return (
-    <div className="modal-overlay settings-compliance-email-overlay" role="presentation">
-      <div
-        className="modal card settings-compliance-email-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="compliance-email-title"
-      >
+    <AppModal
+      open
+      onClose={onClose}
+      size="lg"
+      className="settings-compliance-email-modal"
+      overlayClassName="settings-compliance-email-overlay"
+      labelledBy="compliance-email-title"
+      preventClose={sending}
+    >
         <h2 id="compliance-email-title" className="settings-section-title">
           {t('settings.complianceEmailTitle')}
         </h2>
@@ -137,7 +140,6 @@ export function ComplianceEmailModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </AppModal>
   );
 }

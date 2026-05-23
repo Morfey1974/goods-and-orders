@@ -91,7 +91,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.OsekNumber).HasMaxLength(32);
             e.Property(x => x.TeudatZehut).HasMaxLength(16);
             e.Property(x => x.BusinessCategory).HasMaxLength(256);
-            e.Property(x => x.ExternalKey).HasMaxLength(64);
             e.Property(x => x.PaymentTerms).HasMaxLength(128);
             e.Property(x => x.Email).HasMaxLength(256);
             e.Property(x => x.Phone).HasMaxLength(64);

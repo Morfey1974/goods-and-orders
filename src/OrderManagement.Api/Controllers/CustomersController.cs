@@ -12,8 +12,29 @@ namespace OrderManagement.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class CustomersController(AppDbContext db, CustomerLogoService logoService) : ControllerBase
+public class CustomersController(
+    AppDbContext db,
+    CustomerLogoService logoService,
+    CustomerImportService importService) : ControllerBase
 {
+    [HttpPost("import")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<CustomerImportResultDto>> Import(
+        IFormFile file,
+        [FromQuery] bool updateExisting = false,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        if (file.Length == 0)
+            return BadRequest(new { message = "File is empty." });
+
+        await using var stream = file.OpenReadStream();
+        var result = await importService.ImportCsvAsync(tenantId.Value, stream, updateExisting, ct);
+        return Ok(result);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CustomerDto>>> List(
         [FromQuery] bool includeInactive = false,

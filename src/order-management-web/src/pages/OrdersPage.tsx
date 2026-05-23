@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogApi } from '../api/catalog';
 import { ordersApi, type Order } from '../api/orders';
+import { AppModal } from '../components/ui/AppModal';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_KEYS: Record<string, string> = {
@@ -162,9 +163,7 @@ export function OrdersPage() {
         {orders.length === 0 && <p className="muted empty-table">{t('orders.empty')}</p>}
       </div>
 
-      {createOpen && (
-        <div className="modal-overlay" onClick={() => setCreateOpen(false)}>
-          <div className="modal card" onClick={(e) => e.stopPropagation()}>
+      <AppModal open={createOpen} onClose={() => setCreateOpen(false)} size="md">
             <h2>{t('orders.add')}</h2>
             <form className="form-grid" onSubmit={onCreate}>
               {error && <div className="error-banner">{error}</div>}
@@ -216,9 +215,7 @@ export function OrdersPage() {
                 <button type="submit" className="btn btn-primary">{t('submit')}</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </AppModal>
     </div>
   );
 }
