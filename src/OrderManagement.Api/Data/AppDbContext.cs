@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<ArticleSequence> ArticleSequences => Set<ArticleSequence>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<BomLine> BomLines => Set<BomLine>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
@@ -18,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<BusinessDocument> BusinessDocuments => Set<BusinessDocument>();
     public DbSet<BusinessDocumentLine> BusinessDocumentLines => Set<BusinessDocumentLine>();
+    public DbSet<ReceiptPaymentLine> ReceiptPaymentLines => Set<ReceiptPaymentLine>();
     public DbSet<TenantComplianceDocument> TenantComplianceDocuments => Set<TenantComplianceDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -111,6 +113,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.LogoPath).HasMaxLength(512);
             e.Property(x => x.DefaultDiscountPercent).HasPrecision(5, 2);
             e.HasIndex(x => new { x.TenantId, x.Name });
+        });
+
+        modelBuilder.Entity<CustomerContact>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FullName).HasMaxLength(256);
+            e.Property(x => x.Phone).HasMaxLength(64);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.HasIndex(x => x.CustomerId);
+            e.HasOne(x => x.Customer)
+                .WithMany(c => c.Contacts)
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Product>(e =>
@@ -231,6 +246,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ReceiptPaymentLine>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+            e.Property(x => x.Currency).HasMaxLength(8);
+            e.Property(x => x.GeneralDetail).HasMaxLength(256);
+            e.Property(x => x.DetailsJson).HasMaxLength(2048);
+            e.HasIndex(x => x.DocumentId);
+            e.HasOne(x => x.Document)
+                .WithMany(d => d.PaymentLines)
+                .HasForeignKey(x => x.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

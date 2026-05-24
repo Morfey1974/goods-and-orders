@@ -40,6 +40,7 @@ export type TenantProfile = {
   bankDetails?: string;
   defaultLanguage: string;
   taxRegime: string;
+  withholdingTaxPercent?: number | null;
   subscriptionStatus: string;
   registeredAt: string;
   trialEndsAt: string;

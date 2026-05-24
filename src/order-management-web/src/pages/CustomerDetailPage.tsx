@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { catalogApi, type Customer } from '../api/catalog';
+import { catalogApi, type Customer, type CustomerContactInput } from '../api/catalog';
 import {
   bankDisplayName,
   findIsraeliBank,
@@ -13,7 +13,38 @@ import { useAuth } from '../context/AuthContext';
 import '../styles/settings.css';
 import '../styles/customers.css';
 
-type CustomerForm = Omit<Customer, 'id' | 'hasLogo' | 'createdAt' | 'version'> & { version?: number };
+type CustomerForm = Omit<Customer, 'id' | 'hasLogo' | 'createdAt' | 'version' | 'contacts'> & {
+  version?: number;
+};
+
+type ContactRow = {
+  key: string;
+  fullName: string;
+  phone: string;
+  email: string;
+};
+
+function emptyContactRow(): ContactRow {
+  return { key: crypto.randomUUID(), fullName: '', phone: '', email: '' };
+}
+
+function contactsFromCustomer(c: Customer): ContactRow[] {
+  const rows = (c.contacts ?? []).map((x) => ({
+    key: x.id,
+    fullName: x.fullName,
+    phone: x.phone ?? '',
+    email: x.email ?? '',
+  }));
+  return rows.length > 0 ? rows : [emptyContactRow()];
+}
+
+function contactsToPayload(rows: ContactRow[]): CustomerContactInput[] {
+  return rows.map((r) => ({
+    fullName: r.fullName.trim() || null,
+    phone: r.phone.trim() || null,
+    email: r.email.trim() || null,
+  }));
+}
 
 function emptyForm(): CustomerForm {
   return {
@@ -79,7 +110,12 @@ function customerToForm(c: Customer): CustomerForm {
   };
 }
 
-function formToPayload(form: CustomerForm, lang: string, version?: number) {
+function formToPayload(
+  form: CustomerForm,
+  lang: string,
+  contacts: CustomerContactInput[],
+  version?: number
+) {
   const bankCode = normalizeBankCode(form.bankCode ?? '') || (form.bankCode ?? '').trim() || null;
   return {
     name: form.name.trim(),
@@ -108,6 +144,7 @@ function formToPayload(form: CustomerForm, lang: string, version?: number) {
     bankIban: form.bankIban?.trim() || null,
     defaultDiscountPercent: form.defaultDiscountPercent,
     isActive: form.isActive,
+    contacts,
     version: version ?? form.version ?? 1,
   };
 }
@@ -120,6 +157,7 @@ export function CustomerDetailPage() {
   const isNew = routeId === 'new';
 
   const [form, setForm] = useState<CustomerForm>(emptyForm);
+  const [contactRows, setContactRows] = useState<ContactRow[]>([emptyContactRow()]);
   const [hasLogo, setHasLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -146,6 +184,7 @@ export function CustomerDetailPage() {
       .get(token, customerId)
       .then((c) => {
         setForm(customerToForm(c));
+        setContactRows(contactsFromCustomer(c));
         setHasLogo(c.hasLogo);
       })
       .catch((e) => setError(e.message));
@@ -184,16 +223,20 @@ export function CustomerDetailPage() {
     setError('');
     try {
       if (isNew) {
-        const created = await catalogApi.customers.create(token, formToPayload(form, i18n.language));
+        const created = await catalogApi.customers.create(
+          token,
+          formToPayload(form, i18n.language, contactsToPayload(contactRows))
+        );
         setMessage(t('customers.created'));
         navigate(`/customers/${created.id}`, { replace: true });
       } else if (customerId) {
         const updated = await catalogApi.customers.update(
           token,
           customerId,
-          formToPayload(form, i18n.language, form.version)
+          formToPayload(form, i18n.language, contactsToPayload(contactRows), form.version)
         );
         setForm(customerToForm(updated));
+        setContactRows(contactsFromCustomer(updated));
         setMessage(t('customers.updated'));
       }
     } catch (err) {
@@ -398,6 +441,78 @@ export function CustomerDetailPage() {
                   />
                 </label>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="card settings-section customer-contacts-section">
+          <div className="settings-section-head customer-contacts-head">
+            <h2 className="settings-section-title">{t('customers.contactPeople')}</h2>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm customer-contact-add"
+              onClick={() => setContactRows((prev) => [...prev, emptyContactRow()])}
+              aria-label={t('customers.addContact')}
+            >
+              +
+            </button>
+          </div>
+          <div className="settings-section-body">
+            <p className="muted customer-contacts-hint">{t('customers.contactPeopleHint')}</p>
+            <div className="customer-contacts-list">
+              {contactRows.map((row, index) => (
+                <div key={row.key} className="customer-contact-row">
+                  <label className="customer-contact-field customer-contact-field--name">
+                    <span>{t('customers.contactFullName')}</span>
+                    <input
+                      value={row.fullName}
+                      onChange={(e) =>
+                        setContactRows((prev) =>
+                          prev.map((r, i) =>
+                            i === index ? { ...r, fullName: e.target.value } : r
+                          )
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="customer-contact-field customer-contact-field--phone">
+                    <span>{t('settings.phoneMobile')}</span>
+                    <input
+                      type="tel"
+                      value={row.phone}
+                      onChange={(e) =>
+                        setContactRows((prev) =>
+                          prev.map((r, i) => (i === index ? { ...r, phone: e.target.value } : r))
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="customer-contact-field customer-contact-field--email">
+                    <span>{t('settings.email')}</span>
+                    <input
+                      type="email"
+                      value={row.email}
+                      onChange={(e) =>
+                        setContactRows((prev) =>
+                          prev.map((r, i) => (i === index ? { ...r, email: e.target.value } : r))
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="customer-contact-remove"
+                    onClick={() =>
+                      setContactRows((prev) =>
+                        prev.length <= 1 ? [emptyContactRow()] : prev.filter((_, i) => i !== index)
+                      )
+                    }
+                    aria-label={t('customers.removeContact')}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </section>

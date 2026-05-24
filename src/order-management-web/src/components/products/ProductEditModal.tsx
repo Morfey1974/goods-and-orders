@@ -10,9 +10,9 @@ import { formatStockQuantity } from '../../lib/stockQuantity';
 import { warehouseLabelForProductType } from '../../lib/warehouseLabel';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
+import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
 
 const PRODUCT_FORM_ID = 'product-card-form';
-const PRODUCT_CARD_SIZE_KEY = 'ordermgmt.product-card-modal-size';
 
 function tracksStockType(type: string) {
   return ['ComponentPart', 'FinishedGood', 'Bundle', 'Spare'].includes(type);
@@ -259,13 +259,7 @@ export function ProductEditModal({
       className="product-card-modal"
       overlayClassName="product-card-overlay"
       noCard
-      resize={{
-        storageKey: PRODUCT_CARD_SIZE_KEY,
-        defaultSize: { width: 720, height: 680 },
-        minWidth: 420,
-        minHeight: 380,
-        applyDefaultWhenEmpty: false,
-      }}
+      resize={PRODUCT_CARD_RESIZE}
     >
         <div className="product-card-header">
           <h2>{t('products.cardTitle')}</h2>

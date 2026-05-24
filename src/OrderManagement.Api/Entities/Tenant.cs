@@ -39,6 +39,8 @@ public class Tenant
     public string? SignaturePath { get; set; }
     public string DefaultLanguage { get; set; } = "he";
     public TaxRegime TaxRegime { get; set; } = TaxRegime.Patur;
+    /// <summary>Default withholding tax percent (ניכוי במקור) for receipts.</summary>
+    public decimal? WithholdingTaxPercent { get; set; }
     public SubscriptionStatus SubscriptionStatus { get; set; } = SubscriptionStatus.Trial;
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
     public DateTime TrialEndsAt { get; set; }

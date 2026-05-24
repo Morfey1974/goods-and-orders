@@ -54,24 +54,35 @@
   position: absolute;
   inset-inline-end: 0;
   bottom: 0;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   cursor: nwse-resize;
   z-index: 5;
   touch-action: none;
-  opacity: 0.55;
-  background: linear-gradient(
-    135deg,
-    transparent 0 42%,
-    var(--palette-turquoise-dark, #0e7490) 42% 52%,
-    transparent 52% 62%,
-    var(--palette-turquoise-dark, #0e7490) 62% 72%,
-    transparent 72%
-  );
+  background: transparent;
 }
 
-.app-modal__resize-handle:hover {
-  opacity: 0.85;
+/* Three diagonal stripes — same teal as .btn-primary (--primary) */
+.app-modal__resize-handle::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 4px;
+  bottom: 4px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--primary);
+  opacity: 0.72;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M16 2 L2 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 6.5 L6.5 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 11 L11 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M16 2 L2 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 6.5 L6.5 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 11 L11 16' stroke='%23000' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.app-modal__resize-handle:hover::after {
+  opacity: 1;
+  background-color: var(--primary-hover);
 }
 
 .app-modal__panel h2:first-child {

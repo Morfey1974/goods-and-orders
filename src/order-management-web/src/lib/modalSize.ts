@@ -7,6 +7,13 @@ export type ModalSizeLimits = {
   maxHeightRatio?: number;
 };
 
+export type ResizablePanelConfig = ModalSizeLimits & {
+  storageKey: string;
+  defaultSize: ModalSize;
+  /** If false, only restore saved size; CSS defaults when nothing saved */
+  applyDefaultWhenEmpty?: boolean;
+};
+
 const DEFAULT_MAX_W = 0.96;
 const DEFAULT_MAX_H = 0.92;
 

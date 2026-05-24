@@ -56,7 +56,9 @@ public class CustomersController(
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
 
-        var c = await db.Customers.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+        var c = await db.Customers
+            .Include(x => x.Contacts)
+            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
         if (c is null) return NotFound();
         return Ok(CatalogMappers.ToDto(c));
     }
@@ -79,6 +81,9 @@ public class CustomersController(
 
         db.Customers.Add(customer);
         await db.SaveChangesAsync(ct);
+        await CatalogMappers.SyncCustomerContactsAsync(db, customer.Id, request.Contacts, ct);
+        await db.SaveChangesAsync(ct);
+        await db.Entry(customer).Collection(c => c.Contacts).LoadAsync(ct);
         return CreatedAtAction(nameof(Get), new { id = customer.Id }, CatalogMappers.ToDto(customer));
     }
 
@@ -99,8 +104,9 @@ public class CustomersController(
         CatalogMappers.ApplyCustomerFields(c, request);
         c.Version++;
         c.UpdatedAt = DateTime.UtcNow;
-
+        await CatalogMappers.SyncCustomerContactsAsync(db, c.Id, request.Contacts, ct);
         await db.SaveChangesAsync(ct);
+        await db.Entry(c).Collection(x => x.Contacts).LoadAsync(ct);
         return Ok(CatalogMappers.ToDto(c));
     }
 

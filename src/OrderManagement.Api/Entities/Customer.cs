@@ -43,4 +43,6 @@ public class Customer
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<CustomerContact> Contacts { get; set; } = new List<CustomerContact>();
 }

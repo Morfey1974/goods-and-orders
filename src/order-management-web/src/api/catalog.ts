@@ -1,6 +1,20 @@
 import { normalizeStockQuantity } from '../lib/stockQuantity';
 import { request } from './http';
 
+export type CustomerContact = {
+  id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  sortOrder: number;
+};
+
+export type CustomerContactInput = {
+  fullName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
 export type Customer = {
   id: string;
   name: string;
@@ -32,7 +46,18 @@ export type Customer = {
   isActive: boolean;
   createdAt: string;
   version: number;
+  contacts: CustomerContact[];
 };
+
+function mapCustomerContact(raw: Record<string, unknown>): CustomerContact {
+  return {
+    id: String(raw.id ?? raw.Id),
+    fullName: String(raw.fullName ?? raw.FullName ?? ''),
+    phone: (raw.phone ?? raw.Phone) as string | undefined,
+    email: (raw.email ?? raw.Email) as string | undefined,
+    sortOrder: Number(raw.sortOrder ?? raw.SortOrder ?? 0),
+  };
+}
 
 function mapCustomer(raw: Record<string, unknown>): Customer {
   return {
@@ -66,6 +91,11 @@ function mapCustomer(raw: Record<string, unknown>): Customer {
     isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
     version: Number(raw.version ?? raw.Version ?? 1),
+    contacts: (() => {
+      const rawContacts = raw.contacts ?? raw.Contacts;
+      if (!Array.isArray(rawContacts)) return [];
+      return rawContacts.map((c) => mapCustomerContact(c as Record<string, unknown>));
+    })(),
   };
 }
 

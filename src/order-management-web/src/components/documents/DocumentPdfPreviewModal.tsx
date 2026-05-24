@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import { DOCUMENT_PDF_PREVIEW_RESIZE } from '../../lib/resizablePanelKeys';
 import { AppModal } from '../ui/AppModal';
-
-const PDF_PREVIEW_SIZE_KEY = 'ordermgmt.document-pdf-preview-size';
 
 type Props = {
   open: boolean;
@@ -32,12 +31,7 @@ export function DocumentPdfPreviewModal({
       className="doc-pdf-preview-modal"
       overlayClassName="doc-pdf-preview-overlay"
       noCard
-      resize={{
-        storageKey: PDF_PREVIEW_SIZE_KEY,
-        defaultSize: { width: 1000, height: 780 },
-        minWidth: 640,
-        minHeight: 480,
-      }}
+      resize={DOCUMENT_PDF_PREVIEW_RESIZE}
     >
       <header className="doc-pdf-preview-header">
         <h2>{title}</h2>

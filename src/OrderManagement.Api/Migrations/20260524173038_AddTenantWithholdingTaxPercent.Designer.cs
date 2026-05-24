@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OrderManagement.Api.Data;
@@ -11,9 +12,11 @@ using OrderManagement.Api.Data;
 namespace OrderManagement.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260524173038_AddTenantWithholdingTaxPercent")]
+    partial class AddTenantWithholdingTaxPercent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -324,38 +327,6 @@ namespace OrderManagement.Api.Migrations
                     b.HasIndex("TenantId", "Name");
 
                     b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("OrderManagement.Api.Entities.CustomerContact", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("CustomerContacts");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>
@@ -949,17 +920,6 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("OrderManagement.Api.Entities.CustomerContact", b =>
-                {
-                    b.HasOne("OrderManagement.Api.Entities.Customer", "Customer")
-                        .WithMany("Contacts")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-                });
-
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>
                 {
                     b.HasOne("OrderManagement.Api.Entities.Customer", "Customer")
@@ -1058,11 +1018,6 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("PaymentLines");
-                });
-
-            modelBuilder.Entity("OrderManagement.Api.Entities.Customer", b =>
-                {
-                    b.Navigation("Contacts");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>

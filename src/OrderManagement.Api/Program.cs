@@ -27,7 +27,7 @@ builder.Services.AddScoped<ArticleSequenceService>();
 builder.Services.AddScoped<WarehouseService>();
 builder.Services.AddScoped<StockFulfillmentService>();
 builder.Services.AddScoped<DocumentService>();
-builder.Services.AddScoped<QuotePdfService>();
+builder.Services.AddScoped<DocumentPdfService>();
 builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddScoped<CustomerImportService>();
 builder.Services.AddSingleton<ProductImageService>();

@@ -13,6 +13,7 @@ import { tenantAssetsApi, type TenantAssetsSummary } from '../api/tenantAssets';
 import { TenantBrandingSection } from '../components/settings/TenantBrandingSection';
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
 import { useAuth } from '../context/AuthContext';
+import { BANK_MODAL_RESIZE } from '../lib/resizablePanelKeys';
 import '../styles/settings.css';
 
 type BankForm = {
@@ -148,6 +149,10 @@ export function SettingsPage() {
         website: profile.website,
         businessField: profile.businessField,
         defaultLanguage: profile.defaultLanguage,
+        withholdingTaxPercent:
+          profile.withholdingTaxPercent != null && profile.withholdingTaxPercent > 0
+            ? profile.withholdingTaxPercent
+            : null,
         version: profile.version,
       });
       setProfile(updated);
@@ -319,6 +324,26 @@ export function SettingsPage() {
                   <select value={profile.taxRegime} disabled title={t('settings.taxRegimeLocked')}>
                     <option value="Patur">{t('settings.taxRegimePatur')}</option>
                   </select>
+                </label>
+                <label className="settings-field field-flex-compact">
+                  <span className="settings-field-label-row">
+                    {t('settings.withholdingTaxPercent')}
+                    <span className="field-hint">{t('settings.withholdingTaxPercentHint')}</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    value={profile.withholdingTaxPercent ?? ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      setProfile({
+                        ...profile,
+                        withholdingTaxPercent: raw === '' ? null : Number(raw),
+                      });
+                    }}
+                  />
                 </label>
               </div>
             </div>
@@ -540,13 +565,7 @@ export function SettingsPage() {
           overlayClassName="settings-bank-overlay"
           closeOnBackdrop={false}
           labelledBy="settings-bank-modal-title"
-          resize={{
-            storageKey: 'ordermgmt.bank-modal-size',
-            defaultSize: { width: 860, height: 680 },
-            minWidth: 640,
-            minHeight: 420,
-            applyDefaultWhenEmpty: false,
-          }}
+          resize={BANK_MODAL_RESIZE}
         >
             <div className="settings-bank-modal-head">
               <h2 id="settings-bank-modal-title" className="settings-section-title">

@@ -1,14 +1,25 @@
 namespace OrderManagement.Api.Services.Pdf;
 
-public sealed record QuotePdfLine(
+public enum BusinessDocumentPdfLinesKind
+{
+    Products = 0,
+    ReceiptPayments = 1
+}
+
+public sealed record BusinessDocumentPdfLine(
     int RowNumber,
     string Description,
     string? Sku,
     decimal Quantity,
     decimal UnitPrice,
-    decimal LineTotal);
+    decimal LineTotal,
+    string? PaymentTypeLabel = null,
+    string? LineDateDisplay = null,
+    string? PaymentDetail = null);
 
-public sealed record QuotePdfModel(
+public sealed record BusinessDocumentPdfModel(
+    string DocumentTitle,
+    string FooterDocumentLabel,
     string DisplayNumber,
     string FullDocumentNumber,
     DateTime IssueDate,
@@ -28,7 +39,10 @@ public sealed record QuotePdfModel(
     string? SupplierMobile,
     string? SupplierEmail,
     string? SupplierWebsite,
-    string? ProjectLine,
+    /// <summary>Banner above the lines table (project / based-on reference).</summary>
+    string? TableBannerLine,
     string? LogoFilePath,
     string? SignatureFilePath,
-    IReadOnlyList<QuotePdfLine> Lines);
+    IReadOnlyList<BusinessDocumentPdfLine> Lines,
+    BusinessDocumentPdfLinesKind LinesKind = BusinessDocumentPdfLinesKind.Products,
+    string TotalFooterLabel = "סה\"כ לתשלום");

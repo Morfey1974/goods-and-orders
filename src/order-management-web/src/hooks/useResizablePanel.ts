@@ -5,22 +5,18 @@ import {
   clampModalSize,
   loadModalSize,
   saveModalSize,
-  type ModalSize,
   type ModalSizeLimits,
+  type ResizablePanelConfig,
 } from '../lib/modalSize';
 
-export type ResizablePanelConfig = ModalSizeLimits & {
-  storageKey: string;
-  defaultSize: ModalSize;
-  /** If false, only restore saved size; CSS defaults when nothing saved */
-  applyDefaultWhenEmpty?: boolean;
-};
+export type { ResizablePanelConfig };
 
 export function useResizablePanel(open: boolean, config: ResizablePanelConfig | undefined) {
   const panelRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const suppressOverlayCloseRef = useRef(false);
+  const ignoreResizeObserverRef = useRef(false);
 
   const limits: ModalSizeLimits | undefined = config
     ? {
@@ -52,12 +48,37 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
       }
     })();
 
+    ignoreResizeObserverRef.current = true;
     if (hasStored || config.applyDefaultWhenEmpty !== false) {
       applyModalSize(el, saved);
     } else {
       clearModalInlineSize(el);
     }
+    requestAnimationFrame(() => {
+      ignoreResizeObserverRef.current = false;
+    });
   }, [open, config, limits]);
+
+  useEffect(() => {
+    if (!open || !config || !limits) return;
+    const el = panelRef.current;
+    if (!el) return;
+
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      if (ignoreResizeObserverRef.current || isResizingRef.current) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        if (el.isConnected) persistSize();
+      }, 150);
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      clearTimeout(saveTimer);
+      persistSize();
+    };
+  }, [open, config, limits, persistSize]);
 
   useEffect(() => {
     if (!open || !config || !limits) return;

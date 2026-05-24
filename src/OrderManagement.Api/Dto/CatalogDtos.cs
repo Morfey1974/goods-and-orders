@@ -5,6 +5,18 @@ using OrderManagement.Api.Entities;
 
 namespace OrderManagement.Api.Dto;
 
+public record CustomerContactDto(
+    Guid Id,
+    string FullName,
+    string? Phone,
+    string? Email,
+    int SortOrder);
+
+public record CustomerContactInput(
+    string? FullName,
+    string? Phone,
+    string? Email);
+
 public record CustomerDto(
     Guid Id,
     string Name,
@@ -35,7 +47,8 @@ public record CustomerDto(
     decimal DefaultDiscountPercent,
     bool IsActive,
     DateTime CreatedAt,
-    int Version);
+    int Version,
+    IReadOnlyList<CustomerContactDto> Contacts);
 
 public record CreateCustomerRequest(
     [Required][MinLength(1)] string Name,
@@ -62,7 +75,8 @@ public record CreateCustomerRequest(
     string? BankSwift,
     string? BankAba,
     string? BankIban,
-    [Range(0, 100)] decimal DefaultDiscountPercent);
+    [Range(0, 100)] decimal DefaultDiscountPercent,
+    IReadOnlyList<CustomerContactInput>? Contacts);
 
 public record UpdateCustomerRequest(
     [Required][MinLength(1)] string Name,
@@ -91,7 +105,8 @@ public record UpdateCustomerRequest(
     string? BankIban,
     [Range(0, 100)] decimal DefaultDiscountPercent,
     bool IsActive,
-    int Version);
+    int Version,
+    IReadOnlyList<CustomerContactInput>? Contacts);
 
 public record BomLineDto(Guid ComponentProductId, string ComponentArticleCode, string ComponentName, decimal Quantity);
 
@@ -250,6 +265,13 @@ public record OrderLineInput(
 
 public static class CatalogMappers
 {
+    public static CustomerContactDto ToContactDto(CustomerContact contact) => new(
+        contact.Id,
+        contact.FullName,
+        contact.Phone,
+        contact.Email,
+        contact.SortOrder);
+
     public static CustomerDto ToDto(Customer c) => new(
         c.Id,
         c.Name,
@@ -280,7 +302,38 @@ public static class CatalogMappers
         c.DefaultDiscountPercent,
         c.IsActive,
         c.CreatedAt,
-        c.Version);
+        c.Version,
+        c.Contacts.OrderBy(x => x.SortOrder).Select(ToContactDto).ToList());
+
+    public static async Task SyncCustomerContactsAsync(
+        AppDbContext db,
+        Guid customerId,
+        IReadOnlyList<CustomerContactInput>? contacts,
+        CancellationToken ct)
+    {
+        await db.CustomerContacts.Where(x => x.CustomerId == customerId).ExecuteDeleteAsync(ct);
+        if (contacts is null || contacts.Count == 0) return;
+
+        var order = 0;
+        foreach (var input in contacts)
+        {
+            var name = input.FullName?.Trim() ?? "";
+            var phone = input.Phone?.Trim();
+            var email = input.Email?.Trim();
+            if (name.Length == 0 && string.IsNullOrEmpty(phone) && string.IsNullOrEmpty(email))
+                continue;
+
+            db.CustomerContacts.Add(new CustomerContact
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = customerId,
+                FullName = name.Length > 0 ? name : email ?? phone ?? "—",
+                Phone = phone,
+                Email = email,
+                SortOrder = order++
+            });
+        }
+    }
 
     public static void ApplyCustomerFields(Customer c, CreateCustomerRequest request)
     {

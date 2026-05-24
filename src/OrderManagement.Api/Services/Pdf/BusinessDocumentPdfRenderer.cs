@@ -6,14 +6,13 @@ using QuestPDF.Infrastructure;
 
 namespace OrderManagement.Api.Services.Pdf;
 
-/// <summary>הצעת מחיר layout aligned with Yesh / DCM sample (345).</summary>
-public static class QuotePdfRenderer
+/// <summary>Shared layout for הצעת מחיר / חשבון חיוב / קבלה (Yesh / DCM sample).</summary>
+public static class BusinessDocumentPdfRenderer
 {
     private const string FontRegular = "Noto Sans Hebrew";
     private const string FontBold = "Noto Sans Hebrew Bold";
     private static bool _fontsRegistered;
 
-    private static readonly string BorderColor = "#333333";
     private static readonly string TitleAccentColor = "#3d4f5f";
     private static readonly string TableBorderColor = "#b0b8bf";
     private static readonly string TableHeaderBg = "#e8ecef";
@@ -21,7 +20,7 @@ public static class QuotePdfRenderer
     private static readonly string TableTotalLabelBg = "#c5d4dc";
     private static readonly string TableRowBg = "#FFFFFF";
 
-    static QuotePdfRenderer()
+    static BusinessDocumentPdfRenderer()
     {
         QuestPDF.Settings.License = LicenseType.Community;
         RegisterFonts();
@@ -43,7 +42,7 @@ public static class QuotePdfRenderer
         FontManager.RegisterFontWithCustomName(family, stream);
     }
 
-    public static byte[] Render(QuotePdfModel model)
+    public static byte[] Render(BusinessDocumentPdfModel model)
     {
         RegisterFonts();
         return Document.Create(container =>
@@ -74,8 +73,7 @@ public static class QuotePdfRenderer
     private const float LogoHeight = 160f;
     private const float DocumentTitleFontSize = 20f;
 
-    /// <summary>Logo top-left, company details top-right (letterhead).</summary>
-    private static void ComposeLetterhead(IContainer container, QuotePdfModel model)
+    private static void ComposeLetterhead(IContainer container, BusinessDocumentPdfModel model)
     {
         container.Row(row =>
         {
@@ -90,7 +88,7 @@ public static class QuotePdfRenderer
         });
     }
 
-    private static void ComposeTitleBand(IContainer container, QuotePdfModel model)
+    private static void ComposeTitleBand(IContainer container, BusinessDocumentPdfModel model)
     {
         container.Column(col =>
         {
@@ -104,7 +102,7 @@ public static class QuotePdfRenderer
                     right.AutoItem().PaddingRight(8).AlignMiddle()
                         .Text(model.DisplayNumber).Style(Bold(DocumentTitleFontSize).FontColor(TitleAccentColor));
                     right.AutoItem().AlignMiddle()
-                        .Text("הצעת מחיר").Style(Bold(DocumentTitleFontSize).FontColor(TitleAccentColor));
+                        .Text(model.DocumentTitle).Style(Bold(DocumentTitleFontSize).FontColor(TitleAccentColor));
                 });
             });
 
@@ -112,7 +110,7 @@ public static class QuotePdfRenderer
         });
     }
 
-    private static PartyBlockModel SupplierBlock(QuotePdfModel model) => new(
+    private static PartyBlockModel SupplierBlock(BusinessDocumentPdfModel model) => new(
         Heading: null,
         Title: model.SupplierName,
         TitleFontSize: 22f,
@@ -126,7 +124,7 @@ public static class QuotePdfRenderer
         Website: model.SupplierWebsite,
         WebsiteLabel: "אתר");
 
-    private static void ComposeCustomerBlock(IContainer container, QuotePdfModel model)
+    private static void ComposeCustomerBlock(IContainer container, BusinessDocumentPdfModel model)
     {
         container.Row(row =>
         {
@@ -195,28 +193,31 @@ public static class QuotePdfRenderer
         });
     }
 
-    private static void ComposeLinesTable(IContainer container, QuotePdfModel model)
+    private static void ComposeLinesTable(IContainer container, BusinessDocumentPdfModel model)
     {
         container.Column(col =>
         {
-            if (!string.IsNullOrWhiteSpace(model.ProjectLine))
-            {
-                col.Item().Element(c => TableProjectBanner(c, model.ProjectLine));
-            }
+            if (!string.IsNullOrWhiteSpace(model.TableBannerLine))
+                col.Item().Element(c => TableBanner(c, model.TableBannerLine));
 
-            col.Item().Element(c => ComposeTableGrid(c, model));
+            col.Item().Element(c =>
+            {
+                if (model.LinesKind == BusinessDocumentPdfLinesKind.ReceiptPayments)
+                    ComposeReceiptPaymentsTable(c, model);
+                else
+                    ComposeProductLinesTable(c, model);
+            });
         });
     }
 
-    private static void TableProjectBanner(IContainer container, string title) =>
+    private static void TableBanner(IContainer container, string title) =>
         container.Background(TitleAccentColor)
             .Border(0.5f).BorderColor(TableBorderColor)
             .PaddingVertical(7).PaddingHorizontal(8)
             .AlignRight()
             .Text(title).Style(Bold(10).FontColor(Colors.White));
 
-    /// <summary>Excel-style grid: שורה | פירוט | כמות | מחיר ליחידה | סה״כ (LTR defs, RTL layout).</summary>
-    private static void ComposeTableGrid(IContainer container, QuotePdfModel model)
+    private static void ComposeProductLinesTable(IContainer container, BusinessDocumentPdfModel model)
     {
         container.Table(table =>
         {
@@ -265,7 +266,7 @@ public static class QuotePdfRenderer
             table.Footer(footer =>
             {
                 FooterTotalAmountCell(footer.Cell(), FormatMoney(model.TotalAmount));
-                FooterTotalLabelCell(footer.Cell(), "סה\"כ לתשלום");
+                FooterTotalLabelCell(footer.Cell(), model.TotalFooterLabel);
                 FooterEmptyCell(footer.Cell());
                 FooterEmptyCell(footer.Cell());
                 FooterEmptyCell(footer.Cell());
@@ -273,7 +274,52 @@ public static class QuotePdfRenderer
         });
     }
 
-    private static string FormatLineDetail(QuotePdfLine line)
+    private static void ComposeReceiptPaymentsTable(IContainer container, BusinessDocumentPdfModel model)
+    {
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.ConstantColumn(78);
+                columns.RelativeColumn(3);
+                columns.ConstantColumn(76);
+                columns.ConstantColumn(76);
+                columns.ConstantColumn(38);
+            });
+
+            table.Header(header =>
+            {
+                ColumnHeaderCell(header.Cell(), "סה״כ");
+                ColumnHeaderCell(header.Cell(), "פירוט");
+                ColumnHeaderCell(header.Cell(), "סוג תשלום");
+                ColumnHeaderCell(header.Cell(), "תאריך שורה");
+                ColumnHeaderCell(header.Cell(), "שורה");
+            });
+
+            var rowIndex = 0;
+            foreach (var line in model.Lines)
+            {
+                var zebra = rowIndex % 2 == 1;
+                DataMoneyCell(table.Cell(), FormatMoney(line.LineTotal), zebra);
+                DataCell(table.Cell(), line.PaymentDetail ?? "—", zebra);
+                DataCell(table.Cell(), line.PaymentTypeLabel ?? "", zebra);
+                DataCell(table.Cell(), line.LineDateDisplay ?? "—", zebra, alignCenter: true);
+                DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true);
+                rowIndex++;
+            }
+
+            table.Footer(footer =>
+            {
+                FooterTotalAmountCell(footer.Cell(), FormatMoney(model.TotalAmount));
+                FooterTotalLabelCell(footer.Cell(), model.TotalFooterLabel);
+                FooterEmptyCell(footer.Cell());
+                FooterEmptyCell(footer.Cell());
+                FooterEmptyCell(footer.Cell());
+            });
+        });
+    }
+
+    private static string FormatLineDetail(BusinessDocumentPdfLine line)
     {
         if (!string.IsNullOrWhiteSpace(line.Sku))
             return $"{line.Sku} / {line.Description}";
@@ -321,7 +367,7 @@ public static class QuotePdfRenderer
     private const float SignatureImageWidth = 140f;
     private const float SignatureImageHeight = 56f;
 
-    private static void ComposeSignatureBlock(IContainer container, QuotePdfModel model)
+    private static void ComposeSignatureBlock(IContainer container, BusinessDocumentPdfModel model)
     {
         container.AlignLeft().Row(row =>
         {
@@ -337,7 +383,7 @@ public static class QuotePdfRenderer
         });
     }
 
-    private static void ComposeFooter(IContainer container, QuotePdfModel model)
+    private static void ComposeFooter(IContainer container, BusinessDocumentPdfModel model)
     {
         container.AlignCenter().Text(text =>
         {
@@ -345,7 +391,7 @@ public static class QuotePdfRenderer
             text.CurrentPageNumber().Style(Regular(9));
             text.Span(" מתוך ").Style(Regular(9));
             text.TotalPages().Style(Regular(9));
-            text.Span($" | הצעת מחיר {model.DisplayNumber}").Style(Regular(9));
+            text.Span($" | {model.FooterDocumentLabel} {model.DisplayNumber}").Style(Regular(9));
         });
     }
 

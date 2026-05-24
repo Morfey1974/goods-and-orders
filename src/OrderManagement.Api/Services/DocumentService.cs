@@ -71,7 +71,8 @@ public class DocumentService(
         IReadOnlyList<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines,
         decimal? discountPercent,
         decimal? discountAmount,
-        CancellationToken ct)
+        bool receiptAsDraft = false,
+        CancellationToken ct = default)
     {
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.TenantId == tenantId, ct)
             ?? throw new InvalidOperationException("Customer not found.");
@@ -98,7 +99,7 @@ public class DocumentService(
             {
                 DocumentType.Quote => DocumentStatus.Sent,
                 DocumentType.ChargeInvoice => DocumentStatus.Open,
-                DocumentType.Receipt => DocumentStatus.Closed,
+                DocumentType.Receipt => receiptAsDraft ? DocumentStatus.Draft : DocumentStatus.Closed,
                 _ => DocumentStatus.Draft
             },
             CreatedAt = now,
@@ -133,7 +134,26 @@ public class DocumentService(
             doc.TotalAmount = Math.Max(0, subtotal - discountValue);
         }
 
-        if (type == DocumentType.ChargeInvoice && lines is { Count: > 0 })
+        if (type == DocumentType.ChargeInvoice && parentDocumentId is { } quoteParentId)
+        {
+            var quoteParent = await db.BusinessDocuments.FirstOrDefaultAsync(
+                d => d.Id == quoteParentId && d.TenantId == tenantId, ct);
+            if (quoteParent is null) throw new InvalidOperationException("Parent document not found.");
+            if (quoteParent.DocumentType != DocumentType.Quote)
+                throw new InvalidOperationException("Charge invoice can only reference a price quote as parent.");
+
+            var hasCharge = await db.BusinessDocuments.AnyAsync(
+                d => d.TenantId == tenantId &&
+                     d.ParentDocumentId == quoteParentId &&
+                     d.DocumentType == DocumentType.ChargeInvoice,
+                ct);
+            if (hasCharge)
+                throw new InvalidOperationException("A charge invoice already exists for this quote.");
+        }
+
+        // Standalone חשבון חיוב only — quote-linked invoices are created for editing first;
+        // stock is not deducted here (avoids blocking issue-from-quote when warehouse qty is low).
+        if (type == DocumentType.ChargeInvoice && lines is { Count: > 0 } && parentDocumentId is null)
         {
             foreach (var line in doc.Lines.Where(l => l.ProductId.HasValue))
             {
@@ -153,15 +173,29 @@ public class DocumentService(
             if (parent is null) throw new InvalidOperationException("Parent document not found.");
             if (parent.DocumentType != DocumentType.ChargeInvoice)
                 throw new InvalidOperationException("Receipt parent must be a charge invoice.");
-            doc.TotalAmount = parent.TotalAmount;
-            parent.Status = DocumentStatus.Paid;
-            parent.UpdatedAt = now;
+
+            var hasReceipt = await db.BusinessDocuments.AnyAsync(
+                d => d.ParentDocumentId == parentId && d.DocumentType == DocumentType.Receipt, ct);
+            if (hasReceipt)
+                throw new InvalidOperationException("Receipt already exists for this invoice.");
+
+            if (receiptAsDraft)
+            {
+                doc.TotalAmount = 0;
+            }
+            else
+            {
+                doc.TotalAmount = parent.TotalAmount;
+                parent.Status = DocumentStatus.Paid;
+                parent.UpdatedAt = now;
+            }
         }
 
         db.BusinessDocuments.Add(doc);
         await db.SaveChangesAsync(ct);
         await db.Entry(doc).Reference(d => d.Customer).LoadAsync(ct);
         await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
+        await db.Entry(doc).Collection(d => d.PaymentLines).LoadAsync(ct);
         return doc;
     }
 
@@ -191,10 +225,14 @@ public class DocumentService(
         if (doc.OrderId is not null)
             throw new InvalidOperationException("Documents linked to an order cannot be edited here.");
 
-        var hasReceipt = await db.BusinessDocuments.AnyAsync(
-            d => d.ParentDocumentId == doc.Id && d.DocumentType == DocumentType.Receipt, ct);
-        if (hasReceipt)
-            throw new InvalidOperationException("Cannot edit: a receipt already exists for this document.");
+        var hasFinalizedReceipt = await db.BusinessDocuments.AnyAsync(
+            d => d.ParentDocumentId == doc.Id &&
+                 d.DocumentType == DocumentType.Receipt &&
+                 d.Status != DocumentStatus.Draft,
+            ct);
+        if (hasFinalizedReceipt)
+            throw new InvalidOperationException(
+                "Cannot edit: a finalized receipt exists for this document. Delete the receipt first.");
 
         if (lines is null or { Count: 0 })
             throw new InvalidOperationException("At least one line is required.");
@@ -259,7 +297,19 @@ public class DocumentService(
         if (hasChildren)
             throw new InvalidOperationException("Cannot delete: related documents exist.");
 
+        if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
+        {
+            var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
+                d => d.Id == chargeId && d.TenantId == tenantId, ct);
+            if (charge is { DocumentType: DocumentType.ChargeInvoice, Status: DocumentStatus.Paid })
+            {
+                charge.Status = DocumentStatus.Open;
+                charge.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         db.BusinessDocumentLines.RemoveRange(doc.Lines);
+        await db.ReceiptPaymentLines.Where(p => p.DocumentId == doc.Id).ExecuteDeleteAsync(ct);
         db.BusinessDocuments.Remove(doc);
         await db.SaveChangesAsync(ct);
     }
@@ -292,7 +342,222 @@ public class DocumentService(
             lines,
             source.DiscountPercent,
             source.DiscountAmount,
+            receiptAsDraft: false,
             ct);
+    }
+
+    public async Task<BusinessDocument> IssueChargeFromQuoteAsync(
+        Guid tenantId,
+        Guid quoteId,
+        CancellationToken ct)
+    {
+        var quote = await db.BusinessDocuments
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == quoteId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        if (quote.DocumentType != DocumentType.Quote)
+            throw new InvalidOperationException("Charge invoice can only be issued from a price quote.");
+
+        if (quote.OrderId is not null)
+            throw new InvalidOperationException("Documents linked to an order cannot issue a charge invoice here.");
+
+        if (quote.Lines.Count == 0)
+            throw new InvalidOperationException("Quote has no lines.");
+
+        var hasCharge = await db.BusinessDocuments.AnyAsync(
+            d => d.TenantId == tenantId &&
+                 d.ParentDocumentId == quoteId &&
+                 d.DocumentType == DocumentType.ChargeInvoice,
+            ct);
+        if (hasCharge)
+            throw new InvalidOperationException("A charge invoice already exists for this quote.");
+
+        var lines = quote.Lines
+            .OrderBy(l => l.SortOrder)
+            .Select(l => (l.ProductId, l.Description, l.Quantity, l.UnitPrice))
+            .ToList();
+
+        return await CreateAsync(
+            tenantId,
+            DocumentType.ChargeInvoice,
+            quote.CustomerId,
+            quote.Description,
+            DateTime.UtcNow,
+            quote.DueDate,
+            quote.PaymentMethod,
+            quoteId,
+            null,
+            lines,
+            quote.DiscountPercent,
+            quote.DiscountAmount,
+            receiptAsDraft: false,
+            ct);
+    }
+
+    public async Task<BusinessDocument> IssueReceiptAsync(
+        Guid tenantId,
+        Guid documentId,
+        string? paymentMethod,
+        DateTime? paymentDate,
+        CancellationToken ct)
+    {
+        var doc = await db.BusinessDocuments
+            .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        BusinessDocument charge;
+        if (doc.DocumentType == DocumentType.ChargeInvoice)
+        {
+            charge = doc;
+        }
+        else if (doc.DocumentType == DocumentType.Quote)
+        {
+            var existingCharge = await db.BusinessDocuments
+                .FirstOrDefaultAsync(
+                    d => d.TenantId == tenantId &&
+                         d.ParentDocumentId == doc.Id &&
+                         d.DocumentType == DocumentType.ChargeInvoice,
+                    ct);
+            charge = existingCharge ?? await IssueChargeFromQuoteAsync(tenantId, doc.Id, ct);
+        }
+        else
+        {
+            throw new InvalidOperationException("Receipt can only be issued from a quote or charge invoice.");
+        }
+
+        var existingReceipt = await db.BusinessDocuments
+            .Include(d => d.Customer)
+            .Include(d => d.PaymentLines)
+            .FirstOrDefaultAsync(
+                d => d.ParentDocumentId == charge.Id && d.DocumentType == DocumentType.Receipt, ct);
+        if (existingReceipt is not null)
+            return existingReceipt;
+
+        if (charge.Status is DocumentStatus.Paid or DocumentStatus.Closed)
+        {
+            // Receipt was removed but charge stayed paid — allow a new draft.
+            charge.Status = DocumentStatus.Open;
+            charge.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await db.Entry(charge).Reference(c => c.Customer).LoadAsync(ct);
+
+        return await CreateAsync(
+            tenantId,
+            DocumentType.Receipt,
+            charge.CustomerId,
+            charge.Description,
+            paymentDate ?? DateTime.UtcNow,
+            null,
+            paymentMethod ?? charge.PaymentMethod,
+            charge.Id,
+            charge.OrderId,
+            null,
+            null,
+            null,
+            receiptAsDraft: true,
+            ct);
+    }
+
+    public async Task<BusinessDocument> SaveReceiptAsync(
+        Guid tenantId,
+        Guid receiptId,
+        string? description,
+        DateTime? issueDate,
+        int version,
+        IReadOnlyList<ReceiptPaymentLineInput> paymentLines,
+        bool finalize,
+        CancellationToken ct)
+    {
+        var receipt = await db.BusinessDocuments
+            .Include(d => d.Customer)
+            .Include(d => d.PaymentLines)
+            .FirstOrDefaultAsync(d => d.Id == receiptId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Document not found.");
+
+        if (receipt.DocumentType != DocumentType.Receipt)
+            throw new InvalidOperationException("Not a receipt document.");
+
+        if (receipt.Version != version)
+            throw new InvalidOperationException("Document was modified. Refresh and try again.");
+
+        if (receipt.ParentDocumentId is not { } chargeId)
+            throw new InvalidOperationException("Receipt has no linked charge invoice.");
+
+        var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
+            d => d.Id == chargeId && d.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Parent charge invoice not found.");
+
+        if (charge.DocumentType != DocumentType.ChargeInvoice)
+            throw new InvalidOperationException("Receipt parent must be a charge invoice.");
+
+        if (paymentLines.Count == 0)
+            throw new InvalidOperationException("At least one payment line is required.");
+
+        await db.ReceiptPaymentLines.Where(p => p.DocumentId == receiptId).ExecuteDeleteAsync(ct);
+
+        var sort = 0;
+        decimal total = 0;
+        foreach (var line in paymentLines)
+        {
+            if (line.Amount <= 0) continue;
+            ReceiptPaymentType paymentType;
+            try { paymentType = DocumentMappers.ParsePaymentType(line.PaymentType); }
+            catch (ArgumentException ex) { throw new InvalidOperationException(ex.Message); }
+
+            var pl = new ReceiptPaymentLine
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = receiptId,
+                PaymentType = paymentType,
+                Amount = Math.Round(line.Amount, 2),
+                Currency = string.IsNullOrWhiteSpace(line.Currency) ? "ILS" : line.Currency.Trim(),
+                LineDate = line.LineDate?.ToUniversalTime(),
+                GeneralDetail = line.GeneralDetail?.Trim(),
+                DetailsJson = string.IsNullOrWhiteSpace(line.DetailsJson) ? null : line.DetailsJson.Trim(),
+                SortOrder = sort++
+            };
+            db.ReceiptPaymentLines.Add(pl);
+            total += pl.Amount;
+        }
+
+        if (total <= 0)
+            throw new InvalidOperationException("At least one payment line with amount is required.");
+
+        if (total > charge.TotalAmount)
+            throw new InvalidOperationException("Total payments exceed the charge invoice amount.");
+
+        receipt.Description = description?.Trim();
+        if (issueDate.HasValue)
+            receipt.IssueDate = issueDate.Value.ToUniversalTime();
+        receipt.TotalAmount = total;
+        receipt.Version++;
+        receipt.UpdatedAt = DateTime.UtcNow;
+
+        if (finalize)
+        {
+            receipt.Status = DocumentStatus.Closed;
+            if (total >= charge.TotalAmount)
+            {
+                charge.Status = DocumentStatus.Paid;
+                charge.UpdatedAt = DateTime.UtcNow;
+
+                if (charge.OrderId is { } orderId)
+                {
+                    var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId, ct);
+                    if (order is not null)
+                    {
+                        order.Status = OrderStatus.Paid;
+                        order.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        await db.Entry(receipt).Collection(d => d.PaymentLines).LoadAsync(ct);
+        return receipt;
     }
 
     public DocumentSummaryDto ComputeSummary(IEnumerable<BusinessDocument> docs)

@@ -6,10 +6,16 @@ import {
   DocumentCreateWizard,
   type WizardDocumentType,
 } from '../components/documents/DocumentCreateWizard';
+import { ReceiptEditWizard } from '../components/documents/ReceiptEditWizard';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AppModal } from '../components/ui/AppModal';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
+import { DocumentEmailModal } from '../components/documents/DocumentEmailModal';
+import {
+  buildIssueContextMap,
+  DocumentIssueMenu,
+} from '../components/documents/DocumentIssueMenu';
 import { documentsApi, type Document, type DocumentListResponse } from '../api/documents';
 import { useAuth } from '../context/AuthContext';
 import '../styles/products-catalog.css';
@@ -44,14 +50,38 @@ function isWizardDocument(doc: Document) {
   return doc.documentType === 'Quote' || doc.documentType === 'ChargeInvoice';
 }
 
+function canEditReceipt(doc: Document) {
+  return doc.documentType === 'Receipt' && !doc.orderId;
+}
+
 function canManageDocument(doc: Document) {
-  return isWizardDocument(doc) && !doc.orderId;
+  return (isWizardDocument(doc) || canEditReceipt(doc)) && !doc.orderId;
+}
+
+function supportsDocumentPdf(doc: Document) {
+  return (
+    doc.documentType === 'Quote' ||
+    doc.documentType === 'ChargeInvoice' ||
+    doc.documentType === 'Receipt'
+  );
+}
+
+function documentPdfFileName(doc: Document) {
+  const num = doc.documentNumber.replace(/^[A-Z]+-/, '');
+  switch (doc.documentType) {
+    case 'ChargeInvoice':
+      return `invoice-${num}.pdf`;
+    case 'Receipt':
+      return `receipt-${num}.pdf`;
+    default:
+      return `quote-${num}.pdf`;
+  }
 }
 
 function documentHasActions(doc: Document) {
   return (
     canManageDocument(doc) ||
-    doc.documentType === 'Quote' ||
+    supportsDocumentPdf(doc) ||
     (doc.documentType === 'ChargeInvoice' && doc.status === 'Open')
   );
 }
@@ -73,6 +103,7 @@ export function DocumentsPage() {
   const [wizardType, setWizardType] = useState<WizardDocumentType | null>(null);
   const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
   const [duplicateFromDocumentId, setDuplicateFromDocumentId] = useState<string | null>(null);
+  const [receiptEditId, setReceiptEditId] = useState<string | null>(null);
   const [rowMenuDoc, setRowMenuDoc] = useState<Document | null>(null);
   const rowMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
@@ -98,6 +129,8 @@ export function DocumentsPage() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
+  const [emailDoc, setEmailDoc] = useState<Document | null>(null);
+  const [issueBusy, setIssueBusy] = useState(false);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -135,7 +168,12 @@ export function DocumentsPage() {
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
-      if (!el.closest('.row-menu-wrap') && !el.closest('.row-menu--portal')) {
+      if (
+        !el.closest('.row-menu-wrap') &&
+        !el.closest('.row-menu--portal') &&
+        !el.closest('.doc-issue-wrap') &&
+        !el.closest('.doc-issue-dropdown')
+      ) {
         setRowMenuDoc(null);
       }
     };
@@ -149,6 +187,16 @@ export function DocumentsPage() {
       g.documents.filter((d) => d.documentType === 'ChargeInvoice' && d.status === 'Open')
     );
   }, [data]);
+
+  const allDocuments = useMemo(
+    () => data?.groups.flatMap((g) => g.documents) ?? [],
+    [data]
+  );
+
+  const issueContextMap = useMemo(
+    () => buildIssueContextMap(allDocuments),
+    [allDocuments]
+  );
 
   const openCreate = (type: 'Quote' | 'ChargeInvoice' | 'Receipt') => {
     setMenuOpen(false);
@@ -182,10 +230,18 @@ export function DocumentsPage() {
           setError(t('documents.receiptNeedsParent'));
           return;
         }
-        await documentsApi.recordPayment(token, form.parentDocumentId, {
+        const charge = openCharges.find((c) => c.id === form.parentDocumentId);
+        const receipt = await documentsApi.create(token, {
+          documentType: 'Receipt',
+          customerId: charge?.customerId ?? customers[0]?.id ?? '',
+          parentDocumentId: form.parentDocumentId,
           paymentMethod: form.paymentMethod || undefined,
         });
-        setMessage(t('documents.receiptCreated'));
+        setCreateOpen(false);
+        setReceiptEditId(receipt.id);
+        setMessage('');
+        load();
+        return;
       } else {
         if (!form.customerId || !form.productId) return;
         const product = products.find((p) => p.id === form.productId);
@@ -227,10 +283,24 @@ export function DocumentsPage() {
     setDuplicateFromDocumentId(null);
   };
 
+  const openReceiptEditor = (receiptId: string) => {
+    setRowMenuDoc(null);
+    setReceiptEditId(receiptId);
+    setError('');
+  };
+
+  const closeReceiptEditor = () => {
+    setReceiptEditId(null);
+  };
+
   const onEditDocument = (doc: Document) => {
     if (!canManageDocument(doc)) return;
     setRowMenuDoc(null);
     setDuplicateFromDocumentId(null);
+    if (doc.documentType === 'Receipt') {
+      openReceiptEditor(doc.id);
+      return;
+    }
     setEditDocumentId(doc.id);
     setWizardType(doc.documentType as WizardDocumentType);
     setError('');
@@ -261,11 +331,6 @@ export function DocumentsPage() {
     }
   };
 
-  const quotePdfFileName = (doc: Document) => {
-    const num = doc.documentNumber.replace(/^[A-Z]+-/, '');
-    return `quote-${num}.pdf`;
-  };
-
   const closePdfPreview = useCallback(() => {
     setPdfPreviewDoc(null);
     setPdfPreviewError(null);
@@ -283,7 +348,7 @@ export function DocumentsPage() {
   }, []);
 
   const openPdfPreview = async (doc: Document) => {
-    if (!token || doc.documentType !== 'Quote') return;
+    if (!token || !supportsDocumentPdf(doc)) return;
     setRowMenuDoc(null);
     setError('');
     setPdfPreviewDoc(doc);
@@ -305,27 +370,61 @@ export function DocumentsPage() {
   };
 
   const onDownloadPdf = async (doc: Document) => {
-    if (!token || doc.documentType !== 'Quote') return;
+    if (!token || !supportsDocumentPdf(doc)) return;
     setRowMenuDoc(null);
     setError('');
     try {
-      await documentsApi.downloadPdf(token, doc.id, quotePdfFileName(doc));
+      await documentsApi.downloadPdf(token, doc.id, documentPdfFileName(doc));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
     }
   };
 
-  const onPayment = async (doc: Document) => {
+  const onIssueCharge = async (quote: Document) => {
     if (!token) return;
-    if (!window.confirm(t('documents.paymentConfirm', { number: doc.documentNumber }))) return;
+    setIssueBusy(true);
+    setError('');
+    setRowMenuDoc(null);
     try {
-      await documentsApi.recordPayment(token, doc.id, {
-        paymentMethod: doc.paymentMethod || undefined,
-      });
-      setMessage(t('documents.receiptCreated'));
+      const created = await documentsApi.issueChargeInvoice(token, quote.id);
+      setDuplicateFromDocumentId(null);
+      setEditDocumentId(created.id);
+      setWizardType('ChargeInvoice');
+      setMessage('');
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setIssueBusy(false);
+    }
+  };
+
+  const resolveReceiptForDoc = (doc: Document) => {
+    const ctx = issueContextMap.get(doc.id);
+    return ctx?.receiptForCharge;
+  };
+
+  const onIssueReceipt = async (doc: Document) => {
+    if (!token) return;
+    setIssueBusy(true);
+    setError('');
+    setRowMenuDoc(null);
+    try {
+      const existing = resolveReceiptForDoc(doc);
+      if (existing) {
+        openReceiptEditor(existing.id);
+        return;
+      }
+      const receipt = await documentsApi.issueReceipt(token, doc.id, {
+        paymentMethod: doc.paymentMethod || undefined,
+      });
+      openReceiptEditor(receipt.id);
+      setMessage('');
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setIssueBusy(false);
     }
   };
 
@@ -401,6 +500,7 @@ export function DocumentsPage() {
           <option value="Sent">{t('documents.statuses.sent')}</option>
           <option value="Paid">{t('documents.statuses.paid')}</option>
           <option value="Closed">{t('documents.statuses.closed')}</option>
+          <option value="Draft">{t('documents.statuses.draft')}</option>
         </select>
         <button type="button" className="btn btn-ghost-inline" onClick={load}>
           {t('documents.refresh')}
@@ -419,7 +519,8 @@ export function DocumentsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{t('documents.colNumber')}</th>
+                  <th className="doc-col-number">{t('documents.colNumber')}</th>
+                  <th className="doc-col-status">{t('documents.colStatus')}</th>
                   <th>{t('documents.colType')}</th>
                   <th>{t('documents.colCustomer')}</th>
                   <th>{t('documents.colDescription')}</th>
@@ -433,24 +534,24 @@ export function DocumentsPage() {
               <tbody>
                 {group.documents.map((doc) => (
                   <tr key={doc.id}>
-                    <td>
-                      <div className="doc-number-cell">
-                        {doc.documentType === 'Quote' ? (
-                          <button
-                            type="button"
-                            className="doc-number-link"
-                            onClick={() => void openPdfPreview(doc)}
-                            title={t('documents.previewPdf')}
-                          >
-                            <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
-                          </button>
-                        ) : (
+                    <td className="doc-col-number">
+                      {supportsDocumentPdf(doc) ? (
+                        <button
+                          type="button"
+                          className="doc-number-link"
+                          onClick={() => void openPdfPreview(doc)}
+                          title={t('documents.previewPdf')}
+                        >
                           <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
-                        )}
-                        <span className={`doc-badge doc-badge-${STATUS_CLASS[doc.status] ?? 'draft'}`}>
-                          {t(`documents.statuses.${STATUS_CLASS[doc.status] ?? 'draft'}`)}
-                        </span>
-                      </div>
+                        </button>
+                      ) : (
+                        <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+                      )}
+                    </td>
+                    <td className="doc-col-status">
+                      <span className={`doc-badge doc-badge-${STATUS_CLASS[doc.status] ?? 'draft'}`}>
+                        {t(`documents.statuses.${STATUS_CLASS[doc.status] ?? 'draft'}`)}
+                      </span>
                     </td>
                     <td>
                       <span className={`doc-type-${TYPE_CLASS[doc.documentType] ?? 'quote'}`}>
@@ -464,6 +565,13 @@ export function DocumentsPage() {
                     <td>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
                     <td>{formatMoney(doc.totalAmount)}</td>
                     <td className="doc-actions">
+                      <DocumentIssueMenu
+                        doc={doc}
+                        context={issueContextMap.get(doc.id) ?? {}}
+                        busy={issueBusy}
+                        onIssueCharge={(q) => void onIssueCharge(q)}
+                        onIssueReceipt={(d) => void onIssueReceipt(d)}
+                      />
                       {documentHasActions(doc) && (
                         <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
                           <button
@@ -492,13 +600,22 @@ export function DocumentsPage() {
       <CatalogRowMenu open={rowMenuDoc !== null} anchorRef={rowMenuAnchorRef}>
         {rowMenuDoc && (
           <>
-            {rowMenuDoc.documentType === 'Quote' && (
+            {supportsDocumentPdf(rowMenuDoc) && (
               <>
                 <button type="button" onClick={() => void openPdfPreview(rowMenuDoc)}>
                   {t('documents.previewPdf')}
                 </button>
                 <button type="button" onClick={() => void onDownloadPdf(rowMenuDoc)}>
                   {t('documents.downloadPdf')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRowMenuDoc(null);
+                    setEmailDoc(rowMenuDoc);
+                  }}
+                >
+                  {t('documents.sendByEmail')}
                 </button>
               </>
             )}
@@ -515,15 +632,22 @@ export function DocumentsPage() {
                 {t('documents.actionDuplicate')}
               </button>
             )}
-            {rowMenuDoc.documentType === 'ChargeInvoice' && rowMenuDoc.status === 'Open' && (
+            {rowMenuDoc.documentType === 'ChargeInvoice' &&
+              rowMenuDoc.status === 'Open' &&
+              (() => {
+                const r = issueContextMap.get(rowMenuDoc.id)?.receiptForCharge;
+                return !r || r.status === 'Draft';
+              })() && (
               <button
                 type="button"
                 onClick={() => {
                   setRowMenuDoc(null);
-                  void onPayment(rowMenuDoc);
+                  void onIssueReceipt(rowMenuDoc);
                 }}
               >
-                {t('documents.recordPayment')}
+                {issueContextMap.get(rowMenuDoc.id)?.receiptForCharge?.status === 'Draft'
+                  ? t('documents.issueMenuReceiptDraft')
+                  : t('documents.recordPayment')}
               </button>
             )}
             {canManageDocument(rowMenuDoc) && (
@@ -542,24 +666,6 @@ export function DocumentsPage() {
         )}
       </CatalogRowMenu>
 
-      <DocumentPdfPreviewModal
-        open={pdfPreviewDoc !== null}
-        title={
-          pdfPreviewDoc
-            ? `${t('documents.types.Quote')} ${pdfPreviewDoc.documentNumber.replace(/^[A-Z]+-/, '')}`
-            : ''
-        }
-        pdfUrl={pdfPreviewUrl}
-        loading={pdfPreviewLoading}
-        error={pdfPreviewError}
-        onClose={closePdfPreview}
-        onDownload={
-          pdfPreviewDoc && token
-            ? () => void documentsApi.downloadPdf(token, pdfPreviewDoc.id, quotePdfFileName(pdfPreviewDoc))
-            : undefined
-        }
-      />
-
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t('documents.deleteConfirmTitle')}
@@ -570,6 +676,53 @@ export function DocumentsPage() {
         busy={deleteBusy}
         onConfirm={() => void confirmDelete()}
         onCancel={() => !deleteBusy && setDeleteTarget(null)}
+      />
+
+      {receiptEditId && token && (
+        <ReceiptEditWizard
+          open
+          receiptId={receiptEditId}
+          token={token}
+          onClose={closeReceiptEditor}
+          onSuccess={(msg) => {
+            setMessage(msg);
+            closeReceiptEditor();
+            load();
+          }}
+          onPreviewPdf={(doc) => void openPdfPreview(doc)}
+          onSendEmail={(d) => setEmailDoc(d)}
+        />
+      )}
+
+      {token && (
+        <DocumentEmailModal
+          open={emailDoc !== null}
+          document={emailDoc}
+          token={token}
+          onClose={() => setEmailDoc(null)}
+          onMessage={(msg, isError) => {
+            if (isError) setError(msg);
+            else setMessage(msg);
+          }}
+        />
+      )}
+
+      <DocumentPdfPreviewModal
+        open={pdfPreviewDoc !== null}
+        title={
+          pdfPreviewDoc
+            ? `${t(`documents.types.${pdfPreviewDoc.documentType}`)} ${pdfPreviewDoc.documentNumber.replace(/^[A-Z]+-/, '')}`
+            : ''
+        }
+        pdfUrl={pdfPreviewUrl}
+        loading={pdfPreviewLoading}
+        error={pdfPreviewError}
+        onClose={closePdfPreview}
+        onDownload={
+          pdfPreviewDoc && token
+            ? () => void documentsApi.downloadPdf(token, pdfPreviewDoc.id, documentPdfFileName(pdfPreviewDoc))
+            : undefined
+        }
       />
 
       {wizardType && token && (
@@ -588,6 +741,8 @@ export function DocumentsPage() {
             load();
           }}
           onCustomersUpdated={reloadCustomers}
+          onSendEmail={(doc) => setEmailDoc(doc)}
+          onPreviewPdf={(doc) => void openPdfPreview(doc)}
         />
       )}
 

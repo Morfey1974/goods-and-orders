@@ -21,6 +21,7 @@ Thumbs.db
 
 # IDE
 .idea/
+.cursor/
 *.swp
 
 # Uploads (tenant files, product images)

@@ -435,7 +435,8 @@
   inset-inline-end: 0;
   top: 100%;
   margin-top: 4px;
-  min-width: 220px;
+  min-width: 10.5rem;
+  max-width: 14rem;
   background: var(--row-menu-bg);
   color: var(--palette-turquoise-dark);
   border: 2px solid var(--palette-turquoise);
@@ -449,10 +450,23 @@
   position: fixed;
   margin-top: 0;
   z-index: 3000;
+  width: max-content;
+  min-width: 10.5rem;
+  max-width: min(14rem, 92vw);
+  box-sizing: border-box;
   background: var(--row-menu-bg, #e8f4fa);
   border: 2px solid var(--palette-turquoise);
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(41, 107, 122, 0.22);
+}
+
+.row-menu-heading {
+  margin: 0;
+  padding: 0.45rem 0.9rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--palette-turquoise-dark);
+  border-bottom: 1px solid rgba(41, 107, 122, 0.22);
 }
 
 .product-card-overlay {

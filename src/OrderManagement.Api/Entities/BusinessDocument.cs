@@ -27,4 +27,5 @@ public class BusinessDocument
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<BusinessDocumentLine> Lines { get; set; } = new List<BusinessDocumentLine>();
+    public ICollection<ReceiptPaymentLine> PaymentLines { get; set; } = new List<ReceiptPaymentLine>();
 }

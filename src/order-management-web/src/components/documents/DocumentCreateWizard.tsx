@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
 import { documentsApi, type Document } from '../../api/documents';
+import { useResizablePanel } from '../../hooks/useResizablePanel';
+import { DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
+import { mergeRefs } from '../../lib/mergeRefs';
 import { normalizeStockQuantity } from '../../lib/stockQuantity';
 import {
   DocumentProductPickerModal,
@@ -10,61 +13,6 @@ import {
 } from './DocumentProductPickerModal';
 
 export type WizardDocumentType = 'Quote' | 'ChargeInvoice';
-
-const WIZARD_SIZE_STORAGE_KEY = 'ordermgmt.document-wizard-form-size';
-const WIZARD_MIN_WIDTH = 520;
-const WIZARD_MIN_HEIGHT = 420;
-
-type SavedWizardSize = { width: number; height: number };
-
-function clampWizardSize(width: number, height: number): SavedWizardSize {
-  const maxW = window.innerWidth * 0.96;
-  const maxH = window.innerHeight * 0.92;
-  return {
-    width: Math.round(Math.min(maxW, Math.max(WIZARD_MIN_WIDTH, width))),
-    height: Math.round(Math.min(maxH, Math.max(WIZARD_MIN_HEIGHT, height))),
-  };
-}
-
-function loadSavedWizardSize(): SavedWizardSize | null {
-  try {
-    const raw = localStorage.getItem(WIZARD_SIZE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedWizardSize;
-    if (
-      typeof parsed.width !== 'number' ||
-      typeof parsed.height !== 'number' ||
-      parsed.width < WIZARD_MIN_WIDTH ||
-      parsed.height < WIZARD_MIN_HEIGHT
-    ) {
-      return null;
-    }
-    return clampWizardSize(parsed.width, parsed.height);
-  } catch {
-    return null;
-  }
-}
-
-function saveWizardSize(width: number, height: number) {
-  if (width < WIZARD_MIN_WIDTH || height < WIZARD_MIN_HEIGHT) return;
-  localStorage.setItem(WIZARD_SIZE_STORAGE_KEY, JSON.stringify(clampWizardSize(width, height)));
-}
-
-function applySavedWizardSize(el: HTMLElement) {
-  const saved = loadSavedWizardSize();
-  if (saved) {
-    el.style.width = `${saved.width}px`;
-    el.style.height = `${saved.height}px`;
-  } else {
-    el.style.width = '';
-    el.style.height = '';
-  }
-}
-
-function persistWizardSizeFromElement(el: HTMLElement | null) {
-  if (!el) return;
-  saveWizardSize(el.offsetWidth, el.offsetHeight);
-}
 
 type CustomerOption = { id: string; name: string };
 
@@ -89,6 +37,8 @@ type Props = {
   onClose: () => void;
   onSuccess: (message: string) => void;
   onCustomersUpdated: () => void;
+  onSendEmail?: (doc: Document) => void;
+  onPreviewPdf?: (doc: Document) => void;
 };
 
 type DiscountKind = 'percent' | 'amount';
@@ -166,10 +116,11 @@ export function DocumentCreateWizard({
   onClose,
   onSuccess,
   onCustomersUpdated,
+  onSendEmail,
+  onPreviewPdf,
 }: Props) {
   const { t } = useTranslation();
   const formWizardRef = useRef<HTMLDivElement>(null);
-  const ignoreResizeSaveRef = useRef(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [step, setStep] = useState<'customer' | 'form'>('customer');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -178,7 +129,9 @@ export function DocumentCreateWizard({
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerBusy, setNewCustomerBusy] = useState(false);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [persistedDocId, setPersistedDocId] = useState<string | null>(null);
 
   const [issueDate, setIssueDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState('');
@@ -191,10 +144,12 @@ export function DocumentCreateWizard({
   const [editVersion, setEditVersion] = useState(1);
   const [editTitle, setEditTitle] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [editDoc, setEditDoc] = useState<Document | null>(null);
 
   const isEdit = Boolean(editDocumentId);
   const isDuplicateDraft = Boolean(duplicateFromDocumentId);
+  const effectiveDocId = editDocumentId ?? persistedDocId;
+  const canPreviewPdf = Boolean(effectiveDocId && editDoc);
 
   const applyLoadedDocument = (
     loaded: ReturnType<typeof loadDocumentIntoForm>,
@@ -221,7 +176,10 @@ export function DocumentCreateWizard({
       setStep('form');
       documentsApi
         .get(token, editDocumentId)
-        .then((doc) => applyLoadedDocument(loadDocumentIntoForm(doc)))
+        .then((doc) => {
+          setEditDoc(doc);
+          applyLoadedDocument(loadDocumentIntoForm(doc));
+        })
         .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
         .finally(() => setLoadingEdit(false));
       return;
@@ -251,44 +209,19 @@ export function DocumentCreateWizard({
     setDiscountValue(0);
     setEditVersion(1);
     setEditTitle('');
+    setEditDoc(null);
+    setPersistedDocId(null);
+    setInfoMessage('');
   }, [open, documentType, editDocumentId, duplicateFromDocumentId, token]);
 
   const formVisible = open && step === 'form' && Boolean(selectedCustomer);
-
-  useLayoutEffect(() => {
-    if (!formVisible) return;
-    const el = formWizardRef.current;
-    if (!el) return;
-    ignoreResizeSaveRef.current = true;
-    applySavedWizardSize(el);
-    requestAnimationFrame(() => {
-      ignoreResizeSaveRef.current = false;
-    });
-  }, [formVisible, selectedCustomer?.id]);
-
-  useEffect(() => {
-    if (!formVisible) return;
-    const el = formWizardRef.current;
-    if (!el) return;
-    let saveTimer: ReturnType<typeof setTimeout> | undefined;
-    const observer = new ResizeObserver(() => {
-      if (ignoreResizeSaveRef.current) return;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        if (!el.isConnected) return;
-        saveWizardSize(el.offsetWidth, el.offsetHeight);
-      }, 150);
-    });
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      clearTimeout(saveTimer);
-      persistWizardSizeFromElement(el);
-    };
-  }, [formVisible, selectedCustomer?.id]);
+  const { panelRef, persistSize, onResizeHandleMouseDown } = useResizablePanel(
+    formVisible,
+    DOCUMENT_WIZARD_RESIZE
+  );
 
   const handleClose = () => {
-    persistWizardSizeFromElement(formWizardRef.current);
+    persistSize();
     onClose();
   };
 
@@ -350,16 +283,16 @@ export function DocumentCreateWizard({
     setError('');
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!token || !selectedCustomer) return;
+  const persistDocument = async (closeOnSuccess: boolean): Promise<boolean> => {
+    if (!token || !selectedCustomer) return false;
     const validLines = lines.filter((l) => l.productId && l.quantity > 0);
     if (!validLines.length) {
       setError(t('documents.needLines'));
-      return;
+      return false;
     }
     setBusy(true);
     setError('');
+    setInfoMessage('');
     try {
       const bodyDescription = [description.trim(), notes.trim()].filter(Boolean).join('\n\n') || undefined;
       const linePayload = validLines.map((l) => ({
@@ -374,34 +307,59 @@ export function DocumentCreateWizard({
         discountAmount:
           showDiscount && discountKind === 'amount' && discountValue > 0 ? discountValue : undefined,
       };
-      if (isEdit && editDocumentId) {
-        await documentsApi.update(token, editDocumentId, {
-          description: bodyDescription,
-          issueDate: issueDate ? `${issueDate}T12:00:00Z` : undefined,
-          dueDate: dueDate ? `${dueDate}T12:00:00Z` : undefined,
+      const payload = {
+        description: bodyDescription,
+        issueDate: issueDate ? `${issueDate}T12:00:00Z` : undefined,
+        dueDate: dueDate ? `${dueDate}T12:00:00Z` : undefined,
+        ...discountPayload,
+        lines: linePayload,
+      };
+
+      const wasUpdate = Boolean(effectiveDocId);
+      let saved: Document;
+      if (wasUpdate && effectiveDocId) {
+        saved = await documentsApi.update(token, effectiveDocId, {
+          ...payload,
           version: editVersion,
-          ...discountPayload,
-          lines: linePayload,
         });
-        onSuccess(t('documents.updated'));
       } else {
-        await documentsApi.create(token, {
+        saved = await documentsApi.create(token, {
           documentType,
           customerId: selectedCustomer.id,
-          description: bodyDescription,
-          issueDate: issueDate ? `${issueDate}T12:00:00Z` : undefined,
-          dueDate: dueDate ? `${dueDate}T12:00:00Z` : undefined,
-          ...discountPayload,
-          lines: linePayload,
+          ...payload,
         });
-        onSuccess(t('documents.created'));
+        setPersistedDocId(saved.id);
       }
-      handleClose();
+
+      setEditDoc(saved);
+      setEditVersion(saved.version);
+      setEditTitle(saved.documentNumber);
+
+      if (closeOnSuccess) {
+        onSuccess(wasUpdate ? t('documents.updated') : t('documents.created'));
+        handleClose();
+      } else {
+        setInfoMessage(t('documents.draftSaved'));
+      }
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
+      const msg = err instanceof Error ? err.message : 'Error';
+      if (msg.includes('finalized receipt') || msg.includes('receipt already exists')) {
+        setError(t('documents.cannotEditFinalizedReceipt'));
+      } else {
+        setError(msg);
+      }
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  const onSaveDraft = () => void persistDocument(false);
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    await persistDocument(true);
   };
 
   if (!open) return null;
@@ -413,7 +371,7 @@ export function DocumentCreateWizard({
         className="doc-wizard-back"
         onClick={() => {
           if (step === 'form' && !isEdit && !isDuplicateDraft) {
-            persistWizardSizeFromElement(formWizardRef.current);
+            persistSize();
             setStep('customer');
             return;
           }
@@ -502,7 +460,10 @@ export function DocumentCreateWizard({
 
       {step === 'form' && selectedCustomer && (
         <div className="doc-wizard-form-shell">
-          <div ref={formWizardRef} className="doc-wizard doc-wizard--form">
+          <div
+            ref={mergeRefs(panelRef, formWizardRef)}
+            className="doc-wizard doc-wizard--form"
+          >
             {header}
             <div className="doc-wizard-body">
               <form id="doc-create-form" className="doc-wizard-form" onSubmit={onSubmit}>
@@ -511,6 +472,7 @@ export function DocumentCreateWizard({
                   <p className="type-change-note type-change-note-info">{t('documents.duplicateDraftHint')}</p>
                 )}
                 {error && <div className="error-banner doc-wizard-error">{error}</div>}
+                {infoMessage && <div className="success-banner doc-wizard-error">{infoMessage}</div>}
 
             <section className="doc-panel doc-panel-customer">
               <div className="doc-panel-grid">
@@ -575,29 +537,40 @@ export function DocumentCreateWizard({
                   <table className="doc-lines-table">
                     <thead>
                       <tr>
-                        <th>{t('documents.colDescription')}</th>
-                        <th>{t('warehouse.qty')}</th>
-                        <th>{t('products.price')}</th>
-                        <th>{t('documents.colAmount')}</th>
-                        <th />
+                        <th className="col-article">{t('products.article')}</th>
+                        <th className="col-name">{t('products.name')}</th>
+                        <th className="col-qty">{t('warehouse.qty')}</th>
+                        <th className="col-price">{t('documents.colUnitPrice')}</th>
+                        <th className="col-total">{t('documents.colLineTotal')}</th>
+                        <th className="col-remove" aria-hidden />
                       </tr>
                     </thead>
                     <tbody>
-                      {lines.map((line, idx) => (
+                      {lines.map((line, idx) => {
+                        const articleCode =
+                          products.find((p) => p.id === line.productId)?.articleCode ?? '';
+                        return (
                         <tr key={line.key}>
-                          <td className="doc-line-product-cell">
-                            <code className="doc-line-sku">
-                              {products.find((p) => p.id === line.productId)?.articleCode}
-                            </code>
+                          <td className="col-article">
+                            <input
+                              type="text"
+                              className="doc-line-article"
+                              value={articleCode}
+                              readOnly
+                              tabIndex={-1}
+                              aria-label={t('products.article')}
+                            />
+                          </td>
+                          <td className="col-name">
                             <input
                               type="text"
                               className="doc-line-desc"
                               value={line.description}
                               onChange={(e) => updateLine(line.key, { description: e.target.value })}
-                              placeholder={t('documents.colDescription')}
+                              placeholder={t('products.name')}
                             />
                           </td>
-                          <td>
+                          <td className="col-qty">
                             <input
                               type="number"
                               min={1}
@@ -612,7 +585,7 @@ export function DocumentCreateWizard({
                               required
                             />
                           </td>
-                          <td>
+                          <td className="col-price">
                             <input
                               type="number"
                               min={0}
@@ -624,8 +597,8 @@ export function DocumentCreateWizard({
                               required
                             />
                           </td>
-                          <td className="doc-line-total">{formatMoney(lineTotals[idx] ?? 0)}</td>
-                          <td>
+                          <td className="col-total doc-line-total">{formatMoney(lineTotals[idx] ?? 0)}</td>
+                          <td className="col-remove">
                             <button
                               type="button"
                               className="doc-line-remove"
@@ -636,7 +609,8 @@ export function DocumentCreateWizard({
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                   )}
@@ -715,29 +689,44 @@ export function DocumentCreateWizard({
               <button type="button" className="btn btn-ghost-inline" onClick={handleClose} disabled={busy}>
                 {t('settings.cancel')}
               </button>
-              {isEdit && documentType === 'Quote' && editDocumentId && (
+              {canPreviewPdf && editDoc && onSendEmail && (
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  disabled={pdfBusy || busy}
-                  onClick={() => {
-                    if (!token || !editDocumentId) return;
-                    setPdfBusy(true);
-                    setError('');
-                    const num = editTitle.replace(/^[A-Z]+-/, '') || editDocumentId.slice(0, 8);
-                    void documentsApi
-                      .downloadPdf(token, editDocumentId, `quote-${num}.pdf`)
-                      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
-                      .finally(() => setPdfBusy(false));
-                  }}
+                  disabled={busy}
+                  onClick={() => onSendEmail(editDoc)}
                 >
-                  {pdfBusy ? '…' : t('documents.downloadPdf')}
+                  {t('documents.sendByEmail')}
                 </button>
               )}
+              {canPreviewPdf && editDoc && onPreviewPdf && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={() => onPreviewPdf(editDoc)}
+                >
+                  {t('documents.previewPdf')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy || loadingEdit}
+                onClick={onSaveDraft}
+              >
+                {busy ? '…' : t('documents.saveDraft')}
+              </button>
               <button type="submit" className="btn btn-primary" form="doc-create-form" disabled={busy || loadingEdit}>
-                {busy ? '…' : isEdit ? t('documents.save') : t('documents.generate')}
+                {busy ? '…' : isEdit || effectiveDocId ? t('documents.save') : t('documents.generate')}
               </button>
             </footer>
+            <div
+              className="app-modal__resize-handle"
+              onMouseDown={onResizeHandleMouseDown}
+              title={t('common.resizeModal')}
+              aria-hidden
+            />
           </div>
         </div>
       )}

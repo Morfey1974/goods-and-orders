@@ -10,6 +10,17 @@ export type DocumentLine = {
   sortOrder: number;
 };
 
+export type ReceiptPaymentLine = {
+  id: string;
+  paymentType: string;
+  amount: number;
+  currency: string;
+  lineDate?: string;
+  generalDetail?: string;
+  detailsJson?: string;
+  sortOrder: number;
+};
+
 export type Document = {
   id: string;
   documentType: string;
@@ -27,6 +38,9 @@ export type Document = {
   discountAmount?: number | null;
   paymentMethod?: string;
   lines: DocumentLine[];
+  paymentLines?: ReceiptPaymentLine[];
+  parentChargeAmount?: number;
+  parentChargeNumber?: string;
   version: number;
   createdAt: string;
 };
@@ -50,6 +64,19 @@ export type DocumentListResponse = {
   groups: DocumentMonthGroup[];
 };
 
+function mapPaymentLine(raw: Record<string, unknown>): ReceiptPaymentLine {
+  return {
+    id: String(raw.id ?? raw.Id),
+    paymentType: String(raw.paymentType ?? raw.PaymentType ?? ''),
+    amount: Number(raw.amount ?? raw.Amount ?? 0),
+    currency: String(raw.currency ?? raw.Currency ?? 'ILS'),
+    lineDate: (raw.lineDate ?? raw.LineDate) as string | undefined,
+    generalDetail: (raw.generalDetail ?? raw.GeneralDetail) as string | undefined,
+    detailsJson: (raw.detailsJson ?? raw.DetailsJson) as string | undefined,
+    sortOrder: Number(raw.sortOrder ?? raw.SortOrder ?? 0),
+  };
+}
+
 function mapLine(raw: Record<string, unknown>): DocumentLine {
   return {
     id: String(raw.id ?? raw.Id),
@@ -64,6 +91,7 @@ function mapLine(raw: Record<string, unknown>): DocumentLine {
 
 function mapDocument(raw: Record<string, unknown>): Document {
   const linesRaw = (raw.lines ?? raw.Lines ?? []) as Record<string, unknown>[];
+  const paymentLinesRaw = (raw.paymentLines ?? raw.PaymentLines ?? []) as Record<string, unknown>[];
   return {
     id: String(raw.id ?? raw.Id),
     documentType: String(raw.documentType ?? raw.DocumentType ?? ''),
@@ -81,6 +109,9 @@ function mapDocument(raw: Record<string, unknown>): Document {
     discountAmount: (raw.discountAmount ?? raw.DiscountAmount) as number | null | undefined,
     paymentMethod: (raw.paymentMethod ?? raw.PaymentMethod) as string | undefined,
     lines: Array.isArray(linesRaw) ? linesRaw.map(mapLine) : [],
+    paymentLines: Array.isArray(paymentLinesRaw) ? paymentLinesRaw.map(mapPaymentLine) : undefined,
+    parentChargeAmount: (raw.parentChargeAmount ?? raw.ParentChargeAmount) as number | undefined,
+    parentChargeNumber: (raw.parentChargeNumber ?? raw.ParentChargeNumber) as string | undefined,
     version: Number(raw.version ?? raw.Version ?? 1),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
   };
@@ -152,6 +183,73 @@ export const documentsApi = {
     );
     return mapDocument(data);
   },
+  issueChargeInvoice: async (token: string, quoteId: string) => {
+    const quote = await documentsApi.get(token, quoteId);
+    if (quote.documentType !== 'Quote') {
+      throw new Error('Charge invoice can only be issued from a price quote.');
+    }
+    return documentsApi.create(token, {
+      documentType: 'ChargeInvoice',
+      customerId: quote.customerId,
+      parentDocumentId: quote.id,
+      description: quote.description,
+      issueDate: new Date().toISOString(),
+      dueDate: quote.dueDate,
+      paymentMethod: quote.paymentMethod,
+      discountPercent: quote.discountPercent ?? undefined,
+      discountAmount: quote.discountAmount ?? undefined,
+      lines: quote.lines.map((l) => ({
+        productId: l.productId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+    });
+  },
+  issueReceipt: async (token: string, documentId: string, body?: object) => {
+    const source = await documentsApi.get(token, documentId);
+    if (source.documentType === 'ChargeInvoice') {
+      return documentsApi.createReceiptDraft(token, documentId, body);
+    }
+    if (source.documentType === 'Quote') {
+      let chargeId: string | undefined;
+      try {
+        const charge = await documentsApi.issueChargeInvoice(token, documentId);
+        chargeId = charge.id;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!msg.includes('already exists')) throw err;
+        const list = await documentsApi.list(token);
+        const existing = list.groups
+          .flatMap((g) => g.documents)
+          .find(
+            (d) =>
+              d.documentType === 'ChargeInvoice' &&
+              d.parentDocumentId === documentId
+          );
+        if (!existing) throw err;
+        chargeId = existing.id;
+      }
+      return documentsApi.createReceiptDraft(token, chargeId!, body);
+    }
+    throw new Error('Receipt can only be issued from a quote or charge invoice.');
+  },
+  createReceiptDraft: async (token: string, chargeOrQuoteId: string, body?: object) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${chargeOrQuoteId}/payment`,
+      { method: 'POST', body: JSON.stringify(body ?? {}) },
+      token
+    );
+    return mapDocument(data);
+  },
+  saveReceipt: async (token: string, receiptId: string, body: object) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${receiptId}/receipt`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      token
+    );
+    return mapDocument(data);
+  },
   fetchPdfBlob: async (token: string, id: string) => {
     const API_BASE = import.meta.env.VITE_API_URL ?? '';
     const res = await fetch(`${API_BASE}/api/documents/${id}/pdf`, {
@@ -173,5 +271,22 @@ export const documentsApi = {
     a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
+  },
+
+  sendEmail: async (
+    token: string,
+    id: string,
+    body: { contactId: string; recipientEmail: string; subject?: string; bodyHtml?: string }
+  ) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${id}/send-email`,
+      { method: 'POST', body: JSON.stringify(body) },
+      token
+    );
+    return {
+      sent: Boolean(data.sent ?? data.Sent),
+      stub: Boolean(data.stub ?? data.Stub),
+      message: String(data.message ?? data.Message ?? ''),
+    };
   },
 };

@@ -74,6 +74,9 @@ public class TenantController(AppDbContext db) : ControllerBase
             "ru" or "en" or "he" => request.DefaultLanguage.ToLowerInvariant(),
             _ => tenant.DefaultLanguage
         };
+        tenant.WithholdingTaxPercent = request.WithholdingTaxPercent is > 0 and <= 100
+            ? Math.Round(request.WithholdingTaxPercent.Value, 2)
+            : null;
         tenant.Version++;
         tenant.UpdatedAt = DateTime.UtcNow;
 

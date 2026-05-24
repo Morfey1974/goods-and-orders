@@ -8,7 +8,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-const MENU_MIN_WIDTH = 220;
+const MENU_MIN_WIDTH = 168;
+const MENU_MAX_WIDTH = 220;
 const MENU_EST_HEIGHT = 220;
 const GAP = 4;
 
@@ -40,18 +41,25 @@ export function CatalogRowMenu({ open, anchorRef, children }: Props) {
         top = Math.max(8, rect.top - GAP - menuHeight);
       }
 
+      let left: number;
+      if (rtl) {
+        // Actions column is on the physical left — anchor menu to the button's left edge.
+        left = rect.left;
+      } else {
+        left = rect.right - menuWidth;
+      }
+      left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
       const styleNext: CSSProperties = {
         position: 'fixed',
         top,
+        left,
+        width: 'max-content',
+        minWidth: MENU_MIN_WIDTH,
+        maxWidth: MENU_MAX_WIDTH,
         zIndex: 3000,
         visibility: 'visible',
       };
-
-      if (rtl) {
-        styleNext.insetInlineStart = Math.max(8, rect.left);
-      } else {
-        styleNext.left = Math.max(8, rect.right - menuWidth);
-      }
 
       setStyle(styleNext);
     };

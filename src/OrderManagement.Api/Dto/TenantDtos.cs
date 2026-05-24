@@ -66,6 +66,8 @@ public record TenantProfileDto(
 
     string TaxRegime,
 
+    decimal? WithholdingTaxPercent,
+
     string SubscriptionStatus,
 
     DateTime RegisteredAt,
@@ -109,6 +111,8 @@ public record UpdateTenantRequest(
     string? BusinessField,
 
     [Required] string DefaultLanguage,
+
+    [Range(0, 100)] decimal? WithholdingTaxPercent,
 
     int Version);
 
@@ -199,6 +203,8 @@ public static class TenantMapper
         t.DefaultLanguage,
 
         t.TaxRegime.ToString(),
+
+        t.WithholdingTaxPercent,
 
         t.SubscriptionStatus.ToString(),
 

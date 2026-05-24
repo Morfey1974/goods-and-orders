@@ -12,6 +12,16 @@ public record DocumentLineDto(
     decimal LineTotal,
     int SortOrder);
 
+public record ReceiptPaymentLineDto(
+    Guid Id,
+    string PaymentType,
+    decimal Amount,
+    string Currency,
+    DateTime? LineDate,
+    string? GeneralDetail,
+    string? DetailsJson,
+    int SortOrder);
+
 public record DocumentDto(
     Guid Id,
     string DocumentType,
@@ -29,6 +39,9 @@ public record DocumentDto(
     decimal? DiscountAmount,
     string? PaymentMethod,
     IReadOnlyList<DocumentLineDto> Lines,
+    IReadOnlyList<ReceiptPaymentLineDto>? PaymentLines,
+    decimal? ParentChargeAmount,
+    string? ParentChargeNumber,
     int Version,
     DateTime CreatedAt);
 
@@ -81,9 +94,26 @@ public record RecordPaymentRequest(
     string? PaymentMethod,
     DateTime? PaymentDate);
 
+public record ReceiptPaymentLineInput(
+    string PaymentType,
+    [Range(0.01, double.MaxValue)] decimal Amount,
+    string? Currency,
+    DateTime? LineDate,
+    string? GeneralDetail,
+    string? DetailsJson);
+
+public record UpdateReceiptRequest(
+    string? Description,
+    DateTime? IssueDate,
+    int Version,
+    [MinLength(1)] IReadOnlyList<ReceiptPaymentLineInput>? PaymentLines,
+    bool Finalize = true);
+
 public static class DocumentMappers
 {
-    public static DocumentDto ToDto(BusinessDocument d) => new(
+    public static DocumentDto ToDto(
+        BusinessDocument d,
+        BusinessDocument? parentCharge = null) => new(
         d.Id,
         d.DocumentType.ToString(),
         d.DocumentNumber,
@@ -107,11 +137,39 @@ public static class DocumentMappers
             l.UnitPrice,
             l.LineTotal,
             l.SortOrder)).ToList(),
+        d.DocumentType == DocumentType.Receipt
+            ? d.PaymentLines.OrderBy(p => p.SortOrder).Select(ToPaymentLineDto).ToList()
+            : null,
+        parentCharge?.TotalAmount,
+        parentCharge?.DocumentNumber,
         d.Version,
         d.CreatedAt);
+
+    public static ReceiptPaymentLineDto ToPaymentLineDto(ReceiptPaymentLine p) => new(
+        p.Id,
+        p.PaymentType.ToString(),
+        p.Amount,
+        p.Currency,
+        p.LineDate,
+        p.GeneralDetail,
+        p.DetailsJson,
+        p.SortOrder);
+
+    public static ReceiptPaymentType ParsePaymentType(string value) =>
+        Enum.TryParse<ReceiptPaymentType>(value, true, out var t)
+            ? t
+            : throw new ArgumentException("Invalid payment type.");
 
     public static DocumentType ParseType(string value) =>
         Enum.TryParse<DocumentType>(value, true, out var t)
             ? t
             : throw new ArgumentException("Invalid document type.");
 }
+
+public record SendDocumentEmailRequest(
+    Guid ContactId,
+    [Required][EmailAddress] string RecipientEmail,
+    string? Subject,
+    string? BodyHtml);
+
+public record SendDocumentEmailResponse(bool Sent, bool Stub, string Message);

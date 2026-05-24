@@ -8,7 +8,9 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useResizablePanel, type ResizablePanelConfig } from '../../hooks/useResizablePanel';
+import { useResizablePanel } from '../../hooks/useResizablePanel';
+import { mergeRefs } from '../../lib/mergeRefs';
+import type { ResizablePanelConfig } from '../../lib/modalSize';
 
 /** sm=440, md=480, lg=720, xl=960 */
 export type AppModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'fit';
@@ -19,7 +21,7 @@ export type AppModalProps = {
   children: ReactNode;
   /** Panel width preset (ignored when `resize` is set) */
   size?: AppModalSize;
-  /** Persisted draggable resize — pass storageKey + min/default sizes */
+  /** Persisted draggable resize — use RESIZABLE_PANEL_KEYS + defaults from resizablePanelKeys.ts */
   resize?: ResizablePanelConfig;
   className?: string;
   overlayClassName?: string;
@@ -37,16 +39,6 @@ export type AppModalProps = {
   noCard?: boolean;
   role?: 'dialog' | 'alertdialog';
 };
-
-function mergeRefs<T>(...refs: (Ref<T> | undefined)[]) {
-  return (node: T | null) => {
-    for (const ref of refs) {
-      if (!ref) continue;
-      if (typeof ref === 'function') ref(node);
-      else (ref as { current: T | null }).current = node;
-    }
-  };
-}
 
 const SIZE_CLASS: Record<AppModalSize, string> = {
   sm: 'app-modal__panel--sm',

@@ -279,3 +279,90 @@
 .customer-detail-page .customer-category-row {
   grid-template-columns: 1fr minmax(5.5rem, 7rem);
 }
+
+.customer-contacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.customer-contact-add {
+  min-width: 2.25rem;
+  padding-inline: 0.65rem;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.customer-contacts-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+}
+
+.customer-contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.customer-contact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.5fr) 2.25rem;
+  gap: 0.5rem 0.65rem;
+  align-items: end;
+  width: 100%;
+}
+
+.customer-contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.customer-contact-field span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.customer-contact-field input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.customer-contact-remove {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.customer-contact-remove:hover {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
+@media (max-width: 720px) {
+  .customer-contact-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .customer-contact-field--name {
+    grid-column: 1 / -1;
+  }
+
+  .customer-contact-remove {
+    grid-column: 2;
+    justify-self: end;
+  }
+}
