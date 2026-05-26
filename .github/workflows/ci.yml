@@ -23,7 +23,7 @@ jobs:
         run: dotnet build src/OrderManagement.Api/OrderManagement.Api.csproj -c Release
       - name: Install Web dependencies
         working-directory: src/order-management-web
-        run: npm ci
+        run: npm install --no-audit --no-fund --no-save
       - name: Build Web
         working-directory: src/order-management-web
         run: npm run build
