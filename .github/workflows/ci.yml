@@ -16,11 +16,14 @@ jobs:
           dotnet-version: '9.0.x'
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/order-management-web/package-lock.json
       - name: Build API
         run: dotnet build src/OrderManagement.Api/OrderManagement.Api.csproj -c Release
+      - name: Install Web dependencies
+        working-directory: src/order-management-web
+        run: npm ci
       - name: Build Web
-        run: |
-          cd src/order-management-web
-          npm ci
-          npm run build
+        working-directory: src/order-management-web
+        run: npm run build
