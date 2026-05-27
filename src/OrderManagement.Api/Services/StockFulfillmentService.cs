@@ -60,7 +60,8 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
                 if (!ProductTypePrefixes.TracksStock(component.ProductType)) continue;
 
                 var cpWh = await warehouse.GetForProductAsync(tenantId, component, ct);
-                var componentQty = quantity * line.Quantity;
+                var componentQty = StockQuantity.Normalize(quantity * line.Quantity);
+                if (componentQty <= 0) continue;
                 await warehouse.ApplyMovementAsync(
                     tenantId,
                     cpWh.Id,

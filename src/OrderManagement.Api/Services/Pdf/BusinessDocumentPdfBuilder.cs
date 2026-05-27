@@ -228,4 +228,46 @@ public static class BusinessDocumentPdfBuilder
             line += ", ישראל";
         return line;
     }
+
+    /// <summary>Sample quote PDF for branding preview (logo + signature on tenant documents).</summary>
+    public static BusinessDocumentPdfModel BuildBrandingSample(
+        Tenant tenant,
+        string? logoAbsolutePath,
+        string? signatureAbsolutePath)
+    {
+        var lines = new List<BusinessDocumentPdfLine>
+        {
+            new(1, "תיאור שירות לדוגמה", "SKU-001", 1m, 1500m, 1500m),
+            new(2, "פריט נוסף — הצעת מחיר", "SKU-002", 2m, 750m, 1500m),
+        };
+
+        return new BusinessDocumentPdfModel(
+            "הצעת מחיר",
+            "הצעת מחיר",
+            "00001",
+            "Q-00001",
+            DateTime.UtcNow.Date,
+            3000m,
+            null,
+            null,
+            null,
+            "שם לקוח לדוגמה בע\"מ",
+            FormatAddress("רחוב לדוגמה 1", "תל אביב", null),
+            "512345678",
+            "03-1234567",
+            null,
+            tenant.BusinessName,
+            tenant.BusinessCategory ?? tenant.BusinessField,
+            FormatSupplierTaxLine(tenant),
+            FormatAddress(tenant.Address, tenant.City, tenant.ZipCode),
+            tenant.MobilePhone ?? tenant.Phone,
+            tenant.Email,
+            tenant.Website,
+            "לפרויקט דוגמה — תצוגה מקדימה של מיתוג",
+            logoAbsolutePath,
+            signatureAbsolutePath,
+            lines,
+            BusinessDocumentPdfLinesKind.Products,
+            "סה\"כ לתשלום");
+    }
 }

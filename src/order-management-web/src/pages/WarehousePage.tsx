@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { warehouseApi, type StockBalance, type StockMovement, type Warehouse } from '../api/warehouse';
+import { warehouseApi, type StockBalance, type Warehouse } from '../api/warehouse';
 import { AppModal } from '../components/ui/AppModal';
 import { WarehouseManageModal } from '../components/WarehouseManageModal';
+import { WarehouseMovementsModal } from '../components/WarehouseMovementsModal';
+import { WAREHOUSE_RECEIPT_RESIZE } from '../lib/resizablePanelKeys';
 import { formatStockQuantity, normalizeStockQuantity } from '../lib/stockQuantity';
 import { useAuth } from '../context/AuthContext';
 import '../styles/documents.css';
@@ -15,12 +17,12 @@ export function WarehousePage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [filterWarehouseId, setFilterWarehouseId] = useState(ALL_WAREHOUSES);
   const [balances, setBalances] = useState<StockBalance[]>([]);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [products, setProducts] = useState<{ id: string; articleCode: string; name: string }[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [movementsOpen, setMovementsOpen] = useState(false);
   const [receipt, setReceipt] = useState({
     warehouseId: '',
     productId: '',
@@ -34,11 +36,11 @@ export function WarehousePage() {
   }, [token]);
 
   const selectedWarehouseId = filterWarehouseId || undefined;
+  const showWarehouseColumn = filterWarehouseId === ALL_WAREHOUSES;
 
   const load = useCallback(() => {
     if (!token) return;
     warehouseApi.balances(token, selectedWarehouseId).then(setBalances).catch((e) => setError(e.message));
-    warehouseApi.movements(token, 50, selectedWarehouseId).then(setMovements).catch(() => {});
     const whForProducts = filterWarehouseId || warehouses.find((w) => w.kind === 'Components')?.id;
     if (whForProducts) {
       warehouseApi.stockProducts(token, whForProducts).then((p) =>
@@ -54,13 +56,6 @@ export function WarehousePage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const showWarehouseColumn = filterWarehouseId === ALL_WAREHOUSES;
-
-  const visibleBalances = useMemo(
-    () => balances.filter((b) => b.quantity !== 0 || !showWarehouseColumn),
-    [balances, showWarehouseColumn]
-  );
 
   const onReceipt = async (e: FormEvent) => {
     e.preventDefault();
@@ -106,6 +101,9 @@ export function WarehousePage() {
           <button type="button" className="btn btn-ghost-inline" onClick={() => setManageOpen(true)}>
             {t('warehouse.manageWarehouses')}
           </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setMovementsOpen(true)}>
+            {t('warehouse.viewMovements')}
+          </button>
           <button type="button" className="btn btn-primary" onClick={openReceipt}>
             {t('warehouse.receipt')}
           </button>
@@ -128,7 +126,7 @@ export function WarehousePage() {
       </div>
 
       {message && <div className="success-banner">{message}</div>}
-      {error && !receiptOpen && !manageOpen && <div className="error-banner">{error}</div>}
+      {error && !receiptOpen && !manageOpen && !movementsOpen && <div className="error-banner">{error}</div>}
 
       <h2>{t('warehouse.balances')}</h2>
       <div className="card table-wrap">
@@ -142,7 +140,7 @@ export function WarehousePage() {
             </tr>
           </thead>
           <tbody>
-            {visibleBalances.map((b) => (
+            {balances.map((b) => (
               <tr key={`${b.warehouseId}-${b.productId}`}>
                 {showWarehouseColumn && <td>{b.warehouseName}</td>}
                 <td><code>{b.articleCode}</code></td>
@@ -152,33 +150,7 @@ export function WarehousePage() {
             ))}
           </tbody>
         </table>
-        {visibleBalances.length === 0 && <p className="muted empty-table">{t('warehouse.empty')}</p>}
-      </div>
-
-      <h2>{t('warehouse.movements')}</h2>
-      <div className="card table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t('products.article')}</th>
-              <th>{t('warehouse.type')}</th>
-              <th>{t('warehouse.qty')}</th>
-              <th>{t('warehouse.after')}</th>
-              <th>{t('warehouse.date')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements.map((m) => (
-              <tr key={m.id}>
-                <td><code>{m.articleCode}</code></td>
-                <td>{t(`warehouse.moveTypes.${m.movementType}`)}</td>
-                <td>{formatStockQuantity(m.quantity)}</td>
-                <td>{m.balanceAfter}</td>
-                <td>{new Date(m.createdAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {balances.length === 0 && <p className="muted empty-table">{t('warehouse.empty')}</p>}
       </div>
 
       <WarehouseManageModal
@@ -191,67 +163,96 @@ export function WarehousePage() {
         }}
       />
 
-      <AppModal open={receiptOpen} onClose={() => setReceiptOpen(false)} size="md">
-            <h2>{t('warehouse.receipt')}</h2>
-            <p className="muted">{t('warehouse.receiptHint')}</p>
-            <form className="form-grid" onSubmit={onReceipt}>
-              {error && <div className="error-banner">{error}</div>}
-              <label>
-                {t('products.warehouseCol')}
-                <select
-                  value={receipt.warehouseId}
-                  onChange={(e) => {
-                    const whId = e.target.value;
-                    setReceipt({ ...receipt, warehouseId: whId, productId: '' });
-                    if (token && whId) {
-                      warehouseApi.stockProducts(token, whId).then((p) =>
-                        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
-                      );
-                    }
-                  }}
-                  required
-                >
-                  <option value="">—</option>
-                  {warehouses.filter((w) => w.isActive).map((w) => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t('products.name')}
-                <select
-                  value={receipt.productId}
-                  onChange={(e) => setReceipt({ ...receipt, productId: e.target.value })}
-                  required
-                >
-                  <option value="">—</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.articleCode} — {p.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t('warehouse.qty')}
-                <input
-                  type="number"
-                  min={0.0001}
-                  step={1}
-                  value={receipt.quantity}
-                  onChange={(e) => setReceipt({ ...receipt, quantity: Number(e.target.value) })}
-                  required
-                />
-              </label>
-              <label>
-                {t('warehouse.notes')}
-                <input value={receipt.notes} onChange={(e) => setReceipt({ ...receipt, notes: e.target.value })} />
-              </label>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-ghost-inline" onClick={() => setReceiptOpen(false)}>
-                  {t('settings.cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary">{t('submit')}</button>
-              </div>
-            </form>
+      <WarehouseMovementsModal
+        open={movementsOpen}
+        onClose={() => setMovementsOpen(false)}
+        token={token ?? ''}
+        warehouseId={selectedWarehouseId}
+        showWarehouseColumn={showWarehouseColumn}
+      />
+
+      <AppModal
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        ariaLabel={t('warehouse.receipt')}
+        className="app-modal-panel warehouse-receipt-modal"
+        overlayClassName="warehouse-receipt-overlay"
+        noCard
+        closeOnBackdrop={false}
+        resize={WAREHOUSE_RECEIPT_RESIZE}
+      >
+        <header className="app-modal-panel__header">
+          <h2>{t('warehouse.receipt')}</h2>
+          <button
+            type="button"
+            className="app-modal-panel__close"
+            onClick={() => setReceiptOpen(false)}
+            aria-label={t('products.close')}
+          >
+            ×
+          </button>
+        </header>
+        <div className="app-modal-panel__body app-modal-panel__body--form">
+          <p className="muted">{t('warehouse.receiptHint')}</p>
+          <form className="form-grid" onSubmit={onReceipt}>
+            {error && <div className="error-banner">{error}</div>}
+            <label>
+              {t('products.warehouseCol')}
+              <select
+                value={receipt.warehouseId}
+                onChange={(e) => {
+                  const whId = e.target.value;
+                  setReceipt({ ...receipt, warehouseId: whId, productId: '' });
+                  if (token && whId) {
+                    warehouseApi.stockProducts(token, whId).then((p) =>
+                      setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
+                    );
+                  }
+                }}
+                required
+              >
+                <option value="">—</option>
+                {warehouses.filter((w) => w.isActive).map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('products.name')}
+              <select
+                value={receipt.productId}
+                onChange={(e) => setReceipt({ ...receipt, productId: e.target.value })}
+                required
+              >
+                <option value="">—</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.articleCode} — {p.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('warehouse.qty')}
+              <input
+                type="number"
+                min={0.0001}
+                step={1}
+                value={receipt.quantity}
+                onChange={(e) => setReceipt({ ...receipt, quantity: Number(e.target.value) })}
+                required
+              />
+            </label>
+            <label>
+              {t('warehouse.notes')}
+              <input value={receipt.notes} onChange={(e) => setReceipt({ ...receipt, notes: e.target.value })} />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost-inline" onClick={() => setReceiptOpen(false)}>
+                {t('settings.cancel')}
+              </button>
+              <button type="submit" className="btn btn-primary">{t('submit')}</button>
+            </div>
+          </form>
+        </div>
       </AppModal>
     </div>
   );

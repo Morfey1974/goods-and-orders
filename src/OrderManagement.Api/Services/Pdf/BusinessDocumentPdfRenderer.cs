@@ -169,9 +169,9 @@ public static class BusinessDocumentPdfRenderer
         {
             col.Spacing(2);
             if (!string.IsNullOrWhiteSpace(block.Heading))
-                col.Item().AlignRight().Text($"{block.Heading} :").Style(Bold(10));
-
-            col.Item().AlignRight().Text(block.Title).Style(Bold(block.TitleFontSize));
+                col.Item().AlignRight().Text($"{block.Heading}: {block.Title}").Style(Bold(block.TitleFontSize));
+            else
+                col.Item().AlignRight().Text(block.Title).Style(Bold(block.TitleFontSize));
 
             if (!string.IsNullOrWhiteSpace(block.Subtitle))
                 col.Item().AlignRight().Text(block.Subtitle).Style(Regular(10));

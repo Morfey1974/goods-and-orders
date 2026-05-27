@@ -13,6 +13,13 @@ public record LoginRequest(
     [Required][EmailAddress] string Email,
     [Required] string Password);
 
+public record ForgotPasswordRequest(
+    [Required][EmailAddress] string Email);
+
+public record ResetPasswordRequest(
+    [Required][MinLength(16)] string Token,
+    [Required][MinLength(8)] string NewPassword);
+
 public record AuthResponse(
     string Token,
     Guid TenantId,

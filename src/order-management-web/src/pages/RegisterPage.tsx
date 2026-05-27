@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { PasswordInput } from '../components/PasswordInput';
 import i18n from '../i18n';
 
 export function RegisterPage() {
@@ -43,12 +44,12 @@ export function RegisterPage() {
         </label>
         <label>
           {t('password')}
-          <input
-            type="password"
+          <PasswordInput
             minLength={8}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             required
+            autoComplete="new-password"
           />
         </label>
         <label>

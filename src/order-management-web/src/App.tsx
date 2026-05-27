@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CustomersPage } from './pages/CustomersPage';
@@ -13,7 +15,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { WarehousePage } from './pages/WarehousePage';
 import { OrdersPage } from './pages/OrdersPage';
 import { DocumentsPage } from './pages/DocumentsPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
+import { ReportsPage } from './pages/ReportsPage';
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             element={
               <ProtectedRoute>
@@ -37,7 +41,7 @@ function App() {
             <Route path="products" element={<ProductsPage />} />
             <Route path="warehouse" element={<WarehousePage />} />
             <Route path="documents" element={<DocumentsPage />} />
-            <Route path="reports" element={<PlaceholderPage titleKey="nav.reports" />} />
+            <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

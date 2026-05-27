@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   COMPLIANCE_DOCUMENT_KINDS,
@@ -7,6 +7,7 @@ import {
   type ComplianceDocumentKind,
   type TenantAssetsSummary,
 } from '../../api/tenantAssets';
+import { DocumentPdfPreviewModal } from '../documents/DocumentPdfPreviewModal';
 import { ComplianceEmailModal } from './ComplianceEmailModal';
 
 type Props = {
@@ -28,8 +29,39 @@ export function TenantComplianceSection({
   const fileRefs = useRef<Partial<Record<ComplianceDocumentKind, HTMLInputElement | null>>>({});
   const [busyKind, setBusyKind] = useState<ComplianceDocumentKind | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [previewKind, setPreviewKind] = useState<ComplianceDocumentKind | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const uploadedCount = summary?.complianceDocuments.length ?? 0;
+
+  const closePreview = useCallback(() => {
+    setPreviewKind(null);
+    setPreviewError(null);
+    setPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+  }, []);
+
+  const openPreview = async (kind: ComplianceDocumentKind) => {
+    setPreviewKind(kind);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+    try {
+      const blob = await tenantAssetsApi.fetchComplianceBlob(token, kind);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const upload = async (kind: ComplianceDocumentKind, file: File) => {
     setBusyKind(kind);
@@ -87,9 +119,15 @@ export function TenantComplianceSection({
               <div className="settings-compliance-card-body">
                 {doc ? (
                   <>
-                    <div className="settings-compliance-pdf-icon" aria-hidden="true">
+                    <button
+                      type="button"
+                      className="settings-compliance-pdf-icon"
+                      title={t('documents.previewPdf')}
+                      aria-label={t('documents.previewPdf')}
+                      onClick={() => void openPreview(kind)}
+                    >
                       PDF
-                    </div>
+                    </button>
                     <p className="settings-compliance-file-name" title={doc.originalFileName}>
                       {doc.originalFileName}
                     </p>
@@ -162,6 +200,28 @@ export function TenantComplianceSection({
           onError={onError}
         />
       )}
+
+      <DocumentPdfPreviewModal
+        open={previewKind !== null}
+        title={
+          previewKind
+            ? t(`settings.complianceDoc.${previewKind}`)
+            : t('documents.previewPdf')
+        }
+        pdfUrl={previewUrl}
+        loading={previewLoading}
+        error={previewError}
+        onClose={closePreview}
+        onDownload={
+          previewKind && findComplianceDoc(summary, previewKind)
+            ? () =>
+                void download(
+                  previewKind,
+                  findComplianceDoc(summary, previewKind)!.originalFileName
+                )
+            : undefined
+        }
+      />
     </>
   );
 }

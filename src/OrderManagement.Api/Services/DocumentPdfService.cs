@@ -78,6 +78,18 @@ public class DocumentPdfService(AppDbContext db, TenantFileService files)
         return BusinessDocumentPdfRenderer.Render(model);
     }
 
+    public async Task<byte[]> GenerateBrandingSampleAsync(Guid tenantId, CancellationToken ct)
+    {
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+            ?? throw new InvalidOperationException("Tenant not found.");
+
+        var logoPath = ResolveAssetPath(tenant.LogoPath);
+        var signaturePath = ResolveAssetPath(tenant.SignaturePath);
+
+        var model = BusinessDocumentPdfBuilder.BuildBrandingSample(tenant, logoPath, signaturePath);
+        return BusinessDocumentPdfRenderer.Render(model);
+    }
+
     private async Task<BusinessDocument?> ResolveSourceQuoteAsync(
         BusinessDocument charge,
         Guid tenantId,

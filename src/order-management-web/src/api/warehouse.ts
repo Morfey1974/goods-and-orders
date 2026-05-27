@@ -1,6 +1,47 @@
 import { normalizeStockQuantity } from '../lib/stockQuantity';
 import { request } from './http';
 
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+export type WarehouseReportPdfParams = {
+  warehouseId?: string;
+  productId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  includeZero?: boolean;
+};
+
+async function fetchReportPdfBlob(token: string, path: string, params?: WarehouseReportPdfParams) {
+  const q = new URLSearchParams();
+  if (params?.warehouseId) q.set('warehouseId', params.warehouseId);
+  if (params?.productId) q.set('productId', params.productId);
+  if (params?.from) q.set('from', params.from);
+  if (params?.to) q.set('to', params.to);
+  if (params?.limit != null) q.set('limit', String(params.limit));
+  if (params?.includeZero) q.set('includeZero', 'true');
+  const qs = q.toString();
+  const res = await fetch(`${API_BASE}${path}${qs ? `?${qs}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const body = data as { message?: string };
+    throw new Error(body.message ?? res.statusText);
+  }
+  return res.blob();
+}
+
+function triggerDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export type Warehouse = {
   id: string;
   kind: string;
@@ -30,6 +71,8 @@ export type StockMovement = {
   balanceAfter: number;
   notes?: string;
   createdAt: string;
+  warehouseId: string;
+  warehouseName: string;
 };
 
 function mapWarehouse(raw: Record<string, unknown>): Warehouse {
@@ -84,10 +127,19 @@ export const warehouseApi = {
     const data = await request<Record<string, unknown>[]>(`/api/warehouse/balances${q}`, {}, token);
     return data.map(mapBalance);
   },
-  movements: async (token: string, limit = 50, warehouseId?: string, productId?: string) => {
+  movements: async (
+    token: string,
+    limit = 50,
+    warehouseId?: string,
+    productId?: string,
+    from?: string,
+    to?: string
+  ) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (warehouseId) params.set('warehouseId', warehouseId);
     if (productId) params.set('productId', productId);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
     const data = await request<Record<string, unknown>[]>(
       `/api/warehouse/movements?${params}`,
       {},
@@ -98,10 +150,12 @@ export const warehouseApi = {
       articleCode: String(m.articleCode ?? m.ArticleCode ?? ''),
       productName: String(m.productName ?? m.ProductName ?? ''),
       movementType: String(m.movementType ?? m.MovementType ?? ''),
-      quantity: Number(m.quantity ?? m.Quantity ?? 0),
-      balanceAfter: Number(m.balanceAfter ?? m.BalanceAfter ?? 0),
+      quantity: normalizeStockQuantity(Number(m.quantity ?? m.Quantity ?? 0)),
+      balanceAfter: normalizeStockQuantity(Number(m.balanceAfter ?? m.BalanceAfter ?? 0)),
       notes: (m.notes ?? m.Notes) as string | undefined,
       createdAt: String(m.createdAt ?? m.CreatedAt ?? ''),
+      warehouseId: String(m.warehouseId ?? m.WarehouseId ?? ''),
+      warehouseName: String(m.warehouseName ?? m.WarehouseName ?? ''),
     })) as StockMovement[];
   },
   stockProducts: async (token: string, warehouseId?: string) => {
@@ -122,4 +176,22 @@ export const warehouseApi = {
     body: { productId: string; quantity: number; notes?: string; warehouseId?: string }
   ) =>
     request<StockMovement>('/api/warehouse/receipt', { method: 'POST', body: JSON.stringify(body) }, token),
+
+  fetchBalancesReportPdfBlob: (token: string, params?: WarehouseReportPdfParams) =>
+    fetchReportPdfBlob(token, '/api/warehouse/reports/balances/pdf', params),
+
+  fetchMovementsReportPdfBlob: (token: string, params?: WarehouseReportPdfParams) =>
+    fetchReportPdfBlob(token, '/api/warehouse/reports/movements/pdf', params),
+
+  downloadBalancesReportPdf: async (token: string, params?: WarehouseReportPdfParams) => {
+    const blob = await fetchReportPdfBlob(token, '/api/warehouse/reports/balances/pdf', params);
+    const suffix = params?.warehouseId ? 'warehouse' : 'all';
+    triggerDownload(blob, `stock-balances-${suffix}.pdf`);
+  },
+
+  downloadMovementsReportPdf: async (token: string, params?: WarehouseReportPdfParams) => {
+    const blob = await fetchReportPdfBlob(token, '/api/warehouse/reports/movements/pdf', params);
+    const suffix = params?.warehouseId ? 'warehouse' : 'all';
+    triggerDownload(blob, `stock-movements-${suffix}.pdf`);
+  },
 };

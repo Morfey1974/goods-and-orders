@@ -1,6 +1,6 @@
 # WEB Order Management — учёт заказов (עוסק פטור)
 
-Веб-приложение для малого бизнеса в Израиле: клиенты, каталог, склад, заказы, документы (הצעת מחיר / חשבון חיוב / קבלה), профиль עוסק פטור.
+Веб-приложение для малого бизнеса в Израиле: клиенты, каталог, склад, заказы, документы (הצעת מחיר / חשבון חיוב / קבלה), складские отчёты PDF, профиль עוסק פטור.
 
 Подробный план: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)  
 Палитра цветов: [docs/color-palette.html](docs/color-palette.html)
@@ -64,6 +64,8 @@ npm run dev
 2. **Настройки** — профиль, контакты, банк, логотип, подпись, PDF для клиентов  
 3. Язык: עברית / Русский / English (RTL для иврита)
 
+**Сброс пароля:** на странице входа — «Забыли пароль?» → письмо со ссылкой (при `Email:Enabled: false` ссылка пишется в лог API). В `appsettings.json` задайте `App:FrontendBaseUrl` (URL фронтенда для ссылки сброса).
+
 ---
 
 ## После обновления кода (`git pull`)
@@ -79,6 +81,7 @@ docker compose up -d --build api
 - `ReceiptPaymentLines` — строки оплаты в קבלה
 - `Tenant.WithholdingTaxPercent` — % ניכוי במקור по умолчанию
 - `CustomerContacts` — контакты клиента для email
+- `PasswordResetTokens` — одноразовые токены сброса пароля
 
 Фронтенд при изменениях UI:
 
@@ -108,7 +111,7 @@ npm run dev
 |--------|------------|
 | Общие данные | Название, ת.ז., עוסק, категория, адрес, **% ניכוי במקור** (для строк удержания в קבלה) |
 | Контакты | Email (редактируемый), телефоны, сайт, язык |
-| Логотип и подпись | JPG/PNG/WebP → PDF הצעת מחיר и другие документы |
+| Логотип и подпись | JPG/PNG/WebP → PDF הצעת מחיר и другие документы; **просмотр образца** документа с брендингом |
 | Документы для клиентов | PDF: אישור חשבון, כרטיס חברה, ניהול ספרים, ניכוי מס — загрузка и **отправка по email** |
 | Банковские реквизиты | Код банка (справочник IL), филиал, счёт, SWIFT/ABA/IBAN |
 
@@ -123,6 +126,27 @@ npm run dev
 | Карточка клиента | Полные поля, логотип, **несколько אנשי קשר** (имя, телефон, email) для отправки документов |
 | Импорт CSV | Кнопка на странице «לקוחות» — экспорт из Yesh (`yesh_export_customers_*.csv`), опция обновления существующих по имени |
 | Дедупликация | Совпадение по нормализованному имени (без поля «מפתח זר») |
+
+---
+
+## Склад и отчёты
+
+| Возможность | Описание |
+|-------------|----------|
+| Склад | Остатки по складам (компоненты, готовая продукция, пользовательские); приход, движения |
+| Движения | Модальное окно истории движений по товару; отчёт PDF |
+| **Отчёты** (вкладка «Отчёты») | PDF с шапкой бизнеса на иврите; интерфейс выбора — на языке UI |
+| Остатки по складам | Группировка по складу; опция «Показывать нулевые остатки» |
+| Движения товаров | Фильтр по складу и периоду; **быстрый период** (выпадающий список: сегодня, неделя, месяц, 2 месяца, текущий/прошлый год); просмотр и скачивание PDF |
+
+Количества в складских отчётах и новых движениях — **целые числа** (без дробной части).
+
+Эндпоинты PDF:
+
+- `GET /api/warehouse/reports/balances/pdf?warehouseId=&includeZero=`
+- `GET /api/warehouse/reports/movements/pdf?warehouseId=&from=&to=&limit=`
+
+Параметры `from` / `to` — даты в формате `YYYY-MM-DD` (границы дня в UTC).
 
 ---
 
@@ -173,11 +197,14 @@ npm run dev
 ```json
 "Email": {
   "Enabled": false
+},
+"App": {
+  "FrontendBaseUrl": "http://localhost:5173"
 }
 ```
 
-При `Enabled: false` кнопка «Отправить файлы по email» **не шлёт письмо**, а показывает сообщение о режиме заглушки (запрос логируется на сервере).  
-Когда будут данные SMTP — установите `Enabled: true` и заполните `SmtpHost`, `SmtpPort`, `SmtpUser`, `SmtpPassword`, `FromAddress` (реализация отправки в `TenantEmailService`).
+При `Enabled: false` кнопка «Отправить файлы по email» **не шлёт письмо**, а показывает сообщение о режиме заглушки (запрос логируется на сервере). То же для **сброса пароля** — ссылка `/reset-password?token=…` выводится в лог API.  
+Когда будут данные SMTP — установите `Enabled: true` и заполните `SmtpHost`, `SmtpPort`, `SmtpUser`, `SmtpPassword`, `FromAddress` (реализация отправки в `TenantEmailService` и `PasswordResetMailer`).
 
 ---
 
@@ -214,9 +241,11 @@ docker compose down -v
 ├── docker-compose.yml
 ├── docs/
 ├── scripts/                    # ярлыки запуска
+├── tools/
+│   └── HashPassword/           # утилита хеширования пароля (dev)
 ├── src/
-│   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов
-│   └── order-management-web/   # React + Vite + i18n (ru/en/he), AppModal
+│   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов, складские отчёты
+│   └── order-management-web/   # React + Vite + i18n (ru/en/he), AppModal, отчёты
 └── README.md
 ```
 
@@ -227,6 +256,7 @@ docker compose down -v
 | Метод | Путь | Описание |
 |-------|------|----------|
 | POST | `/api/auth/register`, `/login` | Регистрация / вход |
+| POST | `/api/auth/forgot-password`, `/reset-password` | Запрос ссылки сброса / установка нового пароля |
 | GET/PUT | `/api/tenant/profile` | Профиль |
 | PUT | `/api/tenant/bank-details` | Банк |
 | GET | `/api/tenant/assets` | Сводка: лого, подпись, PDF |
@@ -238,6 +268,9 @@ docker compose down -v
 | PUT | `/api/documents/{id}/receipt` | Сохранение קבלה (`paymentLines`, `finalize: true/false`) |
 | GET | `/api/documents/{id}/pdf` | PDF: Quote, ChargeInvoice, Receipt (קבלה — строки оплаты) |
 | POST | `/api/documents/{id}/send-email` | Отправка документа (заглушка) |
+| GET | `/api/warehouse/balances`, `/movements` | Остатки и движения (фильтры `warehouseId`, `from`, `to`) |
+| GET | `/api/warehouse/reports/balances/pdf` | PDF отчёт по остаткам |
+| GET | `/api/warehouse/reports/movements/pdf` | PDF отчёт по движениям |
 
 Полный список — Swagger: http://localhost:8080/swagger
 
@@ -256,6 +289,7 @@ docker compose down -v
 | CORS | Добавьте origin в `Cors:Origins` в `appsettings.json` |
 | Порт 5432 занят | Смените порт в `docker-compose.yml` или остановите другой PostgreSQL |
 | PDF הצעה не открывается / 500 | Пересоберите API; в контейнере должны быть шрифты `Assets/Fonts/NotoSansHebrew-*.ttf` |
+| Отчёт по движениям — Internal Server Error при выборе дат | Пересоберите API (`docker compose up -d --build api`); нужна нормализация дат UTC |
 | Модальное окно закрывается при ресайзе | Обновите фронтенд — используется `AppModal`, не сырой `onClick` на overlay |
 
 ---

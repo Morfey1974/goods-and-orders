@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { COMPLIANCE_EMAIL_RESIZE } from '../../lib/resizablePanelKeys';
 import { AppModal } from '../ui/AppModal';
 import {
   COMPLIANCE_DOCUMENT_KINDS,
@@ -76,15 +77,27 @@ export function ComplianceEmailModal({
     <AppModal
       open
       onClose={onClose}
-      size="lg"
-      className="settings-compliance-email-modal"
+      ariaLabel={t('settings.complianceEmailTitle')}
+      className="app-modal-panel settings-compliance-email-modal"
       overlayClassName="settings-compliance-email-overlay"
-      labelledBy="compliance-email-title"
+      noCard
+      closeOnBackdrop={false}
       preventClose={sending}
+      resize={COMPLIANCE_EMAIL_RESIZE}
     >
-        <h2 id="compliance-email-title" className="settings-section-title">
-          {t('settings.complianceEmailTitle')}
-        </h2>
+      <header className="app-modal-panel__header">
+        <h2 id="compliance-email-title">{t('settings.complianceEmailTitle')}</h2>
+        <button
+          type="button"
+          className="app-modal-panel__close"
+          onClick={onClose}
+          disabled={sending}
+          aria-label={t('products.close')}
+        >
+          ×
+        </button>
+      </header>
+      <div className="app-modal-panel__body app-modal-panel__body--form">
         <form onSubmit={onSubmit}>
           <label className="settings-field">
             <span className="settings-field-label-row">{t('settings.complianceEmailRecipients')}</span>
@@ -128,7 +141,7 @@ export function ComplianceEmailModal({
             )}
           </fieldset>
           <div className="settings-compliance-email-actions">
-            <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
+            <button type="button" className="btn btn-ghost-inline" onClick={onClose} disabled={sending}>
               {t('settings.cancel')}
             </button>
             <button
@@ -140,6 +153,7 @@ export function ComplianceEmailModal({
             </button>
           </div>
         </form>
+      </div>
     </AppModal>
   );
 }

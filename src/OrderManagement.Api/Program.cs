@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
 builder.Services.Configure<SubscriptionSettings>(builder.Configuration.GetSection(SubscriptionSettings.SectionName));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.Configure<AppSettings>(builder.Configuration.GetSection(AppSettings.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -28,12 +29,15 @@ builder.Services.AddScoped<WarehouseService>();
 builder.Services.AddScoped<StockFulfillmentService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<DocumentPdfService>();
+builder.Services.AddScoped<WarehouseReportPdfService>();
 builder.Services.AddScoped<ProductImportService>();
 builder.Services.AddScoped<CustomerImportService>();
 builder.Services.AddSingleton<ProductImageService>();
 builder.Services.AddSingleton<TenantFileService>();
 builder.Services.AddSingleton<CustomerLogoService>();
 builder.Services.AddScoped<TenantEmailService>();
+builder.Services.AddScoped<PasswordResetMailer>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddSingleton<SubscriptionService>();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

@@ -721,6 +721,7 @@ export function DocumentCreateWizard({
                 {busy ? '…' : isEdit || effectiveDocId ? t('documents.save') : t('documents.generate')}
               </button>
             </footer>
+            <div className="app-modal__resize-gutter" aria-hidden />
             <div
               className="app-modal__resize-handle"
               onMouseDown={onResizeHandleMouseDown}

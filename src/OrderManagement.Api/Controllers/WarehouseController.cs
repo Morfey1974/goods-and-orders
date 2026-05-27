@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
+using OrderManagement.Api.Helpers;
 using OrderManagement.Api.Entities;
 using OrderManagement.Api.Extensions;
 using OrderManagement.Api.Services;
@@ -12,7 +13,10 @@ namespace OrderManagement.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class WarehouseController(AppDbContext db, WarehouseService warehouseService) : ControllerBase
+public class WarehouseController(
+    AppDbContext db,
+    WarehouseService warehouseService,
+    WarehouseReportPdfService warehouseReportPdf) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<WarehouseDto>>> List(CancellationToken ct)
@@ -121,35 +125,99 @@ public class WarehouseController(AppDbContext db, WarehouseService warehouseServ
     public async Task<ActionResult<IEnumerable<StockMovementDto>>> Movements(
         [FromQuery] Guid? productId = null,
         [FromQuery] Guid? warehouseId = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
         [FromQuery] int limit = 50,
         CancellationToken ct = default)
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
 
-        var query = db.StockMovements
-            .Where(m => m.TenantId == tenantId)
-            .Include(m => m.Product)
-            .AsQueryable();
+        var query =
+            from m in db.StockMovements
+            join p in db.Products on m.ProductId equals p.Id
+            join w in db.Warehouses on m.WarehouseId equals w.Id
+            where m.TenantId == tenantId
+            select new { m, p, w };
 
-        if (productId.HasValue) query = query.Where(m => m.ProductId == productId);
-        if (warehouseId.HasValue) query = query.Where(m => m.WarehouseId == warehouseId);
+        if (productId.HasValue) query = query.Where(x => x.m.ProductId == productId);
+        if (warehouseId.HasValue) query = query.Where(x => x.m.WarehouseId == warehouseId);
+
+        var rangeError = ReportDateRange.Validate(from, to);
+        if (rangeError is not null) return BadRequest(new { message = rangeError });
+
+        var fromUtc = ReportDateRange.StartUtc(from);
+        var toExclusiveUtc = ReportDateRange.EndExclusiveUtc(to);
+        if (fromUtc.HasValue) query = query.Where(x => x.m.CreatedAt >= fromUtc.Value);
+        if (toExclusiveUtc.HasValue) query = query.Where(x => x.m.CreatedAt < toExclusiveUtc.Value);
 
         var list = await query
-            .OrderByDescending(m => m.CreatedAt)
+            .OrderByDescending(x => x.m.CreatedAt)
             .Take(Math.Clamp(limit, 1, 200))
-            .Select(m => new StockMovementDto(
-                m.Id,
-                m.Product.ArticleCode,
-                m.Product.Name,
-                m.MovementType.ToString(),
-                m.Quantity,
-                m.BalanceAfter,
-                m.Notes,
-                m.CreatedAt))
+            .Select(x => new StockMovementDto(
+                x.m.Id,
+                x.p.ArticleCode,
+                x.p.Name,
+                x.m.MovementType.ToString(),
+                x.m.Quantity,
+                x.m.BalanceAfter,
+                x.m.Notes,
+                x.m.CreatedAt,
+                x.w.Id,
+                x.w.Name))
             .ToListAsync(ct);
 
         return Ok(list);
+    }
+
+    [HttpGet("reports/balances/pdf")]
+    public async Task<IActionResult> BalancesReportPdf(
+        [FromQuery] Guid? warehouseId = null,
+        [FromQuery] bool includeZero = false,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            var pdf = await warehouseReportPdf.GenerateBalancesAsync(
+                tenantId.Value, warehouseId, includeZero, ct);
+            var suffix = warehouseId.HasValue ? "warehouse" : "all";
+            return File(pdf, "application/pdf", $"stock-balances-{suffix}.pdf", enableRangeProcessing: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("reports/movements/pdf")]
+    public async Task<IActionResult> MovementsReportPdf(
+        [FromQuery] Guid? warehouseId = null,
+        [FromQuery] Guid? productId = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int limit = 500,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var rangeError = ReportDateRange.Validate(from, to);
+        if (rangeError is not null) return BadRequest(new { message = rangeError });
+
+        try
+        {
+            var pdf = await warehouseReportPdf.GenerateMovementsAsync(
+                tenantId.Value, warehouseId, productId, from, to, limit, ct);
+            var suffix = warehouseId.HasValue ? "warehouse" : "all";
+            return File(pdf, "application/pdf", $"stock-movements-{suffix}.pdf", enableRangeProcessing: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("receipt")]
@@ -182,7 +250,8 @@ public class WarehouseController(AppDbContext db, WarehouseService warehouseServ
             return Ok(new StockMovementDto(
                 movement.Id, product.ArticleCode, product.Name,
                 movement.MovementType.ToString(), movement.Quantity,
-                movement.BalanceAfter, movement.Notes, movement.CreatedAt));
+                movement.BalanceAfter, movement.Notes, movement.CreatedAt,
+                wh.Id, wh.Name));
         }
         catch (InvalidOperationException ex)
         {

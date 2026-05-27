@@ -1160,6 +1160,7 @@ export function ReceiptEditWizard({
             )}
           </footer>
         )}
+        <div className="app-modal__resize-gutter" aria-hidden />
         <div
           className="app-modal__resize-handle"
           aria-hidden

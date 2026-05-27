@@ -16,7 +16,8 @@ namespace OrderManagement.Api.Controllers;
 public class TenantAssetsController(
     AppDbContext db,
     TenantFileService fileService,
-    TenantEmailService emailService) : ControllerBase
+    TenantEmailService emailService,
+    DocumentPdfService documentPdfService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<TenantAssetsSummaryDto>> GetSummary(CancellationToken ct)
@@ -87,6 +88,23 @@ public class TenantAssetsController(
             return NotFound();
 
         return ServeFile(tenant.SignaturePath, fileService.GetImageContentType(tenant.SignaturePath));
+    }
+
+    [HttpGet("branding-sample/pdf")]
+    public async Task<IActionResult> GetBrandingSamplePdf(CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            var bytes = await documentPdfService.GenerateBrandingSampleAsync(tenantId.Value, ct);
+            return File(bytes, "application/pdf", "branding-sample.pdf");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("signature")]

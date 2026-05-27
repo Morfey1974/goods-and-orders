@@ -68,6 +68,18 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  forgotPassword: (body: { email: string }) =>
+    request<void>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  resetPassword: (body: { token: string; newPassword: string }) =>
+    request<void>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   getProfile: (token: string) =>
     request<TenantProfile>('/api/tenant/profile', {}, token),
 

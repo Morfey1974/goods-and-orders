@@ -80,19 +80,38 @@ export const tenantAssetsApi = {
     return mapSummary((await parseJson<Record<string, unknown>>(res)) as Record<string, unknown>);
   },
 
-  fetchLogoBlob: async (token: string) => {
-    const res = await fetch(`${API_BASE}/api/tenant/assets/logo`, {
+  fetchLogoBlob: async (token: string, cacheBust?: number) => {
+    const v = cacheBust ?? Date.now();
+    const res = await fetch(`${API_BASE}/api/tenant/assets/logo?v=${v}`, {
       headers: authHeaders(token),
+      cache: 'no-store',
     });
     if (!res.ok) throw new Error(res.statusText);
     return res.blob();
   },
 
-  fetchSignatureBlob: async (token: string) => {
-    const res = await fetch(`${API_BASE}/api/tenant/assets/signature`, {
+  fetchSignatureBlob: async (token: string, cacheBust?: number) => {
+    const v = cacheBust ?? Date.now();
+    const res = await fetch(`${API_BASE}/api/tenant/assets/signature?v=${v}`, {
       headers: authHeaders(token),
+      cache: 'no-store',
     });
     if (!res.ok) throw new Error(res.statusText);
+    return res.blob();
+  },
+
+  fetchBrandingSamplePdfBlob: async (token: string) => {
+    const res = await fetch(`${API_BASE}/api/tenant/assets/branding-sample/pdf`, {
+      headers: authHeaders(token),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const message = typeof (data as { message?: string }).message === 'string'
+        ? (data as { message: string }).message
+        : res.statusText;
+      throw new Error(message);
+    }
     return res.blob();
   },
 

@@ -24,7 +24,12 @@ npm run build
 | Путь | Назначение |
 |------|------------|
 | `src/pages/DocumentsPage.tsx` | Список документов, PDF-превью |
+| `src/pages/ReportsPage.tsx` | Складские отчёты (остатки, движения), PDF-превью |
+| `src/pages/ForgotPasswordPage.tsx`, `ResetPasswordPage.tsx` | Сброс пароля |
 | `src/components/documents/ReceiptEditWizard.tsx` | Редактор קבלה (строки оплаты) |
 | `src/components/documents/DocumentCreateWizard.tsx` | הצעת מחיר / חשבון חיוב |
+| `src/components/reports/ReportRunModal.tsx` | Настройки отчёта (склад, период, пресеты дат) |
+| `src/components/WarehouseMovementsModal.tsx` | История движений по товару |
 | `src/components/ui/AppModal.tsx` | Модальные окна с ресайзом |
+| `src/lib/reportDatePresets.ts` | Пресеты периода для отчёта по движениям |
 | `src/lib/resizablePanelKeys.ts` | Ключи `localStorage` для размеров окон |

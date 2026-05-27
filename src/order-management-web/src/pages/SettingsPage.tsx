@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, useCallback, type FormEvent } from 'react';
 import { AppModal } from '../components/ui/AppModal';
 import { useTranslation } from 'react-i18next';
 import { api, type TenantProfile } from '../api/client';
@@ -12,6 +12,7 @@ import {
 import { tenantAssetsApi, type TenantAssetsSummary } from '../api/tenantAssets';
 import { TenantBrandingSection } from '../components/settings/TenantBrandingSection';
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { useAuth } from '../context/AuthContext';
 import { BANK_MODAL_RESIZE } from '../lib/resizablePanelKeys';
 import '../styles/settings.css';
@@ -100,6 +101,10 @@ export function SettingsPage() {
   const [assetsSummary, setAssetsSummary] = useState<TenantAssetsSummary | null>(null);
   const [assetsError, setAssetsError] = useState('');
   const [assetsMessage, setAssetsMessage] = useState('');
+  const [brandingSampleOpen, setBrandingSampleOpen] = useState(false);
+  const [brandingSampleUrl, setBrandingSampleUrl] = useState<string | null>(null);
+  const [brandingSampleLoading, setBrandingSampleLoading] = useState(false);
+  const [brandingSampleError, setBrandingSampleError] = useState<string | null>(null);
   const closeBankModal = () => setBankModalOpen(false);
 
   useEffect(() => {
@@ -116,6 +121,34 @@ export function SettingsPage() {
       .then(setAssetsSummary)
       .catch((e) => setAssetsError(e.message));
   }, [token]);
+
+  const closeBrandingSample = useCallback(() => {
+    setBrandingSampleOpen(false);
+    setBrandingSampleError(null);
+    setBrandingSampleUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+  }, []);
+
+  const openBrandingSample = async () => {
+    if (!token) return;
+    setBrandingSampleOpen(true);
+    setBrandingSampleLoading(true);
+    setBrandingSampleError(null);
+    setBrandingSampleUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+    try {
+      const blob = await tenantAssetsApi.fetchBrandingSamplePdfBlob(token);
+      setBrandingSampleUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setBrandingSampleError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setBrandingSampleLoading(false);
+    }
+  };
 
   const onSubmitProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -484,8 +517,15 @@ export function SettingsPage() {
         </section>
 
         <section className="card settings-section">
-          <div className="settings-section-head">
+          <div className="settings-section-head settings-section-head--with-actions">
             <h2 className="settings-section-title">{t('settings.sectionBranding')}</h2>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void openBrandingSample()}
+            >
+              {t('settings.previewBrandingSample')}
+            </button>
           </div>
           <div className="settings-section-body">
             {assetsError && <div className="error-banner">{assetsError}</div>}
@@ -709,6 +749,15 @@ export function SettingsPage() {
             </form>
         </AppModal>
       )}
+
+      <DocumentPdfPreviewModal
+        open={brandingSampleOpen}
+        title={t('settings.previewBrandingSample')}
+        pdfUrl={brandingSampleUrl}
+        loading={brandingSampleLoading}
+        error={brandingSampleError}
+        onClose={closeBrandingSample}
+      />
     </div>
   );
 }

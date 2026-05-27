@@ -229,6 +229,10 @@ public class WarehouseService(AppDbContext db)
         if (quantity <= 0)
             throw new InvalidOperationException("Quantity must be positive.");
 
+        quantity = StockQuantity.Normalize(quantity);
+        if (quantity <= 0)
+            throw new InvalidOperationException("Quantity must be a positive whole number.");
+
         var balance = await GetOrCreateBalanceAsync(warehouseId, productId, ct);
 
         if (type == StockMovementType.Adjustment)
@@ -238,7 +242,7 @@ public class WarehouseService(AppDbContext db)
         else
         {
             var delta = type == StockMovementType.Receipt ? quantity : -quantity;
-            balance.Quantity += delta;
+            balance.Quantity = StockQuantity.Normalize(balance.Quantity + delta);
             if (balance.Quantity < 0)
                 throw new InvalidOperationException("Insufficient stock.");
         }

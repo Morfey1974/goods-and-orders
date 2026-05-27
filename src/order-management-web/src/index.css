@@ -360,6 +360,51 @@ a {
   margin: 0;
 }
 
+.auth-link {
+  text-align: center;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.auth-link a {
+  color: var(--accent, #0d9488);
+}
+
+.password-input {
+  position: relative;
+  display: block;
+}
+
+.password-input input {
+  width: 100%;
+  padding-inline-end: 2.5rem;
+}
+
+.password-input__toggle {
+  position: absolute;
+  inset-inline-end: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+}
+
+.password-input__toggle:hover,
+.password-input__toggle:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text, #111);
+  outline: none;
+}
+
 .error-banner {
   background: var(--error-bg);
   color: var(--error);
@@ -570,23 +615,28 @@ a {
   font-size: 0.9rem;
 }
 
-.warehouse-manage-modal {
-  max-width: 920px;
-  width: min(96vw, 920px);
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.warehouse-manage-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
 .warehouse-manage-toolbar {
   margin-bottom: 1rem;
+}
+
+.warehouse-movements-modal {
+  width: 960px;
+  height: 720px;
+}
+
+.warehouse-manage-modal {
+  width: 920px;
+  height: 680px;
+}
+
+.warehouse-receipt-modal {
+  width: 480px;
+  height: 520px;
+}
+
+.settings-compliance-email-modal {
+  width: 720px;
+  height: 640px;
 }
 
 .warehouse-edit-form {

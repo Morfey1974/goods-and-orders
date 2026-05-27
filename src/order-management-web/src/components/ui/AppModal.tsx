@@ -129,6 +129,7 @@ export function AppModal({
           aria-label={ariaLabel}
         >
           {children}
+          {resizable && <div className="app-modal__resize-gutter" aria-hidden />}
           {resizable && (
             <div
               className="app-modal__resize-handle"

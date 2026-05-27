@@ -211,7 +211,9 @@ public record StockMovementDto(
     decimal Quantity,
     decimal BalanceAfter,
     string? Notes,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    Guid WarehouseId,
+    string WarehouseName);
 
 public record StockReceiptRequest(
     [Required] Guid ProductId,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { WAREHOUSE_MANAGE_RESIZE } from '../lib/resizablePanelKeys';
 import { AppModal } from './ui/AppModal';
 import { warehouseApi, type Warehouse } from '../api/warehouse';
 
@@ -85,17 +86,34 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
   };
 
   return (
-    <AppModal open={open} onClose={onClose} size="lg" className="warehouse-manage-modal">
-        <div className="warehouse-manage-header">
-          <div>
-            <h2>{t('warehouse.manageTitle')}</h2>
-            <p className="muted">{t('warehouse.manageSubtitle', { count: list.length })}</p>
-          </div>
-          <button type="button" className="btn btn-ghost-inline" onClick={onClose} aria-label={t('products.close')}>
-            ×
-          </button>
+    <AppModal
+      open={open}
+      onClose={onClose}
+      ariaLabel={t('warehouse.manageTitle')}
+      className="app-modal-panel warehouse-manage-modal"
+      overlayClassName="warehouse-manage-overlay"
+      noCard
+      closeOnBackdrop={false}
+      resize={WAREHOUSE_MANAGE_RESIZE}
+    >
+      <header className="app-modal-panel__header">
+        <div>
+          <h2>{t('warehouse.manageTitle')}</h2>
+          <p className="app-modal-panel__header-sub">
+            {t('warehouse.manageSubtitle', { count: list.length })}
+          </p>
         </div>
+        <button
+          type="button"
+          className="app-modal-panel__close"
+          onClick={onClose}
+          aria-label={t('products.close')}
+        >
+          ×
+        </button>
+      </header>
 
+      <div className="app-modal-panel__body">
         {error && <div className="error-banner">{error}</div>}
 
         <div className="warehouse-manage-toolbar">
@@ -188,6 +206,7 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
             </div>
           </form>
         )}
+      </div>
     </AppModal>
   );
 }
