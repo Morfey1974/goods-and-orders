@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import './i18n';
 import { AuthProvider } from './context/AuthContext';
 import { Layout } from './components/Layout';
@@ -16,37 +16,48 @@ import { WarehousePage } from './pages/WarehousePage';
 import { OrdersPage } from './pages/OrdersPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { SuppliersPage } from './pages/SuppliersPage';
+import { SupplierDetailPage } from './pages/SupplierDetailPage';
+import { PurchaseReceiptsPage } from './pages/PurchaseReceiptsPage';
+import { PurchaseReceiptDetailPage } from './pages/PurchaseReceiptDetailPage';
+
+const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
+  { path: '/register', element: <RegisterPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
+  {
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <DashboardPage /> },
+      { path: 'orders', element: <OrdersPage /> },
+      { path: 'customers', element: <CustomersPage /> },
+      { path: 'customers/new', element: <CustomerDetailPage /> },
+      { path: 'customers/:id', element: <CustomerDetailPage /> },
+      { path: 'products', element: <ProductsPage /> },
+      { path: 'warehouse', element: <WarehousePage /> },
+      { path: 'suppliers', element: <SuppliersPage /> },
+      { path: 'suppliers/new', element: <SupplierDetailPage /> },
+      { path: 'suppliers/:id', element: <SupplierDetailPage /> },
+      { path: 'purchase-receipts', element: <PurchaseReceiptsPage /> },
+      { path: 'purchase-receipts/new', element: <PurchaseReceiptDetailPage /> },
+      { path: 'purchase-receipts/:id', element: <PurchaseReceiptDetailPage /> },
+      { path: 'documents', element: <DocumentsPage /> },
+      { path: 'reports', element: <ReportsPage /> },
+      { path: 'settings', element: <SettingsPage /> },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+]);
 
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<DashboardPage />} />
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="customers/new" element={<CustomerDetailPage />} />
-            <Route path="customers/:id" element={<CustomerDetailPage />} />
-            <Route path="products" element={<ProductsPage />} />
-            <Route path="warehouse" element={<WarehousePage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </AuthProvider>
   );
 }

@@ -13,7 +13,9 @@ import { tenantAssetsApi, type TenantAssetsSummary } from '../api/tenantAssets';
 import { TenantBrandingSection } from '../components/settings/TenantBrandingSection';
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
+import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
+import { FORM_AUTOCOMPLETE_OFF } from '../lib/browserAutofill';
 import { BANK_MODAL_RESIZE } from '../lib/resizablePanelKeys';
 import '../styles/settings.css';
 
@@ -273,7 +275,14 @@ export function SettingsPage() {
     <div className="page settings-page">
       <h1>{t('settings.title')}</h1>
 
-      <form className="settings-form" onSubmit={onSubmitProfile} autoComplete="on">
+      <form
+        className="settings-form"
+        onSubmit={onSubmitProfile}
+        autoComplete="off"
+        data-lpignore="true"
+        data-form-type="other"
+      >
+        <SuppressBrowserAutofill />
         {error && <div className="error-banner">{error}</div>}
         {message && <div className="success-banner">{message}</div>}
 
@@ -396,8 +405,7 @@ export function SettingsPage() {
                     <span className="field-hint">{t('settings.forInvoices')}</span>
                   </span>
                   <input
-                    name="street-address"
-                    autoComplete="street-address"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.address ?? ''}
                     onChange={(e) => setProfile({ ...profile, address: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, address: e.currentTarget.value })}
@@ -406,8 +414,7 @@ export function SettingsPage() {
                 <label className="settings-field field-flex-rest">
                   <span className="settings-field-label-row">{t('settings.city')}</span>
                   <input
-                    name="address-level2"
-                    autoComplete="address-level2"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.city ?? ''}
                     onChange={(e) => setProfile({ ...profile, city: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, city: e.currentTarget.value })}
@@ -416,8 +423,7 @@ export function SettingsPage() {
                 <label className="settings-field field-flex-compact">
                   <span className="settings-field-label-row">{t('settings.zipCode')}</span>
                   <input
-                    name="postal-code"
-                    autoComplete="postal-code"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.zipCode ?? ''}
                     onChange={(e) => setProfile({ ...profile, zipCode: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, zipCode: e.currentTarget.value })}
@@ -430,8 +436,7 @@ export function SettingsPage() {
                   <span className="settings-field-label-row">{t('settings.phoneMobile')}</span>
                   <input
                     type="tel"
-                    name="mobile-phone"
-                    autoComplete="mobile tel"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.mobilePhone ?? ''}
                     onChange={(e) => setProfile({ ...profile, mobilePhone: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, mobilePhone: e.currentTarget.value })}
@@ -441,8 +446,7 @@ export function SettingsPage() {
                   <span className="settings-field-label-row">{t('settings.phoneOffice')}</span>
                   <input
                     type="tel"
-                    name="home-phone"
-                    autoComplete="home tel"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.phone ?? ''}
                     onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, phone: e.currentTarget.value })}
@@ -452,8 +456,7 @@ export function SettingsPage() {
                   <span className="settings-field-label-row">{t('settings.fax')}</span>
                   <input
                     type="tel"
-                    name="fax"
-                    autoComplete="fax"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.fax ?? ''}
                     onChange={(e) => setProfile({ ...profile, fax: e.target.value })}
                     onInput={(e) => setProfile({ ...profile, fax: e.currentTarget.value })}
@@ -464,11 +467,12 @@ export function SettingsPage() {
                 <label className="settings-field field-flex-grow">
                   <span className="settings-field-label-row">{t('settings.email')}</span>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.email}
                     onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                     required
-                    autoComplete="email"
                   />
                 </label>
                 <label className="settings-field settings-field--website field-flex-rest">
@@ -493,8 +497,7 @@ export function SettingsPage() {
                   </span>
                   <input
                     type="text"
-                    name="website"
-                    autoComplete="url"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={profile.website ?? ''}
                     onChange={(e) => setProfile({ ...profile, website: e.target.value })}
                     placeholder="https://"

@@ -132,10 +132,12 @@ export type Product = {
   unitPrice: number;
   showBomInQuote: boolean;
   showBomInInvoice: boolean;
+  trackInventory: boolean;
   isActive: boolean;
   hasStockMovements: boolean;
   stockQuantity?: number | null;
   bomLines: BomLine[];
+  groupIds: string[];
   version: number;
 };
 
@@ -163,6 +165,7 @@ function mapProduct(raw: Record<string, unknown>): Product {
     unitPrice: Number(raw.unitPrice ?? raw.UnitPrice ?? 0),
     showBomInQuote: Boolean(raw.showBomInQuote ?? raw.ShowBomInQuote),
     showBomInInvoice: Boolean(raw.showBomInInvoice ?? raw.ShowBomInInvoice),
+    trackInventory: Boolean(raw.trackInventory ?? raw.TrackInventory ?? true),
     isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
     hasStockMovements: Boolean(raw.hasStockMovements ?? raw.HasStockMovements),
     stockQuantity: (() => {
@@ -171,6 +174,10 @@ function mapProduct(raw: Record<string, unknown>): Product {
       return normalizeStockQuantity(Number(v));
     })(),
     bomLines: bom,
+    groupIds: (() => {
+      const g = raw.groupIds ?? raw.GroupIds;
+      return Array.isArray(g) ? g.map(String) : [];
+    })(),
     version: Number(raw.version ?? raw.Version ?? 1),
   };
 }

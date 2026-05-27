@@ -175,6 +175,11 @@
   color: var(--text-muted);
 }
 
+.customers-col-actions {
+  width: 4.5rem;
+  text-align: center;
+}
+
 .customers-cell-actions {
   text-align: end;
   white-space: nowrap;
@@ -365,4 +370,75 @@
     grid-column: 2;
     justify-self: end;
   }
+}
+
+/* Supplier detail card (mirrors customer layout) */
+.supplier-detail-page {
+  width: min(96vw, 1480px);
+  max-width: 1480px;
+  margin-inline: auto;
+}
+
+.supplier-identity-body {
+  min-height: 7.5rem;
+}
+
+.supplier-identity-row {
+  align-items: flex-start;
+}
+
+.supplier-avatar {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--palette-turquoise-dark);
+  background: color-mix(in srgb, var(--palette-turquoise-light) 55%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 30%, var(--border));
+  letter-spacing: 0.02em;
+}
+
+.supplier-avatar-country {
+  position: absolute;
+  bottom: 0.35rem;
+  inset-inline-end: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.supplier-identity-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding-top: 0.15rem;
+}
+
+.supplier-identity-name {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.supplier-identity-legal {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.supplier-identity-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
 }

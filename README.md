@@ -1,6 +1,6 @@
 # WEB Order Management — учёт заказов (עוסק פטור)
 
-Веб-приложение для малого бизнеса в Израиле: клиенты, каталог, склад, заказы, документы (הצעת מחיר / חשבון חיוב / קבלה), складские отчёты PDF, профиль עוסק פטור.
+Веб-приложение для малого бизнеса в Израиле: клиенты, поставщики, закупки (приходные накладные), каталог с группами товаров, склад, заказы, документы (הצעת מחיר / חשבון חיוב / קבלה), складские отчёты PDF, профиль עוסק פטור.
 
 Подробный план: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)  
 Палитра цветов: [docs/color-palette.html](docs/color-palette.html)
@@ -82,6 +82,9 @@ docker compose up -d --build api
 - `Tenant.WithholdingTaxPercent` — % ניכוי במקור по умолчанию
 - `CustomerContacts` — контакты клиента для email
 - `PasswordResetTokens` — одноразовые токены сброса пароля
+- `Suppliers`, `SupplierContacts`, `PurchaseReceipts`, `PurchaseReceiptLines` — поставщики и приходные накладные
+- `AddProductTrackInventory` — флаг учёта остатков по товару
+- `SyncProductGroupsModel` — группы товаров (`ProductGroups`, `ProductGroupMembers`)
 
 Фронтенд при изменениях UI:
 
@@ -126,6 +129,44 @@ npm run dev
 | Карточка клиента | Полные поля, логотип, **несколько אנשי קשר** (имя, телефон, email) для отправки документов |
 | Импорт CSV | Кнопка на странице «לקוחות» — экспорт из Yesh (`yesh_export_customers_*.csv`), опция обновления существующих по имени |
 | Дедупликация | Совпадение по нормализованному имени (без поля «מפתח זר») |
+
+---
+
+## Поставщики и закупки
+
+| Возможность | Описание |
+|-------------|----------|
+| **Поставщики** | Справочник с международными полями (страна ISO, VAT, валюта, банк, адрес), карточка поставщика |
+| **Приходные накладные** | Поставщик, дата, № инвойса, строки товаров, вложение PDF/изображение (инвойс) |
+| **Сохранение** | Кнопка **«Сохранить документ»** сохраняет накладную и **сразу оприходует** товары на склады (движения `Receipt`); возврат в список «Закупки» |
+| **Обязательные поля** | Поставщик; в каждой строке — **склад** (для товаров со складским учётом) и **цена закупки** > 0 |
+| **Выбор товаров** | Модальное окно по образцу מחירון: отметка строк, **Сохранить** добавляет позиции в накладную |
+| **Несохранённые изменения** | При уходе со страницы без сохранения — диалог (сохранить / не сохранять / отмена); при успешном сохранении диалог не показывается |
+
+Склад в строке: для товаров с учётом остатков нужно выбрать конкретный склад (не «По типу товара»). Услуги без складского учёта — склад не требуется.
+
+Эндпоинты:
+
+- `GET/POST/PUT/DELETE /api/suppliers`, `GET /api/suppliers/{id}`
+- `GET/POST /api/purchase-receipts`, `GET/PUT/DELETE /api/purchase-receipts/{id}`
+- `POST /api/purchase-receipts/{id}/post` — оприходование (вызывается из UI при сохранении)
+- `POST/DELETE /api/purchase-receipts/{id}/document` — вложение PDF/изображение
+
+Миграции: `AddSuppliersAndPurchaseReceipts`, `AddProductTrackInventory`.
+
+---
+
+## Каталог товаров
+
+| Возможность | Описание |
+|-------------|----------|
+| **Группы товаров** | Справочник групп на странице «Товары и услуги»; фильтр и привязка товаров к группам |
+| **Тип / вид** | Колонки типа и вида товара; учёт остатков по флагу `trackInventory` |
+| **Карточка товара** | Редактирование цены, групп, складского учёта |
+
+Эндпоинты: `GET/POST/PUT/DELETE /api/product-groups`, `PUT /api/product-groups/{id}/members`.
+
+Миграция: `SyncProductGroupsModel`.
 
 ---
 
@@ -265,6 +306,12 @@ docker compose down -v
 | POST | `/api/tenant/assets/compliance/send-email` | Отправка PDF (SMTP stub) |
 | POST | `/api/customers/import` | Импорт клиентов из CSV (`updateExisting` в query) |
 | … | `/api/customers`, `/products`, `/orders`, `/documents` | Справочники и документы |
+| GET/POST/PUT/DELETE | `/api/suppliers` | Поставщики |
+| GET/POST/PUT/DELETE | `/api/purchase-receipts` | Приходные накладные |
+| POST | `/api/purchase-receipts/{id}/post` | Оприходование на склад |
+| POST/DELETE | `/api/purchase-receipts/{id}/document` | Вложение к накладной |
+| GET/POST/PUT/DELETE | `/api/product-groups` | Группы товаров |
+| PUT | `/api/product-groups/{id}/members` | Состав группы |
 | PUT | `/api/documents/{id}/receipt` | Сохранение קבלה (`paymentLines`, `finalize: true/false`) |
 | GET | `/api/documents/{id}/pdf` | PDF: Quote, ChargeInvoice, Receipt (קבלה — строки оплаты) |
 | POST | `/api/documents/{id}/send-email` | Отправка документа (заглушка) |
@@ -291,6 +338,8 @@ docker compose down -v
 | PDF הצעה не открывается / 500 | Пересоберите API; в контейнере должны быть шрифты `Assets/Fonts/NotoSansHebrew-*.ttf` |
 | Отчёт по движениям — Internal Server Error при выборе дат | Пересоберите API (`docker compose up -d --build api`); нужна нормализация дат UTC |
 | Модальное окно закрывается при ресайзе | Обновите фронтенд — используется `AppModal`, не сырой `onClick` на overlay |
+| Ошибка concurrency при сохранении накладной | `docker compose up -d --build api`; обновите страницу и сохраните снова |
+| Кнопка «Сохранить документ» неактивна | Заполните поставщика, склад и цену закупки во всех строках |
 
 ---
 

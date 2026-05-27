@@ -11,7 +11,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ArticleSequence> ArticleSequences => Set<ArticleSequence>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<SupplierContact> SupplierContacts => Set<SupplierContact>();
+    public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
+    public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
+    public DbSet<ProductGroupMember> ProductGroupMembers => Set<ProductGroupMember>();
     public DbSet<BomLine> BomLines => Set<BomLine>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<StockBalance> StockBalances => Set<StockBalance>();
@@ -141,6 +147,84 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<Supplier>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.LegalName).HasMaxLength(256);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+            e.Property(x => x.TaxId).HasMaxLength(64);
+            e.Property(x => x.ContactPerson).HasMaxLength(256);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.Phone).HasMaxLength(64);
+            e.Property(x => x.MobilePhone).HasMaxLength(64);
+            e.Property(x => x.Fax).HasMaxLength(64);
+            e.Property(x => x.Website).HasMaxLength(256);
+            e.Property(x => x.Address).HasMaxLength(512);
+            e.Property(x => x.City).HasMaxLength(128);
+            e.Property(x => x.StateRegion).HasMaxLength(128);
+            e.Property(x => x.ZipCode).HasMaxLength(16);
+            e.Property(x => x.BankBeneficiary).HasMaxLength(256);
+            e.Property(x => x.BankName).HasMaxLength(128);
+            e.Property(x => x.BankBranch).HasMaxLength(32);
+            e.Property(x => x.BankAccountNumber).HasMaxLength(32);
+            e.Property(x => x.BankSwift).HasMaxLength(32);
+            e.Property(x => x.BankIban).HasMaxLength(64);
+            e.Property(x => x.DefaultCurrency).HasMaxLength(3);
+            e.Property(x => x.Notes).HasMaxLength(2048);
+            e.HasIndex(x => new { x.TenantId, x.Name });
+        });
+
+        modelBuilder.Entity<SupplierContact>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FullName).HasMaxLength(256);
+            e.Property(x => x.Phone).HasMaxLength(64);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.HasIndex(x => x.SupplierId);
+            e.HasOne(x => x.Supplier)
+                .WithMany(s => s.Contacts)
+                .HasForeignKey(x => x.SupplierId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PurchaseReceipt>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ReceiptNumber).HasMaxLength(32);
+            e.Property(x => x.SupplierInvoiceNumber).HasMaxLength(64);
+            e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            e.Property(x => x.Notes).HasMaxLength(2048);
+            e.Property(x => x.DocumentPath).HasMaxLength(512);
+            e.Property(x => x.DocumentFileName).HasMaxLength(256);
+            e.Property(x => x.DocumentContentType).HasMaxLength(128);
+            e.HasIndex(x => new { x.TenantId, x.ReceiptNumber }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.DocumentDate });
+            e.HasIndex(x => new { x.TenantId, x.SupplierId });
+            e.HasOne(x => x.Supplier)
+                .WithMany()
+                .HasForeignKey(x => x.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PurchaseReceiptLine>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Quantity).HasPrecision(18, 4);
+            e.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            e.Property(x => x.SupplierSku).HasMaxLength(64);
+            e.Property(x => x.Notes).HasMaxLength(512);
+            e.HasOne(x => x.PurchaseReceipt)
+                .WithMany(r => r.Lines)
+                .HasForeignKey(x => x.PurchaseReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Product>(e =>
         {
             e.HasKey(x => x.Id);
@@ -152,6 +236,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.UnitPrice).HasPrecision(18, 2);
             e.HasIndex(x => new { x.TenantId, x.ArticleCode }).IsUnique();
             e.HasIndex(x => new { x.TenantId, x.ProductType });
+        });
+
+        modelBuilder.Entity<ProductGroup>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(128);
+            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.SortOrder });
+        });
+
+        modelBuilder.Entity<ProductGroupMember>(e =>
+        {
+            e.HasKey(x => new { x.ProductGroupId, x.ProductId });
+            e.HasOne(x => x.Group)
+                .WithMany(g => g.Members)
+                .HasForeignKey(x => x.ProductGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.ProductId);
         });
 
         modelBuilder.Entity<BomLine>(e =>

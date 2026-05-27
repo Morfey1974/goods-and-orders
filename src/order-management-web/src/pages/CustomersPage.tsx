@@ -124,6 +124,7 @@ export function CustomersPage() {
           <span className="sr-only">{t('customers.search')}</span>
           <input
             type="search"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('customers.searchPlaceholder')}

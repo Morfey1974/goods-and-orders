@@ -10,13 +10,10 @@ import { formatStockQuantity } from '../../lib/stockQuantity';
 import { warehouseLabelForProductType } from '../../lib/warehouseLabel';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
+import { productTypeCanTrackStock, productTracksStock } from '../../lib/productInventory';
 import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
 
 const PRODUCT_FORM_ID = 'product-card-form';
-
-function tracksStockType(type: string) {
-  return ['ComponentPart', 'FinishedGood', 'Bundle', 'Spare'].includes(type);
-}
 
 type BomInput = { componentProductId: string; quantity: number };
 
@@ -28,6 +25,18 @@ function normalizeBomQty(value: number): number {
 function duplicateProductName(name: string): string {
   const suffix = ' (2)';
   return name.endsWith(suffix) ? name : `${name}${suffix}`;
+}
+
+function formatUnitPriceForInput(price: number): string {
+  if (!Number.isFinite(price) || price === 0) return '';
+  return String(price);
+}
+
+function parseUnitPriceInput(value: string): number {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return 0;
+  const n = Number(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
 type Props = {
@@ -43,6 +52,8 @@ type Props = {
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
   onProductUpdated?: (product: Product) => void;
+  /** Raise above nested pickers (e.g. purchase receipt product picker at z-index 2600). */
+  zIndex?: number;
 };
 
 export function ProductEditModal({
@@ -57,6 +68,7 @@ export function ProductEditModal({
   onSaved,
   onError,
   onProductUpdated,
+  zIndex,
 }: Props) {
   const { t } = useTranslation();
   const [modalError, setModalError] = useState('');
@@ -73,10 +85,11 @@ export function ProductEditModal({
     productType: 'ComponentPart',
     name: '',
     description: '',
-    unitPrice: 0,
+    unitPrice: '',
     isActive: true,
     showBomInQuote: false,
     showBomInInvoice: false,
+    trackInventory: true,
     bomLines: [] as BomInput[],
   });
 
@@ -94,10 +107,11 @@ export function ProductEditModal({
         productType: product.productType,
         name: product.name,
         description: product.description ?? '',
-        unitPrice: product.unitPrice,
+        unitPrice: formatUnitPriceForInput(product.unitPrice),
         isActive: product.isActive,
         showBomInQuote: product.showBomInQuote,
         showBomInInvoice: product.showBomInInvoice,
+        trackInventory: product.trackInventory,
         bomLines: product.bomLines.map((b) => ({
           componentProductId: b.componentProductId,
           quantity: normalizeBomQty(b.quantity),
@@ -108,10 +122,11 @@ export function ProductEditModal({
         productType: duplicateFrom.productType,
         name: duplicateProductName(duplicateFrom.name),
         description: duplicateFrom.description ?? '',
-        unitPrice: duplicateFrom.unitPrice,
+        unitPrice: formatUnitPriceForInput(duplicateFrom.unitPrice),
         isActive: true,
         showBomInQuote: duplicateFrom.showBomInQuote,
         showBomInInvoice: duplicateFrom.showBomInInvoice,
+        trackInventory: duplicateFrom.trackInventory,
         bomLines: duplicateFrom.bomLines.map((b) => ({
           componentProductId: b.componentProductId,
           quantity: normalizeBomQty(b.quantity),
@@ -122,10 +137,11 @@ export function ProductEditModal({
         productType: 'ComponentPart',
         name: '',
         description: '',
-        unitPrice: 0,
+        unitPrice: '',
         isActive: true,
         showBomInQuote: false,
         showBomInInvoice: false,
+        trackInventory: true,
         bomLines: [],
       });
     }
@@ -160,8 +176,9 @@ export function ProductEditModal({
       bomLines: showBom ? f.bomLines : [],
       showBomInQuote: showBom ? f.showBomInQuote : false,
       showBomInInvoice: showBom ? f.showBomInInvoice : false,
+      trackInventory: productTypeCanTrackStock(productType) ? f.trackInventory : false,
     }));
-    if (!tracksStockType(productType) && tab === 'movements') setTab('general');
+    if (!productTypeCanTrackStock(productType) && tab === 'movements') setTab('general');
   };
 
   useEffect(() => {
@@ -175,7 +192,11 @@ export function ProductEditModal({
   }, [open, tab, effectiveProduct, token]);
 
   const showBom = form.productType === 'FinishedGood' || form.productType === 'Bundle';
-  const tracksStock = tracksStockType(form.productType);
+  const tracksStock = productTypeCanTrackStock(form.productType);
+  const tracksInventory = productTracksStock({
+    productType: form.productType,
+    trackInventory: form.trackInventory,
+  });
   const typeChanged = editing && effectiveProduct && form.productType !== effectiveProduct.productType;
 
   const onActiveToggle = async (checked: boolean) => {
@@ -220,9 +241,10 @@ export function ProductEditModal({
           productType: form.productType,
           name: form.name,
           description: form.description || null,
-          unitPrice: form.unitPrice,
+          unitPrice: parseUnitPriceInput(form.unitPrice),
           showBomInQuote: form.showBomInQuote,
           showBomInInvoice: form.showBomInInvoice,
+          trackInventory: tracksStock && form.trackInventory,
           isActive: form.isActive,
           bomLines: showBom ? bomPayload ?? [] : undefined,
           version: effectiveProduct.version,
@@ -236,9 +258,10 @@ export function ProductEditModal({
           productType: form.productType,
           name: form.name,
           description: form.description || null,
-          unitPrice: form.unitPrice,
+          unitPrice: parseUnitPriceInput(form.unitPrice),
           showBomInQuote: form.showBomInQuote,
           showBomInInvoice: form.showBomInInvoice,
+          trackInventory: tracksStock && form.trackInventory,
           bomLines: bomPayload,
         });
         setSavedProduct(created);
@@ -258,6 +281,7 @@ export function ProductEditModal({
       onClose={onClose}
       className="product-card-modal"
       overlayClassName="product-card-overlay"
+      zIndex={zIndex}
       noCard
       resize={PRODUCT_CARD_RESIZE}
     >
@@ -352,7 +376,7 @@ export function ProductEditModal({
                 {t('products.typeChangeNewArticle', { article: newArticlePreview })}
               </p>
             )}
-            {typeChanged && effectiveProduct && !tracksStockType(form.productType) && (effectiveProduct.stockQuantity ?? 0) > 0 && (
+            {typeChanged && effectiveProduct && !productTypeCanTrackStock(form.productType) && (effectiveProduct.stockQuantity ?? 0) > 0 && (
               <p className="type-change-note">{t('products.typeChangeZeroStock')}</p>
             )}
 
@@ -378,13 +402,17 @@ export function ProductEditModal({
               <label>
                 {t('products.price')} (₪)
                 <input
-                  type="number"
-                  min={0}
-                  step={0.01}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0"
                   value={form.unitPrice}
-                  onChange={(e) =>
-                    setForm({ ...form, unitPrice: Number(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value.replace(',', '.');
+                    if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                      setForm({ ...form, unitPrice: v });
+                    }
+                  }}
                 />
               </label>
               <label>
@@ -395,7 +423,20 @@ export function ProductEditModal({
               </label>
             </div>
 
-            {tracksStock && editing && (
+            {tracksStock && (
+              <label className="checkbox-row product-track-inventory-row">
+                <input
+                  type="checkbox"
+                  checked={form.trackInventory}
+                  onChange={(e) =>
+                    setForm({ ...form, trackInventory: e.target.checked })
+                  }
+                />
+                {t('products.trackInventory')}
+              </label>
+            )}
+
+            {tracksInventory && editing && (
               <div className="inventory-box">
                 <strong>{t('products.inventoryTitle')}</strong>
                 <div className="inventory-row">

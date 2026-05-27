@@ -76,7 +76,7 @@ export function CatalogRowMenu({ open, anchorRef, children }: Props) {
   if (!open) return null;
 
   return createPortal(
-    <div ref={menuRef} className="row-menu row-menu--portal" style={style} role="menu">
+    <div ref={menuRef} className="row-menu row-menu--portal action-dropdown" style={style} role="menu">
       {children}
     </div>,
     document.body

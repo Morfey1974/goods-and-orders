@@ -1,4 +1,5 @@
 @import './styles/app-modal.css';
+@import './styles/ui-actions.css';
 
 :root {
   /* Палитра бренда (CMYK) */
@@ -18,6 +19,11 @@
 
   --primary: var(--palette-turquoise);
   --primary-hover: var(--palette-turquoise-dark);
+
+  /* Круглая кнопка «+» в таблицах (документы, поставщики и т.д.) */
+  --action-plus-bg: #3b82f6;
+  --action-plus-bg-hover: #2563eb;
+  --action-plus-shadow: 0 2px 5px rgba(59, 130, 246, 0.4);
   --accent: var(--palette-turquoise);
   --accent-red: var(--palette-red);
   --header: var(--palette-turquoise);
@@ -273,6 +279,35 @@ a {
   margin: 0 0 0.75rem;
   font-size: 1.15rem;
   color: var(--palette-turquoise-dark);
+}
+
+.unsaved-leave-dialog.confirm-dialog {
+  max-width: min(32rem, 96vw);
+}
+
+.unsaved-leave-actions {
+  flex-wrap: nowrap;
+  justify-content: stretch;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.unsaved-leave-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.unsaved-leave-actions .btn-ghost-inline {
+  border: 1px solid var(--border);
 }
 
 .confirm-dialog-message {

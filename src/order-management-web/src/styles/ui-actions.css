@@ -1,0 +1,75 @@
+/**
+ * Shared row actions: circular “+” and overflow menu (⋮).
+ * Use on tables (documents, suppliers, customers, products).
+ */
+
+.table-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.action-plus-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.action-plus-btn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--action-plus-bg, #3b82f6);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--action-plus-shadow, 0 2px 5px rgba(59, 130, 246, 0.4));
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.action-plus-btn:hover:not(:disabled) {
+  background: var(--action-plus-bg-hover, #2563eb);
+  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.45);
+}
+
+.action-plus-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.action-plus-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.action-plus-btn.is-open {
+  background: var(--action-plus-bg-hover, #2563eb);
+}
+
+.action-dropdown {
+  min-width: 10.5rem;
+  max-width: min(16rem, 92vw);
+  padding: 0.2rem 0;
+}
+
+.action-dropdown .row-menu-heading {
+  padding: 0.35rem 0.75rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.action-dropdown button {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.84rem;
+  line-height: 1.25;
+}

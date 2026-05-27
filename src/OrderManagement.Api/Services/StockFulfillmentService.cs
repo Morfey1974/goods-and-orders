@@ -37,7 +37,7 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         if (product is null)
             throw new InvalidOperationException("Product not found.");
 
-        if (!ProductTypePrefixes.TracksStock(product.ProductType))
+        if (!ProductInventoryHelper.TracksStock(product))
             return;
 
         var note = string.IsNullOrWhiteSpace(reference) ? "Charge invoice (H-)" : reference;
@@ -57,7 +57,7 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
                 var component = await db.Products.FirstOrDefaultAsync(
                     p => p.Id == line.ComponentProductId && p.TenantId == tenantId, ct);
                 if (component is null) continue;
-                if (!ProductTypePrefixes.TracksStock(component.ProductType)) continue;
+                if (!ProductInventoryHelper.TracksStock(component)) continue;
 
                 var cpWh = await warehouse.GetForProductAsync(tenantId, component, ct);
                 var componentQty = StockQuantity.Normalize(quantity * line.Quantity);

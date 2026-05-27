@@ -260,6 +260,7 @@ public class ProductsController(
             UnitPrice = request.UnitPrice,
             ShowBomInQuote = request.ShowBomInQuote,
             ShowBomInInvoice = request.ShowBomInInvoice,
+            TrackInventory = request.TrackInventory && ProductTypePrefixes.TracksStock(type),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -274,7 +275,7 @@ public class ProductsController(
 
         await db.SaveChangesAsync(ct);
 
-        if (ProductTypePrefixes.TracksStock(type))
+        if (ProductInventoryHelper.TracksStock(product))
         {
             var wh = await warehouseService.GetForProductTypeAsync(tenantId.Value, type, ct);
             await warehouseService.GetOrCreateBalanceAsync(wh.Id, product.Id, ct);
@@ -305,6 +306,7 @@ public class ProductsController(
         product.UnitPrice = request.UnitPrice;
         product.ShowBomInQuote = request.ShowBomInQuote;
         product.ShowBomInInvoice = request.ShowBomInInvoice;
+        product.TrackInventory = request.TrackInventory && ProductTypePrefixes.TracksStock(product.ProductType);
         product.IsActive = request.IsActive;
 
         if (!string.IsNullOrWhiteSpace(request.ProductType))

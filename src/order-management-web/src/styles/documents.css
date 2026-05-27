@@ -315,61 +315,14 @@
   white-space: nowrap;
 }
 
-.doc-issue-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-.doc-issue-btn {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  border: none;
-  border-radius: 50%;
-  background: #3b82f6;
-  color: #fff;
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 5px rgba(59, 130, 246, 0.4);
-}
-
-.doc-issue-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.doc-issue-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .doc-issue-dropdown {
   min-width: 0;
   width: max-content;
   max-width: min(220px, 92vw);
-  padding: 0.2rem 0;
-}
-
-.doc-issue-dropdown .row-menu-heading {
-  padding: 0.3rem 0.65rem 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.2;
 }
 
 .doc-issue-dropdown button {
-  padding: 0.38rem 0.65rem;
-  font-size: 0.82rem;
-  line-height: 1.25;
   white-space: nowrap;
-}
-
-.documents-table .row-menu-wrap {
-  margin-inline-start: auto;
 }
 
 /* —— Create document wizard (customer → form) —— */

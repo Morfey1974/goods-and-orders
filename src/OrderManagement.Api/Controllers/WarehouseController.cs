@@ -231,7 +231,7 @@ public class WarehouseController(
         var product = await db.Products.FirstOrDefaultAsync(
             p => p.Id == request.ProductId && p.TenantId == tenantId, ct);
         if (product is null) return NotFound();
-        if (!ProductTypePrefixes.TracksStock(product.ProductType))
+        if (!ProductInventoryHelper.TracksStock(product))
             return BadRequest(new { message = "This product type is not tracked on stock." });
 
         try
@@ -284,7 +284,7 @@ public class WarehouseController(
                     p.ProductType == ProductType.FinishedGood || p.ProductType == ProductType.Bundle);
             else
                 productQuery = productQuery.Where(p =>
-                    ProductTypePrefixes.TracksStock(p.ProductType));
+                    ProductInventoryHelper.TracksStock(p));
         }
 
         var products = await productQuery.OrderBy(p => p.ArticleCode).ToListAsync(ct);

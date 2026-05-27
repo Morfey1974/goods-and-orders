@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { warehouseApi, type StockBalance, type Warehouse } from '../api/warehouse';
 import { AppModal } from '../components/ui/AppModal';
 import { WarehouseManageModal } from '../components/WarehouseManageModal';
@@ -104,6 +105,9 @@ export function WarehousePage() {
           <button type="button" className="btn btn-secondary" onClick={() => setMovementsOpen(true)}>
             {t('warehouse.viewMovements')}
           </button>
+          <Link to="/purchase-receipts/new" className="btn btn-secondary">
+            {t('purchaseReceipts.add')}
+          </Link>
           <button type="button" className="btn btn-primary" onClick={openReceipt}>
             {t('warehouse.receipt')}
           </button>

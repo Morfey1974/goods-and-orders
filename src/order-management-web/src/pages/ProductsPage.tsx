@@ -7,6 +7,10 @@ import { AppModal } from '../components/ui/AppModal';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ProductEditModal } from '../components/products/ProductEditModal';
 import { ProductPhoto } from '../components/products/ProductPhoto';
+import { ProductGroupsModal } from '../components/products/ProductGroupsModal';
+import { productGroupsApi, type ProductGroup } from '../api/productGroups';
+import { isServiceProductType } from '../lib/productKind';
+import { productTracksStock } from '../lib/productInventory';
 import { normalizeStockQuantity } from '../lib/stockQuantity';
 import { warehouseLabelForProductType } from '../lib/warehouseLabel';
 import '../styles/products-catalog.css';
@@ -16,9 +20,6 @@ const PAGE_SIZES = [50, 100, 200] as const;
 type SortKey = 'articleCode' | 'name' | 'unitPrice' | 'stockQuantity' | 'isActive';
 type SortDir = 'asc' | 'desc';
 
-function tracksStock(type: string) {
-  return ['ComponentPart', 'FinishedGood', 'Bundle', 'Spare'].includes(type);
-}
 
 export function ProductsPage() {
   const { t } = useTranslation();
@@ -30,7 +31,10 @@ export function ProductsPage() {
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterGroupId, setFilterGroupId] = useState('');
   const [filterStock, setFilterStock] = useState('');
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(true);
   const [pageSize, setPageSize] = useState<number>(100);
@@ -63,6 +67,7 @@ export function ProductsPage() {
     if (!token) return;
     catalogApi.products.list(token).then(setList).catch((e) => setError(e.message));
     catalogApi.products.list(token, 'ComponentPart').then(setComponents).catch(() => {});
+    productGroupsApi.list(token).then(setGroups).catch(() => {});
   }, [token]);
 
   useEffect(() => {
@@ -87,6 +92,7 @@ export function ProductsPage() {
     const q = search.trim().toLowerCase();
     return list.filter((p) => {
       if (filterType && p.productType !== filterType) return false;
+      if (filterGroupId && !p.groupIds.includes(filterGroupId)) return false;
       if (filterStatus === 'active' && !p.isActive) return false;
       if (filterStatus === 'inactive' && p.isActive) return false;
       const stock = p.stockQuantity ?? 0;
@@ -100,7 +106,9 @@ export function ProductsPage() {
         (p.description?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [list, search, filterType, filterStock, filterStatus]);
+  }, [list, search, filterType, filterGroupId, filterStock, filterStatus]);
+
+  const groupNameById = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
 
   const sorted = useMemo(() => {
     const items = [...filtered];
@@ -118,8 +126,8 @@ export function ProductsPage() {
           cmp = a.unitPrice - b.unitPrice;
           break;
         case 'stockQuantity': {
-          const sa = tracksStock(a.productType) ? (a.stockQuantity ?? 0) : -1;
-          const sb = tracksStock(b.productType) ? (b.stockQuantity ?? 0) : -1;
+          const sa = productTracksStock(a) ? (a.stockQuantity ?? 0) : -1;
+          const sb = productTracksStock(b) ? (b.stockQuantity ?? 0) : -1;
           cmp = sa - sb;
           break;
         }
@@ -253,7 +261,7 @@ export function ProductsPage() {
   };
 
   const onQuickStock = async (p: Product, value: number) => {
-    if (!token || !tracksStock(p.productType)) return;
+    if (!token || !productTracksStock(p)) return;
     const qty = normalizeStockQuantity(value);
     const current = normalizeStockQuantity(p.stockQuantity ?? 0);
     if (qty === current) return;
@@ -389,6 +397,9 @@ export function ProductsPage() {
           </span>
         </div>
         <div className="catalog-header-actions">
+          <button type="button" className="btn btn-secondary" onClick={() => setGroupsOpen(true)}>
+            {t('products.groupsTitle')}
+          </button>
           <button type="button" className="btn-new-item" onClick={openCreate}>
             + {t('products.newItem')}
           </button>
@@ -472,6 +483,16 @@ export function ProductsPage() {
               </option>
             ))}
           </select>
+          {groups.length > 0 && (
+            <select value={filterGroupId} onChange={(e) => setFilterGroupId(e.target.value)}>
+              <option value="">{t('products.filterGroup')}</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
             <option value="">{t('products.filterStock')}</option>
             <option value="inStock">{t('products.stockIn')}</option>
@@ -520,6 +541,9 @@ export function ProductsPage() {
                   </span>
                 </span>
               </th>
+              <th>{t('products.kindLabel')}</th>
+              <th>{t('products.typesLabel')}</th>
+              <th>{t('products.groupsCol')}</th>
               <th>{t('products.warehouseCol')}</th>
               <th {...sortThProps('unitPrice')}>
                 <span className="catalog-th-sort-label">
@@ -529,6 +553,7 @@ export function ProductsPage() {
                   </span>
                 </span>
               </th>
+              <th>{t('products.trackInventoryCol')}</th>
               <th {...sortThProps('stockQuantity')}>
                 <span className="catalog-th-sort-label">
                   {t('products.stock')}
@@ -572,6 +597,22 @@ export function ProductsPage() {
                   <strong>{p.name}</strong>
                   {p.description && <div className="sub">{p.description}</div>}
                 </td>
+                <td>
+                  <span
+                    className={`pr-kind-badge${isServiceProductType(p.productType) ? ' pr-kind-badge--service' : ' pr-kind-badge--goods'}`}
+                  >
+                    {isServiceProductType(p.productType)
+                      ? t('products.kindService')
+                      : t('products.kindGoods')}
+                  </span>
+                </td>
+                <td className="product-cell-type">{t(`products.types.${p.productType}`)}</td>
+                <td className="product-cell-groups muted">
+                  {p.groupIds
+                    .map((id) => groupNameById.get(id))
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </td>
                 <td>{warehouseLabelForProductType(p.productType, t)}</td>
                 <td>
                   <input
@@ -585,7 +626,14 @@ export function ProductsPage() {
                   />
                 </td>
                 <td>
-                  {tracksStock(p.productType) ? (
+                  {productTracksStock(p) ? (
+                    <span className="status-active">{t('products.trackInventoryYes')}</span>
+                  ) : (
+                    <span className="status-inactive muted">{t('products.trackInventoryNo')}</span>
+                  )}
+                </td>
+                <td>
+                  {productTracksStock(p) ? (
                     <input
                       type="number"
                       className="catalog-inline-input"
@@ -700,6 +748,13 @@ export function ProductsPage() {
             </div>
       </AppModal>
 
+      <ProductGroupsModal
+        open={groupsOpen}
+        products={list}
+        onClose={() => setGroupsOpen(false)}
+        onChanged={load}
+      />
+
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t('products.deleteConfirmTitle')}
@@ -721,7 +776,7 @@ export function ProductsPage() {
             <button type="button" onClick={() => onDuplicate(rowMenuProduct)}>
               ⧉ {t('products.actionDuplicate')}
             </button>
-            {tracksStock(rowMenuProduct.productType) && (
+            {productTracksStock(rowMenuProduct) && (
               <button type="button" onClick={() => openEdit(rowMenuProduct, 'movements')}>
                 ⚖ {t('products.actionMovements')}
               </button>

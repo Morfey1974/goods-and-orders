@@ -115,11 +115,11 @@ export function DocumentIssueMenu({ doc, context, busy, onIssueCharge, onIssueRe
   if (!showMenu) return null;
 
   return (
-    <div className="doc-issue-wrap">
+    <div className="action-plus-wrap">
       <button
         ref={btnRef}
         type="button"
-        className="doc-issue-btn"
+        className={`action-plus-btn${open ? ' is-open' : ''}`}
         title={t('documents.issueNewTitle')}
         aria-label={t('documents.issueNewTitle')}
         aria-expanded={open}
@@ -136,7 +136,7 @@ export function DocumentIssueMenu({ doc, context, busy, onIssueCharge, onIssueRe
         createPortal(
           <div
             ref={menuRef}
-            className="row-menu row-menu--portal doc-issue-dropdown"
+            className="row-menu row-menu--portal action-dropdown doc-issue-dropdown"
             style={menuStyle}
             role="menu"
           >

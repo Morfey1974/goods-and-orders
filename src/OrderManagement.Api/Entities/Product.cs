@@ -15,6 +15,8 @@ public class Product
     public decimal UnitPrice { get; set; }
     public bool ShowBomInQuote { get; set; }
     public bool ShowBomInInvoice { get; set; }
+    /// <summary>When false, warehouse balances and receipt/issue movements are skipped.</summary>
+    public bool TrackInventory { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

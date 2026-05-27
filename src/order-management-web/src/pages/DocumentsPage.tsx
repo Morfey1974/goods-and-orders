@@ -171,8 +171,8 @@ export function DocumentsPage() {
       if (
         !el.closest('.row-menu-wrap') &&
         !el.closest('.row-menu--portal') &&
-        !el.closest('.doc-issue-wrap') &&
-        !el.closest('.doc-issue-dropdown')
+        !el.closest('.action-plus-wrap') &&
+        !el.closest('.action-dropdown')
       ) {
         setRowMenuDoc(null);
       }
@@ -564,7 +564,7 @@ export function DocumentsPage() {
                     <td>{formatDate(doc.issueDate)}</td>
                     <td>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
                     <td>{formatMoney(doc.totalAmount)}</td>
-                    <td className="doc-actions">
+                    <td className="doc-actions table-actions-cell">
                       <DocumentIssueMenu
                         doc={doc}
                         context={issueContextMap.get(doc.id) ?? {}}

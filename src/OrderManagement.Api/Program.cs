@@ -38,6 +38,8 @@ builder.Services.AddSingleton<CustomerLogoService>();
 builder.Services.AddScoped<TenantEmailService>();
 builder.Services.AddScoped<PasswordResetMailer>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<PurchaseReceiptService>();
+builder.Services.AddScoped<SupplierImportService>();
 builder.Services.AddSingleton<SubscriptionService>();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

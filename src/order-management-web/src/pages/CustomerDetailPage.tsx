@@ -9,7 +9,9 @@ import {
   normalizeBankCode,
   resolveBankNameForCode,
 } from '../data/israeliBanks';
+import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
+import { FORM_AUTOCOMPLETE_OFF } from '../lib/browserAutofill';
 import '../styles/settings.css';
 import '../styles/customers.css';
 
@@ -284,7 +286,14 @@ export function CustomerDetailPage() {
         <h1>{isNew ? t('customers.add') : t('customers.cardTitle')}</h1>
       </div>
 
-      <form className="settings-form" onSubmit={onSubmit}>
+      <form
+        className="settings-form"
+        onSubmit={onSubmit}
+        autoComplete="off"
+        data-lpignore="true"
+        data-form-type="other"
+      >
+        <SuppressBrowserAutofill />
         {error && <div className="error-banner">{error}</div>}
         {message && <div className="success-banner">{message}</div>}
 
@@ -490,7 +499,9 @@ export function CustomerDetailPage() {
                   <label className="customer-contact-field customer-contact-field--email">
                     <span>{t('settings.email')}</span>
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
+                      autoComplete={FORM_AUTOCOMPLETE_OFF}
                       value={row.email}
                       onChange={(e) =>
                         setContactRows((prev) =>
@@ -527,17 +538,23 @@ export function CustomerDetailPage() {
                 <label className="settings-field field-flex-grow">
                   <span className="settings-field-label-row">{t('settings.streetAddress')}</span>
                   <input
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={form.address}
                     onChange={(e) => setForm({ ...form, address: e.target.value })}
                   />
                 </label>
                 <label className="settings-field field-flex-compact">
                   <span className="settings-field-label-row">{t('settings.city')}</span>
-                  <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                  <input
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
                 </label>
                 <label className="settings-field field-flex-compact">
                   <span className="settings-field-label-row">{t('settings.zipCode')}</span>
                   <input
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={form.zipCode}
                     onChange={(e) => setForm({ ...form, zipCode: e.target.value })}
                   />
@@ -564,7 +581,9 @@ export function CustomerDetailPage() {
                 <label className="settings-field field-flex-grow">
                   <span className="settings-field-label-row">{t('settings.email')}</span>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete={FORM_AUTOCOMPLETE_OFF}
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />

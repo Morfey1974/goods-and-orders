@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Services;
 
 namespace OrderManagement.Api.Dto;
 
@@ -136,10 +137,12 @@ public record ProductDto(
     decimal UnitPrice,
     bool ShowBomInQuote,
     bool ShowBomInInvoice,
+    bool TrackInventory,
     bool IsActive,
     bool HasStockMovements,
     decimal? StockQuantity,
     IReadOnlyList<BomLineDto> BomLines,
+    IReadOnlyList<Guid> GroupIds,
     int Version);
 
 public record CreateProductRequest(
@@ -149,6 +152,7 @@ public record CreateProductRequest(
     [Range(0, double.MaxValue)] decimal UnitPrice,
     bool ShowBomInQuote,
     bool ShowBomInInvoice,
+    bool TrackInventory,
     IReadOnlyList<BomLineInput>? BomLines);
 
 public record UpdateProductRequest(
@@ -158,6 +162,7 @@ public record UpdateProductRequest(
     [Range(0, double.MaxValue)] decimal UnitPrice,
     bool ShowBomInQuote,
     bool ShowBomInInvoice,
+    bool TrackInventory,
     bool IsActive,
     IReadOnlyList<BomLineInput>? BomLines,
     int Version);
@@ -414,7 +419,7 @@ public static class CatalogMappers
         var warehouseId = WarehouseIdFor(p, componentsWarehouseId, finishedWarehouseId);
         var hasMovements = await db.StockMovements.AnyAsync(m => m.ProductId == p.Id, ct);
         decimal? stock = null;
-        if (ProductTypePrefixes.TracksStock(p.ProductType))
+        if (ProductInventoryHelper.TracksStock(p))
         {
             stock = await db.StockBalances
                 .Where(b => b.WarehouseId == warehouseId && b.ProductId == p.Id)
@@ -432,11 +437,16 @@ public static class CatalogMappers
                 b.Quantity))
             .ToListAsync(ct);
 
+        var groupIds = await db.ProductGroupMembers
+            .Where(m => m.ProductId == p.Id)
+            .Select(m => m.ProductGroupId)
+            .ToListAsync(ct);
+
         return new ProductDto(
             p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
             !string.IsNullOrEmpty(p.ImagePath),
-            p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.IsActive,
-            hasMovements, stock, bom, p.Version);
+            p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
+            hasMovements, stock, bom, groupIds, p.Version);
     }
 
     public static async Task<List<ProductDto>> ToDtoListAsync(
@@ -475,9 +485,14 @@ public static class CatalogMappers
 
         var bomByParent = bomAll.GroupBy(b => b.ParentProductId).ToDictionary(g => g.Key, g => g.ToList());
 
+        var groupsByProduct = await db.ProductGroupMembers
+            .Where(m => ids.Contains(m.ProductId))
+            .GroupBy(m => m.ProductId)
+            .ToDictionaryAsync(g => g.Key, g => g.Select(x => x.ProductGroupId).ToList(), ct);
+
         return products.Select(p =>
         {
-            decimal? stock = ProductTypePrefixes.TracksStock(p.ProductType)
+            decimal? stock = ProductInventoryHelper.TracksStock(p)
                 ? stockByProduct.GetValueOrDefault(p.Id, 0)
                 : null;
 
@@ -489,11 +504,13 @@ public static class CatalogMappers
                     b.Quantity)).ToList()
                 : [];
 
+            var groupIds = groupsByProduct.GetValueOrDefault(p.Id, []);
+
             return new ProductDto(
                 p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
                 !string.IsNullOrEmpty(p.ImagePath),
-                p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.IsActive,
-                movementIds.Contains(p.Id), stock, bom, p.Version);
+                p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
+                movementIds.Contains(p.Id), stock, bom, groupIds, p.Version);
         }).ToList();
     }
 
