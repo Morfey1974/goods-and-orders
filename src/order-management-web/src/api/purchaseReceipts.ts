@@ -12,6 +12,7 @@ export type PurchaseReceiptLine = {
   warehouseName?: string;
   quantity: number;
   unitPrice?: number;
+  unitCostIls?: number;
   supplierSku?: string;
   notes?: string;
   sortOrder: number;
@@ -22,6 +23,7 @@ export type PurchaseReceiptLineInput = {
   warehouseId?: string;
   quantity: number;
   unitPrice?: number;
+  unitCostIls?: number;
   supplierSku?: string;
   notes?: string;
 };
@@ -69,6 +71,9 @@ function mapLine(raw: Record<string, unknown>): PurchaseReceiptLine {
     quantity: normalizeStockQuantity(Number(raw.quantity ?? raw.Quantity ?? 0)),
     unitPrice: raw.unitPrice != null || raw.UnitPrice != null
       ? Number(raw.unitPrice ?? raw.UnitPrice)
+      : undefined,
+    unitCostIls: raw.unitCostIls != null || raw.UnitCostIls != null
+      ? Number(raw.unitCostIls ?? raw.UnitCostIls)
       : undefined,
     supplierSku: (raw.supplierSku ?? raw.SupplierSku) as string | undefined,
     notes: (raw.notes ?? raw.Notes) as string | undefined,

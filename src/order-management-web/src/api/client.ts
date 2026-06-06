@@ -41,6 +41,7 @@ export type TenantProfile = {
   defaultLanguage: string;
   taxRegime: string;
   withholdingTaxPercent?: number | null;
+  inventoryCostMethod?: string;
   subscriptionStatus: string;
   registeredAt: string;
   trialEndsAt: string;

@@ -58,7 +58,7 @@ export function AppModal({
   overlayClassName = '',
   shellClassName = '',
   zIndex,
-  closeOnBackdrop = true,
+  closeOnBackdrop = false,
   closeOnEscape = true,
   preventClose = false,
   labelledBy,

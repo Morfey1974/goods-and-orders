@@ -12,6 +12,7 @@ public record PurchaseReceiptLineDto(
     string? WarehouseName,
     decimal Quantity,
     decimal? UnitPrice,
+    decimal? UnitCostIls,
     string? SupplierSku,
     string? Notes,
     int SortOrder);
@@ -21,6 +22,7 @@ public record PurchaseReceiptLineInput(
     Guid? WarehouseId,
     [Range(0.0001, double.MaxValue)] decimal Quantity,
     decimal? UnitPrice,
+    decimal? UnitCostIls,
     string? SupplierSku,
     string? Notes);
 
@@ -120,6 +122,7 @@ public static class PurchaseReceiptMappers
             null,
             line.Quantity,
             line.UnitPrice,
+            line.UnitCostIls,
             line.SupplierSku,
             line.Notes,
             line.SortOrder);

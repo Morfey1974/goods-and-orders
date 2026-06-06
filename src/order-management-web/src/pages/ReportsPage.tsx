@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { warehouseApi, type WarehouseReportPdfParams } from '../api/warehouse';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { ReportCard } from '../components/reports/ReportCard';
@@ -11,7 +12,8 @@ type ReportCategoryId = 'warehouse';
 
 type ReportDef = {
   id: string;
-  kind: ReportRunKind;
+  kind?: ReportRunKind;
+  href?: string;
   titleKey: string;
   descKey: string;
 };
@@ -21,6 +23,13 @@ const REPORT_CATEGORIES: { id: ReportCategoryId; labelKey: string; reports: Repo
     id: 'warehouse',
     labelKey: 'reports.categoryWarehouse',
     reports: [
+      {
+        id: 'inventory-valuation',
+        kind: 'balances',
+        titleKey: 'inventory.valuationTitle',
+        descKey: 'inventory.valuationHint',
+        href: '/reports/inventory-valuation',
+      },
       {
         id: 'balances',
         kind: 'balances',
@@ -39,6 +48,7 @@ const REPORT_CATEGORIES: { id: ReportCategoryId; labelKey: string; reports: Repo
 
 export function ReportsPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { token } = useAuth();
   const [activeCategory, setActiveCategory] = useState<ReportCategoryId>('warehouse');
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
@@ -152,7 +162,10 @@ export function ReportsPage() {
               key={report.id}
               title={t(report.titleKey)}
               description={t(report.descKey)}
-              onOpen={() => openReport(report.kind)}
+              onOpen={() => {
+                if (report.href) navigate(report.href);
+                else if (report.kind) openReport(report.kind);
+              }}
             />
           ))}
         </div>

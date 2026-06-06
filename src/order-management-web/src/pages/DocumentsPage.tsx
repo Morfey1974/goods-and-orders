@@ -86,6 +86,37 @@ function documentHasActions(doc: Document) {
   );
 }
 
+function formatDocNumber(num: string) {
+  return num.replace(/^[A-Z]+-/, '');
+}
+
+function relatedDocNumbersForDelete(
+  doc: Document,
+  issueContextMap: Map<string, { chargeForQuote?: Document; receiptForCharge?: Document }>
+): string[] {
+  const ctx = issueContextMap.get(doc.id);
+  const numbers: string[] = [];
+  if (ctx?.receiptForCharge)
+    numbers.push(formatDocNumber(ctx.receiptForCharge.documentNumber));
+  if (ctx?.chargeForQuote) {
+    numbers.push(formatDocNumber(ctx.chargeForQuote.documentNumber));
+    const chargeCtx = issueContextMap.get(ctx.chargeForQuote.id);
+    if (chargeCtx?.receiptForCharge) {
+      const receiptNum = formatDocNumber(chargeCtx.receiptForCharge.documentNumber);
+      if (!numbers.includes(receiptNum)) numbers.push(receiptNum);
+    }
+  }
+  return numbers;
+}
+
+function mapDeleteError(message: string, t: (key: string) => string): string {
+  if (message.includes('linked to an order'))
+    return t('documents.deleteErrorOrderLinked');
+  if (message.includes('Document not found'))
+    return t('documents.deleteErrorNotFound');
+  return message;
+}
+
 function monthLabel(year: number, month: number) {
   const lang = i18n.language;
   const locale = lang === 'he' ? 'he-IL' : lang === 'ru' ? 'ru-RU' : 'en-US';
@@ -131,6 +162,8 @@ export function DocumentsPage() {
   const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
   const [emailDoc, setEmailDoc] = useState<Document | null>(null);
   const [issueBusy, setIssueBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -325,7 +358,8 @@ export function DocumentsPage() {
       setDeleteTarget(null);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
+      const raw = err instanceof Error ? err.message : 'Error';
+      setError(mapDeleteError(raw, t));
     } finally {
       setDeleteBusy(false);
     }
@@ -402,6 +436,36 @@ export function DocumentsPage() {
   const resolveReceiptForDoc = (doc: Document) => {
     const ctx = issueContextMap.get(doc.id);
     return ctx?.receiptForCharge;
+  };
+
+  const onImportCsv = async (file: File) => {
+    if (!token) return;
+    setImportBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await documentsApi.importCsv(token, file);
+      setMessage(
+        t('documents.importResult', {
+          imported: result.imported,
+          skipped: result.skipped,
+          linked: result.linked,
+        })
+      );
+      if (result.errors.length > 0) {
+        const preview = result.errors
+          .slice(0, 5)
+          .map((e) => `${e.line}: ${e.message}`)
+          .join('; ');
+        setError(t('documents.importErrors', { count: result.errors.length, preview }));
+      }
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setImportBusy(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
   };
 
   const onIssueReceipt = async (doc: Document) => {
@@ -504,6 +568,24 @@ export function DocumentsPage() {
         </select>
         <button type="button" className="btn btn-ghost-inline" onClick={load}>
           {t('documents.refresh')}
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv,.txt,text/csv"
+          className="documents-import-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onImportCsv(file);
+          }}
+        />
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={importBusy}
+          onClick={() => importInputRef.current?.click()}
+        >
+          {importBusy ? t('documents.importing') : t('documents.importCsv')}
         </button>
       </div>
 
@@ -669,7 +751,21 @@ export function DocumentsPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title={t('documents.deleteConfirmTitle')}
-        message={t('documents.deleteConfirm', { number: deleteTarget?.documentNumber ?? '' })}
+        message={
+          deleteTarget
+            ? (() => {
+                const related = relatedDocNumbersForDelete(deleteTarget, issueContextMap);
+                return related.length > 0
+                  ? t('documents.deleteConfirmCascade', {
+                      number: formatDocNumber(deleteTarget.documentNumber),
+                      related: related.join(', '),
+                    })
+                  : t('documents.deleteConfirm', {
+                      number: formatDocNumber(deleteTarget.documentNumber),
+                    });
+              })()
+            : ''
+        }
         confirmLabel={t('documents.actionDelete')}
         cancelLabel={t('settings.cancel')}
         danger

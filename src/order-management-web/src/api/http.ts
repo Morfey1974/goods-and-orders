@@ -1,5 +1,12 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
+let onUnauthorized: (() => void) | null = null;
+
+/** Register handler (e.g. logout) when API returns 401 with a token present. */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -15,6 +22,9 @@ export async function request<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401 && token) {
+      onUnauthorized?.();
+    }
     const body = data as { message?: string; detail?: string };
     const msg = body.message ?? res.statusText;
     const detail = body.detail?.trim();

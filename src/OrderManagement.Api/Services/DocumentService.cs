@@ -7,7 +7,7 @@ namespace OrderManagement.Api.Services;
 
 public class DocumentService(
     AppDbContext db,
-    ArticleSequenceService sequences,
+    DocumentNumberService documentNumbers,
     StockFulfillmentService stock)
 {
     public async Task SyncChargeInvoicesFromOrdersAsync(Guid tenantId, CancellationToken ct)
@@ -77,8 +77,7 @@ public class DocumentService(
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.TenantId == tenantId, ct)
             ?? throw new InvalidOperationException("Customer not found.");
 
-        var prefix = DocumentTypePrefixes.GetPrefix(type);
-        var number = await sequences.AllocateNextAsync(tenantId, prefix, ct);
+        var number = await documentNumbers.AllocateNextAsync(tenantId, type, ct);
         var now = DateTime.UtcNow;
         var issue = issueDate?.ToUniversalTime() ?? now;
 
@@ -162,6 +161,7 @@ public class DocumentService(
                     line.ProductId!.Value,
                     line.Quantity,
                     $"{number}",
+                    issue,
                     ct);
             }
         }
@@ -293,9 +293,13 @@ public class DocumentService(
         if (doc.OrderId is not null)
             throw new InvalidOperationException("Documents linked to an order cannot be deleted here.");
 
-        var hasChildren = await db.BusinessDocuments.AnyAsync(d => d.ParentDocumentId == doc.Id, ct);
-        if (hasChildren)
-            throw new InvalidOperationException("Cannot delete: related documents exist.");
+        var childIds = await db.BusinessDocuments
+            .Where(d => d.ParentDocumentId == doc.Id && d.TenantId == tenantId)
+            .Select(d => d.Id)
+            .ToListAsync(ct);
+
+        foreach (var childId in childIds)
+            await DeleteAsync(tenantId, childId, ct);
 
         if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
         {
@@ -378,12 +382,12 @@ public class DocumentService(
             .Select(l => (l.ProductId, l.Description, l.Quantity, l.UnitPrice))
             .ToList();
 
-        return await CreateAsync(
+        var charge = await CreateAsync(
             tenantId,
             DocumentType.ChargeInvoice,
             quote.CustomerId,
             quote.Description,
-            DateTime.UtcNow,
+            quote.IssueDate,
             quote.DueDate,
             quote.PaymentMethod,
             quoteId,
@@ -393,6 +397,29 @@ public class DocumentService(
             quote.DiscountAmount,
             receiptAsDraft: false,
             ct);
+
+        await DeductStockForChargeAsync(tenantId, charge, ct);
+        return charge;
+    }
+
+    public async Task DeductStockForChargeAsync(
+        Guid tenantId,
+        BusinessDocument charge,
+        CancellationToken ct)
+    {
+        if (charge.DocumentType != DocumentType.ChargeInvoice)
+            throw new InvalidOperationException("Stock is deducted only for charge invoices.");
+
+        foreach (var line in charge.Lines.Where(l => l.ProductId.HasValue))
+        {
+            await stock.DeductProductSaleAsync(
+                tenantId,
+                line.ProductId!.Value,
+                line.Quantity,
+                charge.DocumentNumber,
+                charge.IssueDate,
+                ct);
+        }
     }
 
     public async Task<BusinessDocument> IssueReceiptAsync(
@@ -436,7 +463,6 @@ public class DocumentService(
 
         if (charge.Status is DocumentStatus.Paid or DocumentStatus.Closed)
         {
-            // Receipt was removed but charge stayed paid — allow a new draft.
             charge.Status = DocumentStatus.Open;
             charge.UpdatedAt = DateTime.UtcNow;
         }

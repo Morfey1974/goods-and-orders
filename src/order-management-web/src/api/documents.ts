@@ -289,4 +289,30 @@ export const documentsApi = {
       message: String(data.message ?? data.Message ?? ''),
     };
   },
+
+  importCsv: async (token: string, file: File) => {
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/api/documents/import`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const body = data as { message?: string };
+      throw new Error(body.message ?? res.statusText);
+    }
+    const raw = data as Record<string, unknown>;
+    return {
+      imported: Number(raw.imported ?? raw.Imported ?? 0),
+      skipped: Number(raw.skipped ?? raw.Skipped ?? 0),
+      linked: Number(raw.linked ?? raw.Linked ?? 0),
+      errors: ((raw.errors ?? raw.Errors ?? []) as Record<string, unknown>[]).map((e) => ({
+        line: Number(e.line ?? e.Line ?? 0),
+        message: String(e.message ?? e.Message ?? ''),
+      })),
+    };
+  },
 };

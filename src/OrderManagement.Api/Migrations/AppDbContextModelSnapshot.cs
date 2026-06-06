@@ -142,10 +142,10 @@ namespace OrderManagement.Api.Migrations
 
                     b.HasIndex("ParentDocumentId");
 
-                    b.HasIndex("TenantId", "DocumentNumber")
-                        .IsUnique();
-
                     b.HasIndex("TenantId", "IssueDate");
+
+                    b.HasIndex("TenantId", "DocumentType", "DocumentNumber")
+                        .IsUnique();
 
                     b.HasIndex("TenantId", "DocumentType", "Status");
 
@@ -358,6 +358,122 @@ namespace OrderManagement.Api.Migrations
                     b.ToTable("CustomerContacts");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryAverageCost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("UnitCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("TenantId", "ProductId", "WarehouseId")
+                        .IsUnique();
+
+                    b.ToTable("InventoryAverageCosts");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryLot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("QuantityRemaining")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("UnitCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("TenantId", "ProductId", "WarehouseId", "ReceivedAt");
+
+                    b.ToTable("InventoryLots");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryLotAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InventoryLotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid>("StockMovementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("UnitCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryLotId");
+
+                    b.HasIndex("StockMovementId");
+
+                    b.ToTable("InventoryLotAllocations");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -539,7 +655,12 @@ namespace OrderManagement.Api.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WarehouseId");
 
                     b.HasIndex("TenantId", "ArticleCode")
                         .IsUnique();
@@ -703,6 +824,10 @@ namespace OrderManagement.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<decimal?>("UnitCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<decimal?>("UnitPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -800,6 +925,9 @@ namespace OrderManagement.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime>("MovementDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("MovementType")
                         .HasColumnType("integer");
 
@@ -816,6 +944,14 @@ namespace OrderManagement.Api.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
 
@@ -824,6 +960,8 @@ namespace OrderManagement.Api.Migrations
                     b.HasIndex("ProductId");
 
                     b.HasIndex("TenantId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "MovementDate");
 
                     b.ToTable("StockMovements");
                 });
@@ -1058,6 +1196,9 @@ namespace OrderManagement.Api.Migrations
                     b.Property<string>("Fax")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int>("InventoryCostMethod")
+                        .HasColumnType("integer");
 
                     b.Property<string>("LogoPath")
                         .HasMaxLength(512)
@@ -1312,6 +1453,63 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryAverageCost", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OrderManagement.Api.Entities.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryLot", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OrderManagement.Api.Entities.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.InventoryLotAllocation", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.InventoryLot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("InventoryLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OrderManagement.Api.Entities.StockMovement", "StockMovement")
+                        .WithMany()
+                        .HasForeignKey("StockMovementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lot");
+
+                    b.Navigation("StockMovement");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>
                 {
                     b.HasOne("OrderManagement.Api.Entities.Customer", "Customer")
@@ -1351,6 +1549,16 @@ namespace OrderManagement.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.Product", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.ProductGroupMember", b =>

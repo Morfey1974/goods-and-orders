@@ -362,7 +362,7 @@ export function PurchaseReceiptProductPickerModal({
 
     <>
 
-      <div className="doc-picker-overlay pr-picker-overlay" onClick={onClose}>
+      <div className="doc-picker-overlay pr-picker-overlay" role="presentation">
 
         <div
 

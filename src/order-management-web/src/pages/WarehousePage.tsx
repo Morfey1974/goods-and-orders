@@ -99,6 +99,12 @@ export function WarehousePage() {
       <div className="page-header">
         <h1>{t('nav.warehouse')}</h1>
         <div className="page-header-actions">
+          <Link to="/warehouse/opening-balance" className="btn btn-ghost-inline">
+            {t('inventory.openingNav')}
+          </Link>
+          <Link to="/reports/inventory-valuation" className="btn btn-ghost-inline">
+            {t('inventory.valuationNav')}
+          </Link>
           <button type="button" className="btn btn-ghost-inline" onClick={() => setManageOpen(true)}>
             {t('warehouse.manageWarehouses')}
           </button>

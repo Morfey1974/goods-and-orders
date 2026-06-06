@@ -143,6 +143,8 @@ public record ProductDto(
     decimal? StockQuantity,
     IReadOnlyList<BomLineDto> BomLines,
     IReadOnlyList<Guid> GroupIds,
+    Guid? WarehouseId,
+    string? WarehouseName,
     int Version);
 
 public record CreateProductRequest(
@@ -153,6 +155,7 @@ public record CreateProductRequest(
     bool ShowBomInQuote,
     bool ShowBomInInvoice,
     bool TrackInventory,
+    Guid? WarehouseId,
     IReadOnlyList<BomLineInput>? BomLines);
 
 public record UpdateProductRequest(
@@ -164,6 +167,7 @@ public record UpdateProductRequest(
     bool ShowBomInInvoice,
     bool TrackInventory,
     bool IsActive,
+    Guid? WarehouseId,
     IReadOnlyList<BomLineInput>? BomLines,
     int Version);
 
@@ -409,6 +413,9 @@ public static class CatalogMappers
             ? finishedWarehouseId
             : componentsWarehouseId;
 
+    private static Guid ResolveWarehouseId(Product p, Guid componentsWarehouseId, Guid finishedWarehouseId) =>
+        p.WarehouseId ?? WarehouseIdFor(p, componentsWarehouseId, finishedWarehouseId);
+
     public static async Task<ProductDto> ToDtoAsync(
         Product p,
         AppDbContext db,
@@ -416,11 +423,16 @@ public static class CatalogMappers
         Guid finishedWarehouseId,
         CancellationToken ct)
     {
-        var warehouseId = WarehouseIdFor(p, componentsWarehouseId, finishedWarehouseId);
+        var warehouseId = ResolveWarehouseId(p, componentsWarehouseId, finishedWarehouseId);
         var hasMovements = await db.StockMovements.AnyAsync(m => m.ProductId == p.Id, ct);
         decimal? stock = null;
+        string? warehouseName = null;
         if (ProductInventoryHelper.TracksStock(p))
         {
+            warehouseName = await db.Warehouses
+                .Where(w => w.Id == warehouseId)
+                .Select(w => w.Name)
+                .FirstOrDefaultAsync(ct);
             stock = await db.StockBalances
                 .Where(b => b.WarehouseId == warehouseId && b.ProductId == p.Id)
                 .Select(b => (decimal?)b.Quantity)
@@ -446,7 +458,7 @@ public static class CatalogMappers
             p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
             !string.IsNullOrEmpty(p.ImagePath),
             p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-            hasMovements, stock, bom, groupIds, p.Version);
+            hasMovements, stock, bom, groupIds, p.WarehouseId, warehouseName, p.Version);
     }
 
     public static async Task<List<ProductDto>> ToDtoListAsync(
@@ -460,15 +472,23 @@ public static class CatalogMappers
 
         var ids = products.Select(p => p.Id).ToList();
         var stocks = await db.StockBalances
-            .Where(b => ids.Contains(b.ProductId) &&
-                        (b.WarehouseId == componentsWarehouseId || b.WarehouseId == finishedWarehouseId))
+            .Where(b => ids.Contains(b.ProductId))
             .ToListAsync(ct);
+
+        var warehouseIds = products
+            .Where(ProductInventoryHelper.TracksStock)
+            .Select(p => ResolveWarehouseId(p, componentsWarehouseId, finishedWarehouseId))
+            .Distinct()
+            .ToList();
+        var warehouseNames = await db.Warehouses
+            .Where(w => warehouseIds.Contains(w.Id))
+            .ToDictionaryAsync(w => w.Id, w => w.Name, ct);
 
         var stockByProduct = products.ToDictionary(
             p => p.Id,
             p =>
             {
-                var whId = WarehouseIdFor(p, componentsWarehouseId, finishedWarehouseId);
+                var whId = ResolveWarehouseId(p, componentsWarehouseId, finishedWarehouseId);
                 return stocks.FirstOrDefault(b => b.ProductId == p.Id && b.WarehouseId == whId)?.Quantity ?? 0m;
             });
 
@@ -505,12 +525,20 @@ public static class CatalogMappers
                 : [];
 
             var groupIds = groupsByProduct.GetValueOrDefault(p.Id, []);
+            Guid? warehouseId = null;
+            string? warehouseName = null;
+            if (ProductInventoryHelper.TracksStock(p))
+            {
+                var whId = ResolveWarehouseId(p, componentsWarehouseId, finishedWarehouseId);
+                warehouseId = p.WarehouseId;
+                warehouseNames.TryGetValue(whId, out warehouseName);
+            }
 
             return new ProductDto(
                 p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
                 !string.IsNullOrEmpty(p.ImagePath),
                 p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-                movementIds.Contains(p.Id), stock, bom, groupIds, p.Version);
+                movementIds.Contains(p.Id), stock, bom, groupIds, warehouseId, warehouseName, p.Version);
         }).ToList();
     }
 

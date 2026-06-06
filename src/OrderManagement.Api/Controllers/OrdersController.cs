@@ -14,7 +14,7 @@ namespace OrderManagement.Api.Controllers;
 [Authorize]
 public class OrdersController(
     AppDbContext db,
-    ArticleSequenceService articles,
+    DocumentNumberService documentNumbers,
     StockFulfillmentService stockFulfillment,
     DocumentService documentService) : ControllerBase
 {
@@ -68,7 +68,7 @@ public class OrdersController(
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId.Value,
-            OrderNumber = await articles.AllocateNextAsync(tenantId.Value, "O", ct),
+            OrderNumber = await documentNumbers.AllocateNextAsync(tenantId.Value, DocumentSequenceKind.Order, ct),
             CustomerId = customer.Id,
             Status = OrderStatus.Draft,
             Notes = request.Notes?.Trim(),
@@ -179,12 +179,12 @@ public class OrdersController(
         if (order.Status is OrderStatus.Cancelled)
             return BadRequest(new { message = "Cannot issue charge invoice for a cancelled order." });
 
-        var chargeNumber = await articles.AllocateNextAsync(tenantId.Value, "H", ct);
+        var chargeNumber = await documentNumbers.AllocateNextAsync(tenantId.Value, DocumentType.ChargeInvoice, ct);
         var reference = $"{chargeNumber} / order {order.OrderNumber}";
 
         try
         {
-            await stockFulfillment.DeductOrderStockAsync(tenantId.Value, order, reference, ct);
+            await stockFulfillment.DeductOrderStockAsync(tenantId.Value, order, reference, DateTime.UtcNow, ct);
         }
         catch (InvalidOperationException ex)
         {

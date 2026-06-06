@@ -41,6 +41,7 @@ public class Tenant
     public TaxRegime TaxRegime { get; set; } = TaxRegime.Patur;
     /// <summary>Default withholding tax percent (ניכוי במקור) for receipts.</summary>
     public decimal? WithholdingTaxPercent { get; set; }
+    public InventoryCostMethod InventoryCostMethod { get; set; } = InventoryCostMethod.Fifo;
     public SubscriptionStatus SubscriptionStatus { get; set; } = SubscriptionStatus.Trial;
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
     public DateTime TrialEndsAt { get; set; }

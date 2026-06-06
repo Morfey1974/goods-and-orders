@@ -378,6 +378,11 @@
   margin-top: 0;
 }
 
+.settings-form-actions--page-bottom {
+  margin-top: 0.65rem;
+  padding-bottom: 0.5rem;
+}
+
 /* Bank summary block on main page */
 .settings-bank-panel {
   display: flex;
@@ -871,4 +876,35 @@
   .settings-bank-modal-actions .btn {
     width: 100%;
   }
+}
+
+.settings-section--standalone {
+  margin-top: 0.65rem;
+}
+
+.document-sequences-form .field-hint {
+  margin: 0 0 0.75rem;
+}
+
+.document-sequences-table {
+  width: 100%;
+}
+
+.document-sequences-table th,
+.document-sequences-table td {
+  vertical-align: middle;
+}
+
+.document-sequence-input {
+  width: 8rem;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.settings-inline-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
 }

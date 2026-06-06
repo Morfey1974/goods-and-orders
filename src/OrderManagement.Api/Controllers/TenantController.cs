@@ -77,6 +77,15 @@ public class TenantController(AppDbContext db) : ControllerBase
         tenant.WithholdingTaxPercent = request.WithholdingTaxPercent is > 0 and <= 100
             ? Math.Round(request.WithholdingTaxPercent.Value, 2)
             : null;
+        if (!string.IsNullOrWhiteSpace(request.InventoryCostMethod))
+        {
+            tenant.InventoryCostMethod = request.InventoryCostMethod.Trim().ToUpperInvariant() switch
+            {
+                "WAC" => Entities.InventoryCostMethod.Wac,
+                "FIFO" => Entities.InventoryCostMethod.Fifo,
+                _ => tenant.InventoryCostMethod
+            };
+        }
         tenant.Version++;
         tenant.UpdatedAt = DateTime.UtcNow;
 

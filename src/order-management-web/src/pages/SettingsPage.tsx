@@ -12,6 +12,7 @@ import {
 import { tenantAssetsApi, type TenantAssetsSummary } from '../api/tenantAssets';
 import { TenantBrandingSection } from '../components/settings/TenantBrandingSection';
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
+import { DocumentSequencesSection } from '../components/settings/DocumentSequencesSection';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
@@ -188,6 +189,7 @@ export function SettingsPage() {
           profile.withholdingTaxPercent != null && profile.withholdingTaxPercent > 0
             ? profile.withholdingTaxPercent
             : null,
+        inventoryCostMethod: profile.inventoryCostMethod ?? 'FIFO',
         version: profile.version,
       });
       setProfile(updated);
@@ -275,7 +277,11 @@ export function SettingsPage() {
     <div className="page settings-page">
       <h1>{t('settings.title')}</h1>
 
+      {error && <div className="error-banner">{error}</div>}
+      {message && <div className="success-banner">{message}</div>}
+
       <form
+        id="settings-profile-form"
         className="settings-form"
         onSubmit={onSubmitProfile}
         autoComplete="off"
@@ -283,8 +289,6 @@ export function SettingsPage() {
         data-form-type="other"
       >
         <SuppressBrowserAutofill />
-        {error && <div className="error-banner">{error}</div>}
-        {message && <div className="success-banner">{message}</div>}
 
         <section className="card settings-section">
           <div className="settings-section-head">
@@ -386,6 +390,21 @@ export function SettingsPage() {
                       });
                     }}
                   />
+                </label>
+                <label className="settings-field field-flex-compact">
+                  <span className="settings-field-label-row">
+                    {t('settings.inventoryCostMethod')}
+                    <span className="field-hint">{t('settings.inventoryCostMethodHint')}</span>
+                  </span>
+                  <select
+                    value={profile.inventoryCostMethod ?? 'FIFO'}
+                    onChange={(e) =>
+                      setProfile({ ...profile, inventoryCostMethod: e.target.value })
+                    }
+                  >
+                    <option value="FIFO">{t('settings.inventoryCostFifo')}</option>
+                    <option value="WAC">{t('settings.inventoryCostWac')}</option>
+                  </select>
                 </label>
               </div>
             </div>
@@ -592,13 +611,28 @@ export function SettingsPage() {
             </div>
           </div>
         </section>
-
-        <div className="settings-form-actions">
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? t('settings.saving') : t('settings.saveToDb')}
-          </button>
-        </div>
       </form>
+
+      <section className="card settings-section settings-section--standalone">
+        <div className="settings-section-head">
+          <h2 className="settings-section-title">{t('settings.documentSequences.sectionTitle')}</h2>
+        </div>
+        <div className="settings-section-body">
+          {token && (
+            <DocumentSequencesSection
+              token={token}
+              onError={setError}
+              onMessage={setMessage}
+            />
+          )}
+        </div>
+      </section>
+
+      <div className="settings-form-actions settings-form-actions--page-bottom">
+        <button type="submit" form="settings-profile-form" className="btn btn-primary" disabled={saving}>
+          {saving ? t('settings.saving') : t('settings.saveToDb')}
+        </button>
+      </div>
 
       {bankModalOpen && bankForm && (
         <AppModal

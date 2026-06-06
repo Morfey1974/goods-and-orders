@@ -9,6 +9,8 @@ public class PurchaseReceiptLine
 
     public decimal Quantity { get; set; }
     public decimal? UnitPrice { get; set; }
+    /// <summary>Actual inventory unit cost in ILS (FIFO/WAC). Required for stock items when posting.</summary>
+    public decimal? UnitCostIls { get; set; }
     public string? SupplierSku { get; set; }
     public string? Notes { get; set; }
     public int SortOrder { get; set; }

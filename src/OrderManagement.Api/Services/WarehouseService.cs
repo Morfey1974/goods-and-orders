@@ -170,8 +170,19 @@ public class WarehouseService(AppDbContext db)
             : components;
     }
 
-    public async Task<Warehouse> GetForProductAsync(Guid tenantId, Product product, CancellationToken ct) =>
-        await GetForProductTypeAsync(tenantId, product.ProductType, ct);
+    public async Task<Warehouse> GetForProductAsync(Guid tenantId, Product product, CancellationToken ct)
+    {
+        if (product.WarehouseId is { } wid)
+        {
+            var wh = await GetByIdAsync(tenantId, wid, ct)
+                ?? throw new InvalidOperationException("Warehouse not found.");
+            if (!wh.IsActive)
+                throw new InvalidOperationException("Warehouse is not active.");
+            return wh;
+        }
+
+        return await GetForProductTypeAsync(tenantId, product.ProductType, ct);
+    }
 
     public async Task<Warehouse> ResolveReceiptWarehouseAsync(
         Guid tenantId,
@@ -224,7 +235,10 @@ public class WarehouseService(AppDbContext db)
         StockMovementType type,
         decimal quantity,
         string? notes,
-        CancellationToken ct)
+        CancellationToken ct,
+        DateTime? movementDate = null,
+        decimal? unitCost = null,
+        decimal? totalCost = null)
     {
         if (quantity <= 0)
             throw new InvalidOperationException("Quantity must be positive.");
@@ -247,6 +261,10 @@ public class WarehouseService(AppDbContext db)
                 throw new InvalidOperationException("Insufficient stock.");
         }
 
+        var when = movementDate ?? DateTime.UtcNow;
+        if (when.Kind == DateTimeKind.Unspecified)
+            when = DateTime.SpecifyKind(when, DateTimeKind.Utc);
+
         var movement = new StockMovement
         {
             Id = Guid.NewGuid(),
@@ -256,6 +274,9 @@ public class WarehouseService(AppDbContext db)
             MovementType = type,
             Quantity = quantity,
             BalanceAfter = balance.Quantity,
+            MovementDate = when,
+            UnitCost = unitCost,
+            TotalCost = totalCost,
             Notes = notes,
             CreatedAt = DateTime.UtcNow
         };

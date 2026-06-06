@@ -8,6 +8,7 @@ namespace OrderManagement.Api.Services;
 public class PurchaseReceiptService(
     AppDbContext db,
     WarehouseService warehouse,
+    InventoryCostService inventoryCost,
     ArticleSequenceService sequences)
 {
     public async Task<PurchaseReceipt> CreateDraftAsync(
@@ -16,7 +17,7 @@ public class PurchaseReceiptService(
         CancellationToken ct)
     {
         await ValidateSupplierAsync(tenantId, request.SupplierId, ct);
-        await ValidateLinesAsync(tenantId, request.Lines, ct);
+        await ValidateLinesAsync(tenantId, NormalizeCurrency(request.Currency), request.Lines, ct);
 
         var number = await sequences.AllocateNextAsync(tenantId, "GR", ct);
         var now = DateTime.UtcNow;
@@ -62,7 +63,7 @@ public class PurchaseReceiptService(
             throw new InvalidOperationException("Data was modified. Refresh and try again.");
 
         await ValidateSupplierAsync(tenantId, request.SupplierId, ct);
-        await ValidateLinesAsync(tenantId, request.Lines, ct);
+        await ValidateLinesAsync(tenantId, NormalizeCurrency(request.Currency), request.Lines, ct);
 
         receipt.SupplierId = request.SupplierId;
         receipt.SupplierInvoiceNumber = TrimOrNull(request.SupplierInvoiceNumber);
@@ -130,12 +131,20 @@ public class PurchaseReceiptService(
             if (qty <= 0)
                 throw new InvalidOperationException("Line quantity must be positive.");
 
-            await warehouse.ApplyMovementAsync(
+            var unitCostIls = InventoryCostService.ResolveLineUnitCostIls(
+                receipt.Currency, line.UnitPrice, line.UnitCostIls);
+
+            line.UnitCostIls = unitCostIls;
+
+            await inventoryCost.ReceiveAsync(
                 tenantId,
-                wh.Id,
                 product.Id,
-                StockMovementType.Receipt,
+                wh.Id,
                 qty,
+                unitCostIls,
+                receipt.DocumentDate,
+                InventoryLotSource.PurchaseReceipt,
+                line.Id,
                 noteBase,
                 ct);
         }
@@ -185,6 +194,7 @@ public class PurchaseReceiptService(
                 WarehouseId = input.WarehouseId,
                 Quantity = input.Quantity,
                 UnitPrice = input.UnitPrice,
+                UnitCostIls = input.UnitCostIls,
                 SupplierSku = TrimOrNull(input.SupplierSku),
                 Notes = TrimOrNull(input.Notes),
                 SortOrder = order++
@@ -202,6 +212,7 @@ public class PurchaseReceiptService(
 
     private async Task ValidateLinesAsync(
         Guid tenantId,
+        string receiptCurrency,
         IReadOnlyList<PurchaseReceiptLineInput> lines,
         CancellationToken ct)
     {
@@ -217,8 +228,22 @@ public class PurchaseReceiptService(
             if (line.UnitPrice is null or <= 0)
                 throw new InvalidOperationException("Purchase price is required for all lines.");
 
-            if (ProductInventoryHelper.TracksStock(product) && line.WarehouseId is null)
-                throw new InvalidOperationException("Warehouse is required for all stock items.");
+            if (ProductInventoryHelper.TracksStock(product))
+            {
+                if (line.WarehouseId is null)
+                    throw new InvalidOperationException("Warehouse is required for all stock items.");
+
+                try
+                {
+                    _ = InventoryCostService.ResolveLineUnitCostIls(
+                        receiptCurrency, line.UnitPrice, line.UnitCostIls);
+                }
+                catch (InvalidOperationException)
+                {
+                    throw new InvalidOperationException(
+                        "Unit cost in ILS is required for stock items when the receipt currency is not ILS.");
+                }
+            }
         }
     }
 

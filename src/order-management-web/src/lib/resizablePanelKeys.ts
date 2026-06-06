@@ -12,6 +12,7 @@ export const RESIZABLE_PANEL_KEYS = {
   warehouseManage: 'ordermgmt.warehouse-manage-modal-size',
   warehouseReceipt: 'ordermgmt.warehouse-receipt-modal-size',
   complianceEmail: 'ordermgmt.compliance-email-modal-size',
+  productsCatalogColumns: 'ordermgmt.products-catalog-column-widths',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {

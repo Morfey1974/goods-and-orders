@@ -9,6 +9,10 @@ public class StockMovement
     public StockMovementType MovementType { get; set; }
     public decimal Quantity { get; set; }
     public decimal BalanceAfter { get; set; }
+    /// <summary>Business date of the movement (may differ from CreatedAt for backdated documents).</summary>
+    public DateTime MovementDate { get; set; } = DateTime.UtcNow;
+    public decimal? UnitCost { get; set; }
+    public decimal? TotalCost { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

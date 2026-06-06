@@ -138,6 +138,8 @@ export type Product = {
   stockQuantity?: number | null;
   bomLines: BomLine[];
   groupIds: string[];
+  warehouseId?: string | null;
+  warehouseName?: string | null;
   version: number;
 };
 
@@ -165,7 +167,7 @@ function mapProduct(raw: Record<string, unknown>): Product {
     unitPrice: Number(raw.unitPrice ?? raw.UnitPrice ?? 0),
     showBomInQuote: Boolean(raw.showBomInQuote ?? raw.ShowBomInQuote),
     showBomInInvoice: Boolean(raw.showBomInInvoice ?? raw.ShowBomInInvoice),
-    trackInventory: Boolean(raw.trackInventory ?? raw.TrackInventory ?? true),
+    trackInventory: Boolean(raw.trackInventory ?? raw.TrackInventory ?? false),
     isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
     hasStockMovements: Boolean(raw.hasStockMovements ?? raw.HasStockMovements),
     stockQuantity: (() => {
@@ -178,6 +180,8 @@ function mapProduct(raw: Record<string, unknown>): Product {
       const g = raw.groupIds ?? raw.GroupIds;
       return Array.isArray(g) ? g.map(String) : [];
     })(),
+    warehouseId: (raw.warehouseId ?? raw.WarehouseId) as string | null | undefined,
+    warehouseName: (raw.warehouseName ?? raw.WarehouseName) as string | null | undefined,
     version: Number(raw.version ?? raw.Version ?? 1),
   };
 }

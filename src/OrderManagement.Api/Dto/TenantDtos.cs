@@ -68,6 +68,8 @@ public record TenantProfileDto(
 
     decimal? WithholdingTaxPercent,
 
+    string InventoryCostMethod,
+
     string SubscriptionStatus,
 
     DateTime RegisteredAt,
@@ -113,6 +115,8 @@ public record UpdateTenantRequest(
     [Required] string DefaultLanguage,
 
     [Range(0, 100)] decimal? WithholdingTaxPercent,
+
+    string? InventoryCostMethod,
 
     int Version);
 
@@ -205,6 +209,8 @@ public static class TenantMapper
         t.TaxRegime.ToString(),
 
         t.WithholdingTaxPercent,
+
+        InventoryCostMethodNames.ToApi(t.InventoryCostMethod),
 
         t.SubscriptionStatus.ToString(),
 

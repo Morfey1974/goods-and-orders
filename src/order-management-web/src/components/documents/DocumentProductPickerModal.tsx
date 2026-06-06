@@ -99,7 +99,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
   if (!open) return null;
 
   return createPortal(
-    <div className="doc-picker-overlay" onClick={onClose}>
+    <div className="doc-picker-overlay" role="presentation">
       <div
         className="doc-picker-modal"
         onClick={(e) => e.stopPropagation()}

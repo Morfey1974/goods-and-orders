@@ -20,6 +20,8 @@ import { SuppliersPage } from './pages/SuppliersPage';
 import { SupplierDetailPage } from './pages/SupplierDetailPage';
 import { PurchaseReceiptsPage } from './pages/PurchaseReceiptsPage';
 import { PurchaseReceiptDetailPage } from './pages/PurchaseReceiptDetailPage';
+import { InventoryOpeningBalancePage } from './pages/InventoryOpeningBalancePage';
+import { InventoryValuationPage } from './pages/InventoryValuationPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -48,6 +50,8 @@ const router = createBrowserRouter([
       { path: 'purchase-receipts/:id', element: <PurchaseReceiptDetailPage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'reports', element: <ReportsPage /> },
+      { path: 'warehouse/opening-balance', element: <InventoryOpeningBalancePage /> },
+      { path: 'reports/inventory-valuation', element: <InventoryValuationPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

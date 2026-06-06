@@ -38,7 +38,13 @@ type LineRow = {
   warehouseId: string;
   quantity: number;
   unitPrice: string;
+  unitCostIls: string;
 };
+
+function isIlsCurrency(currency: string) {
+  const c = currency.trim().toUpperCase();
+  return c === 'ILS' || c === 'NIS' || c === '₪';
+}
 
 function emptyLine(product?: Product): LineRow {
   return {
@@ -47,6 +53,7 @@ function emptyLine(product?: Product): LineRow {
     warehouseId: '',
     quantity: 1,
     unitPrice: product ? String(product.unitPrice) : '',
+    unitCostIls: '',
   };
 }
 
@@ -57,6 +64,7 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
     warehouseId: l.warehouseId ?? '',
     quantity: l.quantity,
     unitPrice: l.unitPrice != null ? String(l.unitPrice) : '',
+    unitCostIls: l.unitCostIls != null ? String(l.unitCostIls) : '',
   }));
 }
 
@@ -67,15 +75,25 @@ function lineTotal(row: LineRow): number {
   return Math.round(price * qty * 100) / 100;
 }
 
-function rowsToPayload(rows: LineRow[]): PurchaseReceiptLineInput[] {
+function rowsToPayload(rows: LineRow[], currency: string): PurchaseReceiptLineInput[] {
+  const ils = isIlsCurrency(currency);
   return rows
     .filter((r) => r.productId)
-    .map((r) => ({
-      productId: r.productId,
-      warehouseId: r.warehouseId || undefined,
-      quantity: normalizeStockQuantity(r.quantity),
-      unitPrice: r.unitPrice.trim() ? Number(r.unitPrice) : undefined,
-    }));
+    .map((r) => {
+      const unitPrice = r.unitPrice.trim() ? Number(r.unitPrice) : undefined;
+      const unitCostIls = ils
+        ? unitPrice
+        : r.unitCostIls.trim()
+          ? Number(r.unitCostIls)
+          : undefined;
+      return {
+        productId: r.productId,
+        warehouseId: r.warehouseId || undefined,
+        quantity: normalizeStockQuantity(r.quantity),
+        unitPrice,
+        unitCostIls,
+      };
+    });
 }
 
 function isValidUnitPrice(unitPrice: string): boolean {
@@ -92,6 +110,7 @@ type ReceiptFormValidation = {
 
 function validateReceiptForm(
   supplierId: string,
+  currency: string,
   lines: LineRow[],
   productById: Map<string, Product>
 ): ReceiptFormValidation {
@@ -104,6 +123,8 @@ function validateReceiptForm(
     return { canSave: false, errorKey: 'purchaseReceipts.linesRequired' };
   }
 
+  const ils = isIlsCurrency(currency);
+
   for (const line of filled) {
     const product = productById.get(line.productId);
     if (product && productTracksStock(product) && !line.warehouseId) {
@@ -111,6 +132,9 @@ function validateReceiptForm(
     }
     if (!isValidUnitPrice(line.unitPrice)) {
       return { canSave: false, errorKey: 'purchaseReceipts.unitPriceRequired' };
+    }
+    if (!ils && !isValidUnitPrice(line.unitCostIls)) {
+      return { canSave: false, errorKey: 'purchaseReceipts.unitCostIlsRequired' };
     }
   }
 
@@ -126,6 +150,7 @@ function linesForCompare(rows: LineRow[]) {
       warehouseId: r.warehouseId,
       quantity: normalizeStockQuantity(r.quantity),
       unitPrice: r.unitPrice.trim(),
+      unitCostIls: r.unitCostIls.trim(),
     }));
 }
 
@@ -210,6 +235,7 @@ export function PurchaseReceiptDetailPage() {
   );
 
   const isDirty = isDraft && serializeForm() !== baseline;
+  const needsIlsCost = !isIlsCurrency(currency);
 
   const clearLocalPreview = useCallback(() => {
     setLocalPreviewUrl((u) => {
@@ -218,10 +244,6 @@ export function PurchaseReceiptDetailPage() {
     });
     setPendingFile(null);
   }, []);
-
-  const markSaved = useCallback(() => {
-    setBaseline(serializeForm());
-  }, [serializeForm]);
 
   const loadReceipt = useCallback(async () => {
     if (!token || isNew || !id || id === 'new') return;
@@ -258,8 +280,8 @@ export function PurchaseReceiptDetailPage() {
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const formValidation = useMemo(
-    () => validateReceiptForm(supplierId, lines, productById),
-    [supplierId, lines, productById]
+    () => validateReceiptForm(supplierId, currency, lines, productById),
+    [supplierId, currency, lines, productById]
   );
 
   useEffect(() => {
@@ -324,7 +346,7 @@ export function PurchaseReceiptDetailPage() {
     totalAmount: positionsCount > 0 ? linesGrandTotal : null,
     notes: notes.trim() || null,
     version: receipt?.version,
-    lines: rowsToPayload(lines),
+    lines: rowsToPayload(lines, currency),
   });
 
   const performSave = useCallback(async (): Promise<boolean> => {
@@ -646,6 +668,7 @@ export function PurchaseReceiptDetailPage() {
                     <col className="pr-col-warehouse" />
                     <col className="pr-col-qty" />
                     <col className="pr-col-price" />
+                    {needsIlsCost && <col className="pr-col-price" />}
                     <col className="pr-col-line-total" />
                     {isDraft && <col className="pr-col-actions" />}
                   </colgroup>
@@ -655,6 +678,9 @@ export function PurchaseReceiptDetailPage() {
                       <th className="pr-col-warehouse">{t('purchaseReceipts.warehouse')}</th>
                       <th className="pr-col-qty">{t('purchaseReceipts.quantity')}</th>
                       <th className="pr-col-price">{t('purchaseReceipts.unitPrice')}</th>
+                      {needsIlsCost && (
+                        <th className="pr-col-price">{t('inventory.unitCostIls')}</th>
+                      )}
                       <th className="pr-col-line-total">{t('purchaseReceipts.lineSum')}</th>
                       {isDraft && <th className="pr-col-actions" aria-hidden />}
                     </tr>
@@ -721,6 +747,19 @@ export function PurchaseReceiptDetailPage() {
                             onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
                           />
                         </td>
+                        {needsIlsCost && (
+                          <td className="pr-col-price">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              disabled={isPosted}
+                              value={line.unitCostIls}
+                              title={t('purchaseReceipts.unitCostIlsHint')}
+                              onChange={(e) => updateLine(line.key, { unitCostIls: e.target.value })}
+                            />
+                          </td>
+                        )}
                         <td className="pr-col-line-total pr-line-total-cell">
                           {line.productId
                             ? formatMoney(lineTotal(line), currency)
@@ -756,7 +795,7 @@ export function PurchaseReceiptDetailPage() {
                   </tbody>
                   <tfoot>
                     <tr className="pr-lines-summary">
-                      <td colSpan={4}>
+                      <td colSpan={needsIlsCost ? 5 : 4}>
                         {t('purchaseReceipts.positionsCount', { count: positionsCount })}
                       </td>
                       <td className="pr-line-total-cell pr-lines-grand-total">

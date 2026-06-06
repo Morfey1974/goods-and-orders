@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, type AuthResponse } from '../api/client';
+import { setUnauthorizedHandler } from '../api/http';
 
 type AuthState = {
   token: string | null;
@@ -77,6 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     []
   );
+
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
 
   useEffect(() => {
     api.health().catch(() => {

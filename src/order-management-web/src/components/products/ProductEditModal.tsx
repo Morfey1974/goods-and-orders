@@ -1,14 +1,19 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppModal } from '../ui/AppModal';
+import { UnsavedLeaveDialog } from '../UnsavedLeaveDialog';
 import {
   catalogApi,
   type Product,
   type StockMovement,
 } from '../../api/catalog';
+import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
+import { warehouseApi, type Warehouse } from '../../api/warehouse';
+import { defaultWarehouseForProductType, resolveProductWarehouseId } from '../../lib/defaultWarehouse';
 import { formatStockQuantity } from '../../lib/stockQuantity';
-import { warehouseLabelForProductType } from '../../lib/warehouseLabel';
 import { ProductTypeSelect } from './ProductTypeSelect';
+import { ProductGroupsMultiSelect } from './ProductGroupsMultiSelect';
+import { ProductWarehouseSelect } from './ProductWarehouseSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
 import { productTypeCanTrackStock, productTracksStock } from '../../lib/productInventory';
 import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
@@ -16,6 +21,83 @@ import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
 const PRODUCT_FORM_ID = 'product-card-form';
 
 type BomInput = { componentProductId: string; quantity: number };
+
+type FormSnapshot = {
+  productType: string;
+  name: string;
+  description: string;
+  unitPrice: string;
+  isActive: boolean;
+  showBomInQuote: boolean;
+  showBomInInvoice: boolean;
+  trackInventory: boolean;
+  bomLines: BomInput[];
+  groupIds: string[];
+  warehouseId: string;
+};
+
+function snapshotFromState(
+  form: {
+    productType: string;
+    name: string;
+    description: string;
+    unitPrice: string;
+    isActive: boolean;
+    showBomInQuote: boolean;
+    showBomInInvoice: boolean;
+    trackInventory: boolean;
+    bomLines: BomInput[];
+  },
+  groupIds: Set<string>,
+  warehouseId: string
+): FormSnapshot {
+  return {
+    productType: form.productType,
+    name: form.name,
+    description: form.description,
+    unitPrice: form.unitPrice,
+    isActive: form.isActive,
+    showBomInQuote: form.showBomInQuote,
+    showBomInInvoice: form.showBomInInvoice,
+    trackInventory: form.trackInventory,
+    bomLines: form.bomLines.map((b) => ({
+      componentProductId: b.componentProductId,
+      quantity: normalizeBomQty(b.quantity),
+    })),
+    groupIds: [...groupIds].sort(),
+    warehouseId,
+  };
+}
+
+function snapshotsEqual(a: FormSnapshot, b: FormSnapshot): boolean {
+  if (
+    a.productType !== b.productType ||
+    a.name !== b.name ||
+    a.description !== b.description ||
+    a.unitPrice !== b.unitPrice ||
+    a.isActive !== b.isActive ||
+    a.showBomInQuote !== b.showBomInQuote ||
+    a.showBomInInvoice !== b.showBomInInvoice ||
+    a.trackInventory !== b.trackInventory ||
+    a.warehouseId !== b.warehouseId
+  ) {
+    return false;
+  }
+  if (a.groupIds.length !== b.groupIds.length) return false;
+  for (let i = 0; i < a.groupIds.length; i++) {
+    if (a.groupIds[i] !== b.groupIds[i]) return false;
+  }
+  if (a.bomLines.length !== b.bomLines.length) return false;
+  for (let i = 0; i < a.bomLines.length; i++) {
+    if (
+      a.bomLines[i].componentProductId !== b.bomLines[i].componentProductId ||
+      a.bomLines[i].quantity !== b.bomLines[i].quantity
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function normalizeBomQty(value: number): number {
   if (!Number.isFinite(value) || value < 1) return 1;
@@ -37,6 +119,40 @@ function parseUnitPriceInput(value: string): number {
   if (!normalized) return 0;
   const n = Number(normalized);
   return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+async function syncProductGroupMembership(
+  token: string,
+  productId: string,
+  groups: ProductGroup[],
+  selectedGroupIds: Set<string>,
+  initialGroupIds: Set<string>
+) {
+  const changedGroupIds = new Set<string>();
+  for (const id of selectedGroupIds) {
+    if (!initialGroupIds.has(id)) changedGroupIds.add(id);
+  }
+  for (const id of initialGroupIds) {
+    if (!selectedGroupIds.has(id)) changedGroupIds.add(id);
+  }
+
+  for (const groupId of changedGroupIds) {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) continue;
+    const memberIds = new Set(group.productIds);
+    if (selectedGroupIds.has(groupId)) memberIds.add(productId);
+    else memberIds.delete(productId);
+    await productGroupsApi.setMembers(token, groupId, [...memberIds]);
+  }
+}
+
+function withGroupIds(product: Product, groupIds: string[]): Product {
+  return { ...product, groupIds };
+}
+
+function withWarehouse(product: Product, warehouseId: string, warehouses: Warehouse[]): Product {
+  const wh = warehouses.find((w) => w.id === warehouseId);
+  return { ...product, warehouseId, warehouseName: wh?.name ?? product.warehouseName ?? null };
 }
 
 type Props = {
@@ -72,7 +188,9 @@ export function ProductEditModal({
 }: Props) {
   const { t } = useTranslation();
   const [modalError, setModalError] = useState('');
-  const [savingActive, setSavingActive] = useState(false);
+  const [unsavedOpen, setUnsavedOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const baselineRef = useRef<FormSnapshot | null>(null);
   const [savedProduct, setSavedProduct] = useState<Product | null>(null);
   const effectiveProduct = product ?? savedProduct;
   const editing = effectiveProduct !== null;
@@ -81,6 +199,11 @@ export function ProductEditModal({
   const [loadingMovements, setLoadingMovements] = useState(false);
   const [previewArticle, setPreviewArticle] = useState(nextArticle);
   const [newArticlePreview, setNewArticlePreview] = useState<string | null>(null);
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseId, setWarehouseId] = useState('');
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  const [initialGroupIds, setInitialGroupIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     productType: 'ComponentPart',
     name: '',
@@ -89,18 +212,31 @@ export function ProductEditModal({
     isActive: true,
     showBomInQuote: false,
     showBomInInvoice: false,
-    trackInventory: true,
+    trackInventory: false,
     bomLines: [] as BomInput[],
   });
+  const [baselineKey, setBaselineKey] = useState(0);
+
+  const isDirty = () => {
+    if (!baselineRef.current) return false;
+    return !snapshotsEqual(
+      baselineRef.current,
+      snapshotFromState(form, selectedGroupIds, warehouseId)
+    );
+  };
+
+  const requestClose = () => {
+    if (isDirty()) {
+      setUnsavedOpen(true);
+      return;
+    }
+    onClose();
+  };
 
   useEffect(() => {
     if (!open) return;
     setModalError('');
     setTab(initialTab);
-    if (!open) {
-      setSavedProduct(null);
-      return;
-    }
     setSavedProduct(null);
     if (product) {
       setForm({
@@ -141,11 +277,38 @@ export function ProductEditModal({
         isActive: true,
         showBomInQuote: false,
         showBomInInvoice: false,
-        trackInventory: true,
+        trackInventory: false,
         bomLines: [],
       });
     }
+    const groupSeed = product?.groupIds ?? duplicateFrom?.groupIds ?? [];
+    setSelectedGroupIds(new Set(groupSeed));
+    setInitialGroupIds(new Set(groupSeed));
   }, [open, product, duplicateFrom, initialTab]);
+
+  useEffect(() => {
+    if (!open || !token) return;
+    productGroupsApi.list(token).then(setProductGroups).catch(() => setProductGroups([]));
+    warehouseApi.list(token).then(setWarehouses).catch(() => setWarehouses([]));
+  }, [open, token]);
+
+  useEffect(() => {
+    if (!open || warehouses.length === 0) return;
+    const source = product ?? duplicateFrom;
+    const productType = source?.productType ?? 'ComponentPart';
+    const nextWarehouseId = resolveProductWarehouseId(productType, warehouses, source?.warehouseId);
+    setWarehouseId(nextWarehouseId);
+    setBaselineKey((k) => k + 1);
+  }, [open, product, duplicateFrom, warehouses]);
+
+  useEffect(() => {
+    if (!open) {
+      baselineRef.current = null;
+      setUnsavedOpen(false);
+      return;
+    }
+    baselineRef.current = snapshotFromState(form, selectedGroupIds, warehouseId);
+  }, [open, baselineKey]);
 
   useEffect(() => {
     setPreviewArticle(nextArticle);
@@ -178,6 +341,7 @@ export function ProductEditModal({
       showBomInInvoice: showBom ? f.showBomInInvoice : false,
       trackInventory: productTypeCanTrackStock(productType) ? f.trackInventory : false,
     }));
+    setWarehouseId(defaultWarehouseForProductType(productType, warehouses));
     if (!productTypeCanTrackStock(productType) && tab === 'movements') setTab('general');
   };
 
@@ -199,32 +363,10 @@ export function ProductEditModal({
   });
   const typeChanged = editing && effectiveProduct && form.productType !== effectiveProduct.productType;
 
-  const onActiveToggle = async (checked: boolean) => {
-    setForm((f) => ({ ...f, isActive: checked }));
-    if (!editing || !effectiveProduct || !token) return;
-    setSavingActive(true);
+  const saveProduct = async () => {
+    if (!token || saving) return;
     setModalError('');
-    try {
-      const updated = await catalogApi.products.setActive(token, effectiveProduct.id, {
-        isActive: checked,
-        version: effectiveProduct.version,
-      });
-      onProductUpdated?.(updated);
-      onSaved(checked ? t('products.activated') : t('products.deactivated'));
-    } catch (err) {
-      setForm((f) => ({ ...f, isActive: !checked }));
-      const msg = err instanceof Error ? err.message : 'Error';
-      setModalError(msg);
-      onError(msg);
-    } finally {
-      setSavingActive(false);
-    }
-  };
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    setModalError('');
+    setSaving(true);
     try {
       const bomPayload =
         showBom && form.bomLines.length > 0
@@ -235,6 +377,10 @@ export function ProductEditModal({
                 quantity: normalizeBomQty(b.quantity),
               }))
           : undefined;
+
+      const groupIds = [...selectedGroupIds];
+      const warehousePayload =
+        tracksStock && form.trackInventory && warehouseId ? { warehouseId } : { warehouseId: null };
 
       if (effectiveProduct) {
         const updated = await catalogApi.products.update(token, effectiveProduct.id, {
@@ -248,11 +394,28 @@ export function ProductEditModal({
           isActive: form.isActive,
           bomLines: showBom ? bomPayload ?? [] : undefined,
           version: effectiveProduct.version,
+          ...warehousePayload,
         });
-        setSavedProduct(updated);
-        onProductUpdated?.(updated);
-        onSaved(t('products.updated'));
-        onClose();
+        await syncProductGroupMembership(
+          token,
+          updated.id,
+          productGroups,
+          selectedGroupIds,
+          initialGroupIds
+        );
+        const saved = withWarehouse(withGroupIds(updated, groupIds), warehouseId, warehouses);
+        setSavedProduct(saved);
+        setInitialGroupIds(new Set(groupIds));
+        onProductUpdated?.(saved);
+        const originalActive = product?.isActive ?? baselineRef.current?.isActive ?? true;
+        const saveMessage =
+          originalActive !== saved.isActive
+            ? saved.isActive
+              ? t('products.activated', { article: saved.articleCode })
+              : t('products.deactivated', { article: saved.articleCode })
+            : t('products.updated', { article: saved.articleCode });
+        onSaved(saveMessage);
+        baselineRef.current = snapshotFromState(form, selectedGroupIds, warehouseId);
       } else {
         const created = await catalogApi.products.create(token, {
           productType: form.productType,
@@ -263,31 +426,55 @@ export function ProductEditModal({
           showBomInInvoice: form.showBomInInvoice,
           trackInventory: tracksStock && form.trackInventory,
           bomLines: bomPayload,
+          ...warehousePayload,
         });
-        setSavedProduct(created);
-        onProductUpdated?.(created);
+        if (groupIds.length > 0) {
+          await syncProductGroupMembership(
+            token,
+            created.id,
+            productGroups,
+            selectedGroupIds,
+            initialGroupIds
+          );
+        }
+        const saved = withWarehouse(withGroupIds(created, groupIds), warehouseId, warehouses);
+        setSavedProduct(saved);
+        setInitialGroupIds(new Set(groupIds));
+        onProductUpdated?.(saved);
         onSaved(t('products.createdAddPhoto'));
+        baselineRef.current = snapshotFromState(form, selectedGroupIds, warehouseId);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error';
       setModalError(msg);
       onError(msg);
+    } finally {
+      setSaving(false);
     }
   };
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    await saveProduct();
+  };
+
+  const selectedWarehouseName =
+    warehouses.find((w) => w.id === warehouseId)?.name ?? effectiveProduct?.warehouseName ?? '';
 
   return (
     <AppModal
       open={open}
-      onClose={onClose}
+      onClose={requestClose}
       className="product-card-modal"
       overlayClassName="product-card-overlay"
       zIndex={zIndex}
       noCard
       resize={PRODUCT_CARD_RESIZE}
+      preventClose={saving}
     >
         <div className="product-card-header">
           <h2>{t('products.cardTitle')}</h2>
-          <button type="button" className="product-card-close" onClick={onClose} aria-label={t('products.close')}>
+          <button type="button" className="product-card-close" onClick={requestClose} aria-label={t('products.close')}>
             ×
           </button>
         </div>
@@ -353,13 +540,9 @@ export function ProductEditModal({
               <input
                 type="checkbox"
                 checked={form.isActive}
-                disabled={savingActive}
-                onChange={(e) => void onActiveToggle(e.target.checked)}
+                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
               />
-              <span>
-                {t('products.activeItem')}
-                {savingActive && <span className="muted"> …</span>}
-              </span>
+              <span>{t('products.activeItem')}</span>
             </label>
 
             <ProductTypeSelect
@@ -428,19 +611,37 @@ export function ProductEditModal({
                 <input
                   type="checkbox"
                   checked={form.trackInventory}
-                  onChange={(e) =>
-                    setForm({ ...form, trackInventory: e.target.checked })
-                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm({ ...form, trackInventory: checked });
+                    if (checked && !warehouseId) {
+                      setWarehouseId(defaultWarehouseForProductType(form.productType, warehouses));
+                    }
+                  }}
                 />
                 {t('products.trackInventory')}
               </label>
             )}
 
+            {tracksInventory && (
+              <ProductWarehouseSelect
+                warehouses={warehouses}
+                value={warehouseId}
+                onChange={setWarehouseId}
+              />
+            )}
+
+            <ProductGroupsMultiSelect
+              groups={productGroups}
+              selectedGroupIds={selectedGroupIds}
+              onChange={setSelectedGroupIds}
+            />
+
             {tracksInventory && editing && (
               <div className="inventory-box">
                 <strong>{t('products.inventoryTitle')}</strong>
                 <div className="inventory-row">
-                  <span>{warehouseLabelForProductType(form.productType, t)}</span>
+                  <span>{selectedWarehouseName}</span>
                   <strong>{formatStockQuantity(effectiveProduct?.stockQuantity)}</strong>
                 </div>
               </div>
@@ -532,11 +733,11 @@ export function ProductEditModal({
           </form>
           </div>
           <div className="product-card-footer">
-            <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
+            <button type="button" className="btn btn-ghost-inline" onClick={requestClose} disabled={saving}>
               {t('products.close')}
             </button>
-            <button type="submit" form={PRODUCT_FORM_ID} className="btn btn-save">
-              {t('products.saveChanges')}
+            <button type="submit" form={PRODUCT_FORM_ID} className="btn btn-save" disabled={saving}>
+              {saving ? t('settings.saving') : t('products.saveChanges')}
             </button>
           </div>
           </>
@@ -579,12 +780,32 @@ export function ProductEditModal({
           </div>
           </div>
           <div className="product-card-footer">
-            <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
+            <button type="button" className="btn btn-ghost-inline" onClick={requestClose} disabled={saving}>
               {t('products.close')}
             </button>
           </div>
           </>
         )}
+
+      <UnsavedLeaveDialog
+        open={unsavedOpen}
+        title={t('products.unsavedTitle')}
+        message={t('products.unsavedCloseMessage')}
+        saveLabel={t('products.saveChanges')}
+        discardLabel={t('products.unsavedDiscard')}
+        cancelLabel={t('settings.cancel')}
+        busy={saving}
+        onSave={() => {
+          setUnsavedOpen(false);
+          setTab('general');
+          void saveProduct();
+        }}
+        onDiscard={() => {
+          setUnsavedOpen(false);
+          onClose();
+        }}
+        onCancel={() => setUnsavedOpen(false)}
+      />
     </AppModal>
   );
 }

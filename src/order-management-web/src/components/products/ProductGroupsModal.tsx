@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product } from '../../api/catalog';
+import { catalogApi, type Product } from '../../api/catalog';
 import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { useAuth } from '../../context/AuthContext';
 import { AppModal } from '../ui/AppModal';
 
 type Props = {
   open: boolean;
-  products: Product[];
   onClose: () => void;
   onChanged: () => void;
 };
 
-export function ProductGroupsModal({ open, products, onClose, onChanged }: Props) {
+export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
   const { t } = useTranslation();
   const { token } = useAuth();
   const [groups, setGroups] = useState<ProductGroup[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [memberDraft, setMemberDraft] = useState<Set<string>>(new Set());
@@ -23,7 +23,7 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
+  const loadGroups = useCallback(() => {
     if (!token) return;
     productGroupsApi
       .list(token)
@@ -34,14 +34,23 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
       .catch((e) => setError(e.message));
   }, [token]);
 
+  const loadProducts = useCallback(() => {
+    if (!token) return;
+    catalogApi.products
+      .list(token)
+      .then(setCatalogProducts)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
+  }, [token]);
+
   useEffect(() => {
     if (open) {
       setError('');
       setNewName('');
       setSearch('');
-      load();
+      loadGroups();
+      loadProducts();
     }
-  }, [open, load]);
+  }, [open, loadGroups, loadProducts]);
 
   const active = groups.find((g) => g.id === activeId);
 
@@ -55,15 +64,16 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const items = [...products].filter((p) => p.isActive).sort((a, b) => a.name.localeCompare(b.name));
+    const items = [...catalogProducts].sort((a, b) => a.articleCode.localeCompare(b.articleCode, undefined, { numeric: true }));
     if (!q) return items;
     return items.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.articleCode.toLowerCase().includes(q) ||
-        (p.legacySku?.toLowerCase().includes(q) ?? false)
+        (p.legacySku?.toLowerCase().includes(q) ?? false) ||
+        (p.description?.toLowerCase().includes(q) ?? false)
     );
-  }, [products, search]);
+  }, [catalogProducts, search]);
 
   const onCreateGroup = async () => {
     if (!token || !newName.trim()) return;
@@ -72,7 +82,7 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
     try {
       const g = await productGroupsApi.create(token, newName.trim());
       setNewName('');
-      await load();
+      loadGroups();
       setActiveId(g.id);
       onChanged();
     } catch (e) {
@@ -87,7 +97,7 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
     setBusy(true);
     try {
       await productGroupsApi.delete(token, id);
-      load();
+      loadGroups();
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -102,7 +112,7 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
     setError('');
     try {
       await productGroupsApi.setMembers(token, active.id, [...memberDraft]);
-      load();
+      loadGroups();
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -122,9 +132,20 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
 
   return (
     <AppModal open={open} onClose={onClose} size="xl" labelledBy="product-groups-title">
-      <h2 id="product-groups-title" className="app-modal__title">
-        {t('products.groupsTitle')}
-      </h2>
+      <header className="product-groups-header">
+        <h2 id="product-groups-title" className="app-modal__title">
+          {t('products.groupsTitle')}
+        </h2>
+        <button
+          type="button"
+          className="app-modal-panel__close"
+          onClick={onClose}
+          aria-label={t('products.close')}
+        >
+          ×
+        </button>
+      </header>
+
       {error && <div className="error-banner">{error}</div>}
 
       <div className="product-groups-layout">
@@ -179,9 +200,18 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('products.searchPlaceholder')}
               />
+              <p className="product-groups-members-hint muted">
+                {t('products.groupsMembersCount', { count: filteredProducts.length })}
+              </p>
               <div className="product-groups-checklist">
+                {filteredProducts.length === 0 && (
+                  <p className="muted product-groups-checklist-empty">{t('products.empty')}</p>
+                )}
                 {filteredProducts.map((p) => (
-                  <label key={p.id} className="product-groups-check">
+                  <label
+                    key={p.id}
+                    className={`product-groups-check${p.isActive ? '' : ' product-groups-check--inactive'}`}
+                  >
                     <input
                       type="checkbox"
                       checked={memberDraft.has(p.id)}
@@ -193,15 +223,21 @@ export function ProductGroupsModal({ open, products, onClose, onChanged }: Props
                   </label>
                 ))}
               </div>
-              <div className="product-groups-members-actions">
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onSaveMembers()}>
-                  {t('products.groupsSaveMembers')}
-                </button>
-              </div>
             </>
           )}
         </section>
       </div>
+
+      <footer className="product-groups-footer">
+        <button type="button" className="btn btn-ghost-inline" onClick={onClose} disabled={busy}>
+          {t('products.close')}
+        </button>
+        {active && (
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onSaveMembers()}>
+            {t('products.groupsSaveMembers')}
+          </button>
+        )}
+      </footer>
     </AppModal>
   );
 }

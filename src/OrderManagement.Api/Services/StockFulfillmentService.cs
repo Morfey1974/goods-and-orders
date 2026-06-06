@@ -7,18 +7,19 @@ namespace OrderManagement.Api.Services;
 /// <summary>
 /// Warehouse issues when חשבון חיוב / חשבון עסקה (H-) is issued — not on quote or קבלה.
 /// </summary>
-public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse)
+public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse, InventoryCostService inventoryCost)
 {
     public async Task DeductOrderStockAsync(
         Guid tenantId,
         Order order,
         string chargeInvoiceReference,
+        DateTime movementDate,
         CancellationToken ct)
     {
         foreach (var line in order.Lines)
         {
             await DeductProductSaleAsync(
-                tenantId, line.ProductId, line.Quantity, chargeInvoiceReference, ct);
+                tenantId, line.ProductId, line.Quantity, chargeInvoiceReference, movementDate, ct);
         }
     }
 
@@ -27,6 +28,7 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         Guid productId,
         decimal quantity,
         string? reference,
+        DateTime movementDate,
         CancellationToken ct)
     {
         if (quantity <= 0)
@@ -37,47 +39,59 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         if (product is null)
             throw new InvalidOperationException("Product not found.");
 
-        if (!ProductInventoryHelper.TracksStock(product))
-            return;
-
         var note = string.IsNullOrWhiteSpace(reference) ? "Charge invoice (H-)" : reference;
+        var when = movementDate.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(movementDate, DateTimeKind.Utc)
+            : movementDate.ToUniversalTime();
 
         if (product.ProductType is ProductType.FinishedGood or ProductType.Bundle)
         {
-            var fgWh = await warehouse.GetForProductAsync(tenantId, product, ct);
-            await warehouse.ApplyMovementAsync(
-                tenantId, fgWh.Id, product.Id, StockMovementType.Issue, quantity, note, ct);
-
             var bomLines = await db.BomLines
                 .Where(b => b.ParentProductId == product.Id)
                 .ToListAsync(ct);
 
-            foreach (var line in bomLines)
+            if (bomLines.Count > 0)
             {
-                var component = await db.Products.FirstOrDefaultAsync(
-                    p => p.Id == line.ComponentProductId && p.TenantId == tenantId, ct);
-                if (component is null) continue;
-                if (!ProductInventoryHelper.TracksStock(component)) continue;
+                // Assembled FG: no FG stock — deduct BOM components only.
+                foreach (var line in bomLines)
+                {
+                    var component = await db.Products.FirstOrDefaultAsync(
+                        p => p.Id == line.ComponentProductId && p.TenantId == tenantId, ct);
+                    if (component is null) continue;
+                    if (!ProductInventoryHelper.TracksStock(component)) continue;
 
-                var cpWh = await warehouse.GetForProductAsync(tenantId, component, ct);
-                var componentQty = StockQuantity.Normalize(quantity * line.Quantity);
-                if (componentQty <= 0) continue;
-                await warehouse.ApplyMovementAsync(
-                    tenantId,
-                    cpWh.Id,
-                    component.Id,
-                    StockMovementType.Issue,
-                    componentQty,
-                    $"{note} (BOM {product.ArticleCode})",
-                    ct);
+                    var cpWh = await warehouse.GetForProductAsync(tenantId, component, ct);
+                    var componentQty = StockQuantity.Normalize(quantity * line.Quantity);
+                    if (componentQty <= 0) continue;
+                    await inventoryCost.IssueAsync(
+                        tenantId,
+                        component.Id,
+                        cpWh.Id,
+                        componentQty,
+                        $"{note} (BOM {product.ArticleCode})",
+                        when,
+                        ct);
+                }
+
+                return;
             }
+
+            // Purchased finished good (no BOM): deduct FG stock when tracked.
+            if (!ProductInventoryHelper.TracksStock(product))
+                return;
+
+            var fgWh = await warehouse.GetForProductAsync(tenantId, product, ct);
+            await inventoryCost.IssueAsync(
+                tenantId, product.Id, fgWh.Id, quantity, note, when, ct);
+            return;
         }
-        else
-        {
-            var wh = await warehouse.GetForProductAsync(tenantId, product, ct);
-            await warehouse.ApplyMovementAsync(
-                tenantId, wh.Id, product.Id, StockMovementType.Issue, quantity, note, ct);
-        }
+
+        if (!ProductInventoryHelper.TracksStock(product))
+            return;
+
+        var wh = await warehouse.GetForProductAsync(tenantId, product, ct);
+        await inventoryCost.IssueAsync(
+            tenantId, product.Id, wh.Id, quantity, note, when, ct);
     }
 
     [Obsolete("Use DeductProductSaleAsync")]
@@ -87,5 +101,5 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         decimal quantity,
         string? reference,
         CancellationToken ct) =>
-        DeductProductSaleAsync(tenantId, productId, quantity, reference, ct);
+        DeductProductSaleAsync(tenantId, productId, quantity, reference, DateTime.UtcNow, ct);
 }

@@ -25,6 +25,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<ArticleSequenceService>();
+builder.Services.AddScoped<DocumentNumberService>();
+builder.Services.AddScoped<DocumentImportService>();
 builder.Services.AddScoped<WarehouseService>();
 builder.Services.AddScoped<StockFulfillmentService>();
 builder.Services.AddScoped<DocumentService>();
@@ -38,6 +40,8 @@ builder.Services.AddSingleton<CustomerLogoService>();
 builder.Services.AddScoped<TenantEmailService>();
 builder.Services.AddScoped<PasswordResetMailer>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<InventoryCostService>();
+builder.Services.AddScoped<InventoryValuationService>();
 builder.Services.AddScoped<PurchaseReceiptService>();
 builder.Services.AddScoped<SupplierImportService>();
 builder.Services.AddSingleton<SubscriptionService>();

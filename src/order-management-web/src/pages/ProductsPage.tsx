@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, PRODUCT_TYPES, type Product } from '../api/catalog';
 import { useAuth } from '../context/AuthContext';
@@ -9,8 +9,15 @@ import { ProductEditModal } from '../components/products/ProductEditModal';
 import { ProductPhoto } from '../components/products/ProductPhoto';
 import { ProductGroupsModal } from '../components/products/ProductGroupsModal';
 import { productGroupsApi, type ProductGroup } from '../api/productGroups';
+import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
 import { isServiceProductType } from '../lib/productKind';
 import { productTracksStock } from '../lib/productInventory';
+import {
+  PRODUCTS_CATALOG_COLUMN_KEYS,
+  PRODUCTS_CATALOG_COLUMN_WIDTHS_KEY,
+  PRODUCTS_CATALOG_DEFAULT_WIDTHS,
+  type ProductsCatalogColumnKey,
+} from '../lib/productsCatalogColumns';
 import { normalizeStockQuantity } from '../lib/stockQuantity';
 import { warehouseLabelForProductType } from '../lib/warehouseLabel';
 import '../styles/products-catalog.css';
@@ -193,6 +200,42 @@ export function ProductsPage() {
     tabIndex: 0,
   });
 
+  const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
+    PRODUCTS_CATALOG_COLUMN_WIDTHS_KEY,
+    PRODUCTS_CATALOG_DEFAULT_WIDTHS
+  );
+
+  const renderHeaderCell = (
+    colKey: ProductsCatalogColumnKey,
+    label: ReactNode,
+    sortKey?: SortKey
+  ) => {
+    const sortProps = sortKey ? sortThProps(sortKey) : null;
+    const className = ['catalog-th-resizable', sortProps?.className].filter(Boolean).join(' ');
+    const thProps = sortProps
+      ? {
+          className,
+          onClick: sortProps.onClick,
+          onKeyDown: sortProps.onKeyDown,
+          'aria-sort': sortProps['aria-sort'],
+          tabIndex: sortProps.tabIndex,
+        }
+      : { className };
+    return (
+      <th key={colKey} {...thProps}>
+        <span className="catalog-th-label">{label}</span>
+        <span
+          className="catalog-col-resize-handle"
+          onMouseDown={(e) => onResizeHandleMouseDown(colKey, e)}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('products.resizeColumn')}
+          tabIndex={-1}
+        />
+      </th>
+    );
+  };
+
   useEffect(() => {
     setPage(0);
   }, [search, filterType, filterStock, filterStatus, pageSize, sortKey, sortDir]);
@@ -243,7 +286,12 @@ export function ProductsPage() {
 
   const onProductUpdated = (updated: Product) => {
     setEditing(updated);
-    setList((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    setDuplicateFrom(null);
+    setList((prev) => {
+      const exists = prev.some((x) => x.id === updated.id);
+      if (exists) return prev.map((x) => (x.id === updated.id ? updated : x));
+      return [updated, ...prev];
+    });
   };
 
   const onQuickPrice = async (p: Product, value: number) => {
@@ -521,56 +569,71 @@ export function ProductsPage() {
 
       <div className="card catalog-table-wrap" ref={tableTopRef}>
         <div className="catalog-table-scroll">
-        <table className="catalog-table">
+        <table className="catalog-table" style={{ minWidth: tableMinWidth }}>
+          <colgroup>
+            {PRODUCTS_CATALOG_COLUMN_KEYS.map((key) => (
+              <col key={key} style={{ width: widths[key] }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>{t('products.colImage')}</th>
-              <th {...sortThProps('articleCode')}>
+              {renderHeaderCell('image', t('products.colImage'))}
+              {renderHeaderCell(
+                'articleCode',
                 <span className="catalog-th-sort-label">
                   {t('products.articleCol')}
                   <span className="sort-indicator" aria-hidden>
                     {sortMark('articleCode')}
                   </span>
-                </span>
-              </th>
-              <th {...sortThProps('name')}>
+                </span>,
+                'articleCode'
+              )}
+              {renderHeaderCell(
+                'name',
                 <span className="catalog-th-sort-label">
                   {t('products.name')}
                   <span className="sort-indicator" aria-hidden>
                     {sortMark('name')}
                   </span>
-                </span>
-              </th>
-              <th>{t('products.kindLabel')}</th>
-              <th>{t('products.typesLabel')}</th>
-              <th>{t('products.groupsCol')}</th>
-              <th>{t('products.warehouseCol')}</th>
-              <th {...sortThProps('unitPrice')}>
+                </span>,
+                'name'
+              )}
+              {renderHeaderCell('kind', t('products.kindLabel'))}
+              {renderHeaderCell('type', t('products.typesLabel'))}
+              {renderHeaderCell('groups', t('products.groupsCol'))}
+              {renderHeaderCell('warehouse', t('products.warehouseCol'))}
+              {renderHeaderCell(
+                'unitPrice',
                 <span className="catalog-th-sort-label">
                   {t('products.price')}
                   <span className="sort-indicator" aria-hidden>
                     {sortMark('unitPrice')}
                   </span>
-                </span>
-              </th>
-              <th>{t('products.trackInventoryCol')}</th>
-              <th {...sortThProps('stockQuantity')}>
+                </span>,
+                'unitPrice'
+              )}
+              {renderHeaderCell('trackInventory', t('products.trackInventoryCol'))}
+              {renderHeaderCell(
+                'stockQuantity',
                 <span className="catalog-th-sort-label">
                   {t('products.stock')}
                   <span className="sort-indicator" aria-hidden>
                     {sortMark('stockQuantity')}
                   </span>
-                </span>
-              </th>
-              <th {...sortThProps('isActive')}>
+                </span>,
+                'stockQuantity'
+              )}
+              {renderHeaderCell(
+                'isActive',
                 <span className="catalog-th-sort-label">
                   {t('products.status')}
                   <span className="sort-indicator" aria-hidden>
                     {sortMark('isActive')}
                   </span>
-                </span>
-              </th>
-              <th></th>
+                </span>,
+                'isActive'
+              )}
+              {renderHeaderCell('actions', null)}
             </tr>
           </thead>
           <tbody>
@@ -591,7 +654,14 @@ export function ProductsPage() {
                   )}
                 </td>
                 <td>
-                  <code>{p.articleCode}</code>
+                  <button
+                    type="button"
+                    className="product-article-link"
+                    onClick={() => void openEdit(p)}
+                    title={t('products.edit')}
+                  >
+                    <code>{p.articleCode}</code>
+                  </button>
                 </td>
                 <td className="product-cell-name">
                   <strong>{p.name}</strong>
@@ -613,7 +683,7 @@ export function ProductsPage() {
                     .filter(Boolean)
                     .join(', ') || '—'}
                 </td>
-                <td>{warehouseLabelForProductType(p.productType, t)}</td>
+                <td>{p.warehouseName ?? warehouseLabelForProductType(p.productType, t)}</td>
                 <td>
                   <input
                     type="number"
@@ -750,7 +820,6 @@ export function ProductsPage() {
 
       <ProductGroupsModal
         open={groupsOpen}
-        products={list}
         onClose={() => setGroupsOpen(false)}
         onChanged={load}
       />
@@ -802,7 +871,6 @@ export function ProductsPage() {
         onClose={closeProductModal}
         onSaved={(msg) => {
           setMessage(msg);
-          closeProductModal();
           load();
         }}
         onError={setError}

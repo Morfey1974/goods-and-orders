@@ -5,6 +5,6 @@ export function productTypeCanTrackStock(productType: string) {
 }
 
 export function productTracksStock(product: { productType: string; trackInventory?: boolean }) {
-  const track = product.trackInventory ?? true;
+  const track = product.trackInventory ?? false;
   return track && productTypeCanTrackStock(product.productType);
 }

@@ -16,7 +16,10 @@ public class Product
     public bool ShowBomInQuote { get; set; }
     public bool ShowBomInInvoice { get; set; }
     /// <summary>When false, warehouse balances and receipt/issue movements are skipped.</summary>
-    public bool TrackInventory { get; set; } = true;
+    public bool TrackInventory { get; set; } = false;
+    /// <summary>Explicit warehouse for stock; when null, defaults by product type.</summary>
+    public Guid? WarehouseId { get; set; }
+    public Warehouse? Warehouse { get; set; }
     public bool IsActive { get; set; } = true;
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

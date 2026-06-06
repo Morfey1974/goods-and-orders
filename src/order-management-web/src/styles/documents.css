@@ -51,6 +51,10 @@
   border-radius: 6px;
 }
 
+.documents-import-input {
+  display: none;
+}
+
 .documents-create-wrap {
   position: relative;
 }

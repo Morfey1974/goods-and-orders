@@ -22,6 +22,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<StockBalance> StockBalances => Set<StockBalance>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<InventoryLot> InventoryLots => Set<InventoryLot>();
+    public DbSet<InventoryLotAllocation> InventoryLotAllocations => Set<InventoryLotAllocation>();
+    public DbSet<InventoryAverageCost> InventoryAverageCosts => Set<InventoryAverageCost>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<BusinessDocument> BusinessDocuments => Set<BusinessDocument>();
@@ -213,6 +216,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasKey(x => x.Id);
             e.Property(x => x.Quantity).HasPrecision(18, 4);
             e.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            e.Property(x => x.UnitCostIls).HasPrecision(18, 2);
             e.Property(x => x.SupplierSku).HasMaxLength(64);
             e.Property(x => x.Notes).HasMaxLength(512);
             e.HasOne(x => x.PurchaseReceipt)
@@ -236,6 +240,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.UnitPrice).HasPrecision(18, 2);
             e.HasIndex(x => new { x.TenantId, x.ArticleCode }).IsUnique();
             e.HasIndex(x => new { x.TenantId, x.ProductType });
+            e.HasIndex(x => x.WarehouseId);
+            e.HasOne(x => x.Warehouse)
+                .WithMany()
+                .HasForeignKey(x => x.WarehouseId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ProductGroup>(e =>
@@ -323,7 +332,58 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasKey(x => x.Id);
             e.Property(x => x.Quantity).HasPrecision(18, 4);
             e.Property(x => x.BalanceAfter).HasPrecision(18, 4);
+            e.Property(x => x.UnitCost).HasPrecision(18, 2);
+            e.Property(x => x.TotalCost).HasPrecision(18, 2);
             e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasIndex(x => new { x.TenantId, x.MovementDate });
+        });
+
+        modelBuilder.Entity<InventoryLot>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.QuantityRemaining).HasPrecision(18, 4);
+            e.Property(x => x.UnitCostIls).HasPrecision(18, 2);
+            e.HasIndex(x => new { x.TenantId, x.ProductId, x.WarehouseId, x.ReceivedAt });
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Warehouse)
+                .WithMany()
+                .HasForeignKey(x => x.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InventoryLotAllocation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Quantity).HasPrecision(18, 4);
+            e.Property(x => x.UnitCostIls).HasPrecision(18, 2);
+            e.Property(x => x.TotalCostIls).HasPrecision(18, 2);
+            e.HasIndex(x => x.StockMovementId);
+            e.HasOne(x => x.Lot)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryLotId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.StockMovement)
+                .WithMany()
+                .HasForeignKey(x => x.StockMovementId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InventoryAverageCost>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UnitCostIls).HasPrecision(18, 2);
+            e.HasIndex(x => new { x.TenantId, x.ProductId, x.WarehouseId }).IsUnique();
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Warehouse)
+                .WithMany()
+                .HasForeignKey(x => x.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<BusinessDocument>(e =>
@@ -333,7 +393,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Description).HasMaxLength(512);
             e.Property(x => x.PaymentMethod).HasMaxLength(64);
             e.Property(x => x.TotalAmount).HasPrecision(18, 2);
-            e.HasIndex(x => new { x.TenantId, x.DocumentNumber }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.DocumentType, x.DocumentNumber }).IsUnique();
             e.HasIndex(x => new { x.TenantId, x.IssueDate });
             e.HasIndex(x => new { x.TenantId, x.DocumentType, x.Status });
             e.HasOne(x => x.Customer)

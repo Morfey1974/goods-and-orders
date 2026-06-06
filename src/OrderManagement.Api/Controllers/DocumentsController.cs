@@ -16,7 +16,8 @@ namespace OrderManagement.Api.Controllers;
 public class DocumentsController(
     AppDbContext db,
     DocumentService documents,
-    DocumentPdfService documentPdf) : ControllerBase
+    DocumentPdfService documentPdf,
+    DocumentImportService documentImport) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<DocumentListResponseDto>> List(
@@ -468,5 +469,26 @@ public class DocumentsController(
             DocumentType.Receipt => $"receipt-{num}.pdf",
             _ => $"document-{num}.pdf"
         };
+    }
+
+    [HttpPost("import")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<DocumentImportResultDto>> Import(
+        IFormFile file,
+        CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        if (file.Length == 0)
+            return BadRequest(new { message = "File is empty." });
+
+        var name = file.FileName.ToLowerInvariant();
+        if (!name.EndsWith(".csv") && !name.EndsWith(".txt"))
+            return BadRequest(new { message = "Use .csv or .txt file (UTF-8)." });
+
+        await using var stream = file.OpenReadStream();
+        var result = await documentImport.ImportYeshCsvAsync(tenantId.Value, stream, ct);
+        return Ok(result);
     }
 }

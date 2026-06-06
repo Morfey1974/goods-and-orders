@@ -265,6 +265,13 @@ public class ProductsController(
             UpdatedAt = now
         };
 
+        if (request.WarehouseId is { } createWhId)
+        {
+            var whErr = await ValidateWarehouseIdAsync(tenantId.Value, createWhId, ct);
+            if (whErr is not null) return BadRequest(new { message = whErr });
+            product.WarehouseId = createWhId;
+        }
+
         db.Products.Add(product);
 
         if (request.BomLines?.Count > 0)
@@ -277,7 +284,7 @@ public class ProductsController(
 
         if (ProductInventoryHelper.TracksStock(product))
         {
-            var wh = await warehouseService.GetForProductTypeAsync(tenantId.Value, type, ct);
+            var wh = await warehouseService.GetForProductAsync(tenantId.Value, product, ct);
             await warehouseService.GetOrCreateBalanceAsync(wh.Id, product.Id, ct);
         }
 
@@ -331,6 +338,9 @@ public class ProductsController(
             var bomErr = await ReplaceBomLinesAsync(product, request.BomLines, tenantId.Value, ct);
             if (bomErr is not null) return BadRequest(new { message = bomErr });
         }
+
+        var warehouseErr = await ApplyWarehouseChangeAsync(product, request.WarehouseId, tenantId.Value, ct);
+        if (warehouseErr is not null) return BadRequest(new { message = warehouseErr });
 
         product.Version++;
         product.UpdatedAt = DateTime.UtcNow;
@@ -535,20 +545,17 @@ public class ProductsController(
         if (usedAsComponent && newType is not (ProductType.ComponentPart or ProductType.Spare))
             return "This item is used in other products' BOM. Change type to CP or SP only, or remove it from BOM first.";
 
-        var (compWhId, fgWhId) = await WarehouseIdsAsync(tenantId, ct);
+        var oldTracks = ProductTypePrefixes.TracksStock(product.ProductType);
+        var newTracks = ProductTypePrefixes.TracksStock(newType);
         var hasMovements = await db.StockMovements.AnyAsync(
             m => m.ProductId == product.Id && m.TenantId == tenantId, ct);
 
-        var oldTracks = ProductTypePrefixes.TracksStock(product.ProductType);
-        var newTracks = ProductTypePrefixes.TracksStock(newType);
-        var oldWhId = ProductTypePrefixes.GetWarehouseKind(product.ProductType) == WarehouseKind.FinishedGoods
-            ? fgWhId
-            : compWhId;
+        var oldWh = await warehouseService.GetForProductAsync(tenantId, product, ct);
 
         if (!newTracks && oldTracks)
         {
             var qty = await db.StockBalances
-                .Where(b => b.WarehouseId == oldWhId && b.ProductId == product.Id)
+                .Where(b => b.WarehouseId == oldWh.Id && b.ProductId == product.Id)
                 .Select(b => (decimal?)b.Quantity)
                 .FirstOrDefaultAsync(ct) ?? 0;
             if (qty > 0)
@@ -569,10 +576,63 @@ public class ProductsController(
 
         if (newTracks)
         {
-            var newWh = await warehouseService.GetForProductTypeAsync(tenantId, newType, ct);
+            var newWh = await warehouseService.GetForProductAsync(tenantId, product, ct);
             await warehouseService.GetOrCreateBalanceAsync(newWh.Id, product.Id, ct);
         }
 
+        return null;
+    }
+
+    private async Task<string?> ValidateWarehouseIdAsync(
+        Guid tenantId,
+        Guid warehouseId,
+        CancellationToken ct)
+    {
+        var wh = await warehouseService.GetByIdAsync(tenantId, warehouseId, ct);
+        if (wh is null) return "Warehouse not found.";
+        if (!wh.IsActive) return "Warehouse is not active.";
+        return null;
+    }
+
+    private async Task<string?> ApplyWarehouseChangeAsync(
+        Product product,
+        Guid? newWarehouseId,
+        Guid tenantId,
+        CancellationToken ct)
+    {
+        if (product.WarehouseId == newWarehouseId)
+            return null;
+
+        if (newWarehouseId is { } wid)
+        {
+            var err = await ValidateWarehouseIdAsync(tenantId, wid, ct);
+            if (err is not null) return err;
+        }
+
+        if (ProductInventoryHelper.TracksStock(product))
+        {
+            var currentWh = await warehouseService.GetForProductAsync(tenantId, product, ct);
+            var previousWarehouseId = product.WarehouseId;
+            product.WarehouseId = newWarehouseId;
+            var nextWh = await warehouseService.GetForProductAsync(tenantId, product, ct);
+            product.WarehouseId = previousWarehouseId;
+
+            if (currentWh.Id != nextWh.Id)
+            {
+                var qty = await db.StockBalances
+                    .Where(b => b.WarehouseId == currentWh.Id && b.ProductId == product.Id)
+                    .Select(b => (decimal?)b.Quantity)
+                    .FirstOrDefaultAsync(ct) ?? 0;
+                if (qty > 0)
+                    return "Cannot change warehouse while quantity is greater than zero on the current warehouse.";
+            }
+
+            product.WarehouseId = newWarehouseId;
+            await warehouseService.GetOrCreateBalanceAsync(nextWh.Id, product.Id, ct);
+            return null;
+        }
+
+        product.WarehouseId = newWarehouseId;
         return null;
     }
 
