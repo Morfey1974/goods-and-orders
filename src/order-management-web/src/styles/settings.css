@@ -882,6 +882,24 @@
   margin-top: 0.65rem;
 }
 
+.settings-section--danger {
+  border-color: color-mix(in srgb, var(--palette-red) 35%, var(--border));
+}
+
+.settings-stock-reset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+  max-width: 40rem;
+}
+
+.settings-stock-reset-hint {
+  margin: 0;
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
 .document-sequences-form .field-hint {
   margin: 0 0 0.75rem;
 }

@@ -7,6 +7,7 @@ import { AppModal } from '../components/ui/AppModal';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ProductEditModal } from '../components/products/ProductEditModal';
 import { ProductPhoto } from '../components/products/ProductPhoto';
+import { ProductCodeCell } from '../components/products/ProductCodeCell';
 import { ProductGroupsModal } from '../components/products/ProductGroupsModal';
 import { productGroupsApi, type ProductGroup } from '../api/productGroups';
 import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
@@ -660,7 +661,7 @@ export function ProductsPage() {
                     onClick={() => void openEdit(p)}
                     title={t('products.edit')}
                   >
-                    <code>{p.articleCode}</code>
+                    <ProductCodeCell articleCode={p.articleCode} legacySku={p.legacySku} />
                   </button>
                 </td>
                 <td className="product-cell-name">

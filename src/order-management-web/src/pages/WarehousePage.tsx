@@ -8,6 +8,7 @@ import { WarehouseMovementsModal } from '../components/WarehouseMovementsModal';
 import { WAREHOUSE_RECEIPT_RESIZE } from '../lib/resizablePanelKeys';
 import { formatStockQuantity, normalizeStockQuantity } from '../lib/stockQuantity';
 import { useAuth } from '../context/AuthContext';
+import { ProductCodeCell } from '../components/products/ProductCodeCell';
 import '../styles/documents.css';
 
 const ALL_WAREHOUSES = '';
@@ -18,7 +19,7 @@ export function WarehousePage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [filterWarehouseId, setFilterWarehouseId] = useState(ALL_WAREHOUSES);
   const [balances, setBalances] = useState<StockBalance[]>([]);
-  const [products, setProducts] = useState<{ id: string; articleCode: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; articleCode: string; legacySku?: string | null; name: string }[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -45,7 +46,7 @@ export function WarehousePage() {
     const whForProducts = filterWarehouseId || warehouses.find((w) => w.kind === 'Components')?.id;
     if (whForProducts) {
       warehouseApi.stockProducts(token, whForProducts).then((p) =>
-        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
+        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
       ).catch(() => {});
     }
   }, [token, selectedWarehouseId, filterWarehouseId, warehouses]);
@@ -88,7 +89,7 @@ export function WarehousePage() {
     const whId = filterWarehouseId || warehouses[0]?.id;
     if (whId && token) {
       warehouseApi.stockProducts(token, whId).then((p) =>
-        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
+        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
       );
     }
     setReceiptOpen(true);
@@ -99,13 +100,13 @@ export function WarehousePage() {
       <div className="page-header">
         <h1>{t('nav.warehouse')}</h1>
         <div className="page-header-actions">
-          <Link to="/warehouse/opening-balance" className="btn btn-ghost-inline">
+          <Link to="/warehouse/opening-balance" className="btn btn-secondary">
             {t('inventory.openingNav')}
           </Link>
-          <Link to="/reports/inventory-valuation" className="btn btn-ghost-inline">
+          <Link to="/reports/inventory-valuation" className="btn btn-secondary">
             {t('inventory.valuationNav')}
           </Link>
-          <button type="button" className="btn btn-ghost-inline" onClick={() => setManageOpen(true)}>
+          <button type="button" className="btn btn-secondary" onClick={() => setManageOpen(true)}>
             {t('warehouse.manageWarehouses')}
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => setMovementsOpen(true)}>
@@ -114,7 +115,7 @@ export function WarehousePage() {
           <Link to="/purchase-receipts/new" className="btn btn-secondary">
             {t('purchaseReceipts.add')}
           </Link>
-          <button type="button" className="btn btn-primary" onClick={openReceipt}>
+          <button type="button" className="btn btn-secondary" onClick={openReceipt}>
             {t('warehouse.receipt')}
           </button>
         </div>
@@ -153,7 +154,7 @@ export function WarehousePage() {
             {balances.map((b) => (
               <tr key={`${b.warehouseId}-${b.productId}`}>
                 {showWarehouseColumn && <td>{b.warehouseName}</td>}
-                <td><code>{b.articleCode}</code></td>
+                <td><ProductCodeCell articleCode={b.articleCode} legacySku={b.legacySku} /></td>
                 <td>{b.productName}</td>
                 <td>{formatStockQuantity(b.quantity)}</td>
               </tr>
@@ -215,7 +216,7 @@ export function WarehousePage() {
                   setReceipt({ ...receipt, warehouseId: whId, productId: '' });
                   if (token && whId) {
                     warehouseApi.stockProducts(token, whId).then((p) =>
-                      setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, name: x.name })))
+                      setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
                     );
                   }
                 }}
@@ -236,7 +237,10 @@ export function WarehousePage() {
               >
                 <option value="">—</option>
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.articleCode} — {p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.articleCode}
+                    {p.legacySku ? ` (${p.legacySku})` : ''} — {p.name}
+                  </option>
                 ))}
               </select>
             </label>

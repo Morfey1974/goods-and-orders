@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PRODUCT_TYPES, type Product } from '../../api/catalog';
-import { normalizeStockQuantity } from '../../lib/stockQuantity';
+import {
+  finalizePriceDraft,
+  finalizeQuantityDraft,
+  normalizeStockQuantity,
+  sanitizePriceDraft,
+  sanitizeQuantityDraft,
+} from '../../lib/stockQuantity';
 
 export type PickedProductLine = {
   productId: string;
@@ -11,7 +17,7 @@ export type PickedProductLine = {
   unitPrice: number;
 };
 
-type RowDraft = { quantity: number; unitPrice: number };
+type RowDraft = { quantity: string; unitPrice: string };
 
 type Props = {
   open: boolean;
@@ -22,6 +28,10 @@ type Props = {
 
 function tracksStock(type: string) {
   return ['ComponentPart', 'FinishedGood', 'Bundle', 'Spare'].includes(type);
+}
+
+function draftForProduct(p: Product): RowDraft {
+  return { quantity: '1', unitPrice: String(p.unitPrice) };
 }
 
 export function DocumentProductPickerModal({ open, products, onClose, onSave }: Props) {
@@ -38,7 +48,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
     setSelectedIds(new Set());
     const drafts: Record<string, RowDraft> = {};
     for (const p of products) {
-      drafts[p.id] = { quantity: 1, unitPrice: p.unitPrice };
+      drafts[p.id] = draftForProduct(p);
     }
     setRowDrafts(drafts);
   }, [open, products]);
@@ -64,7 +74,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
   };
 
   const toggleSelect = (p: Product) => {
-    const draft = rowDrafts[p.id] ?? { quantity: 1, unitPrice: p.unitPrice };
+    const draft = rowDrafts[p.id] ?? draftForProduct(p);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(p.id)) next.delete(p.id);
@@ -75,8 +85,8 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
   };
 
   const changeQty = (id: string, delta: number) => {
-    const cur = rowDrafts[id]?.quantity ?? 1;
-    updateDraft(id, { quantity: Math.max(1, normalizeStockQuantity(cur + delta)) });
+    const cur = finalizeQuantityDraft(rowDrafts[id]?.quantity ?? '1');
+    updateDraft(id, { quantity: String(Math.max(1, normalizeStockQuantity(cur + delta))) });
   };
 
   const handleSave = () => {
@@ -88,8 +98,8 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
       lines.push({
         productId: p.id,
         description: p.name,
-        quantity: normalizeStockQuantity(draft.quantity),
-        unitPrice: draft.unitPrice,
+        quantity: finalizeQuantityDraft(draft.quantity),
+        unitPrice: finalizePriceDraft(draft.unitPrice),
       });
     }
     if (lines.length) onSave(lines);
@@ -162,7 +172,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
                 </tr>
               )}
               {filtered.map((p) => {
-                const draft = rowDrafts[p.id] ?? { quantity: 1, unitPrice: p.unitPrice };
+                const draft = rowDrafts[p.id] ?? draftForProduct(p);
                 const isSelected = selectedIds.has(p.id);
                 const stock = p.stockQuantity ?? 0;
                 const showStock = tracksStock(p.productType);
@@ -183,14 +193,16 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
                           −
                         </button>
                         <input
-                          type="number"
-                          min={1}
-                          step={1}
+                          type="text"
                           inputMode="numeric"
+                          autoComplete="off"
                           value={draft.quantity}
                           onChange={(e) =>
+                            updateDraft(p.id, { quantity: sanitizeQuantityDraft(e.target.value) })
+                          }
+                          onBlur={() =>
                             updateDraft(p.id, {
-                              quantity: normalizeStockQuantity(Number(e.target.value)),
+                              quantity: String(finalizeQuantityDraft(draft.quantity)),
                             })
                           }
                         />
@@ -208,12 +220,17 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
                     </td>
                     <td>
                       <input
-                        type="number"
-                        min={0}
-                        step={0.01}
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
                         className="doc-picker-price-input"
                         value={draft.unitPrice}
-                        onChange={(e) => updateDraft(p.id, { unitPrice: Number(e.target.value) })}
+                        onChange={(e) => updateDraft(p.id, { unitPrice: sanitizePriceDraft(e.target.value) })}
+                        onBlur={() =>
+                          updateDraft(p.id, {
+                            unitPrice: String(finalizePriceDraft(draft.unitPrice)),
+                          })
+                        }
                       />
                     </td>
                     <td className="doc-picker-name">{p.name}</td>

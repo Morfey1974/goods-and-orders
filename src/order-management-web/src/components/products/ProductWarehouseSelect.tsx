@@ -25,6 +25,11 @@ export function ProductWarehouseSelect({ warehouses, value, onChange, disabled }
 
   const triggerLabel = selected?.name ?? t('products.warehouseCardPlaceholder');
 
+  const pickWarehouse = (warehouseId: string) => {
+    onChange(warehouseId);
+    setOpen(false);
+  };
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -32,8 +37,8 @@ export function ProductWarehouseSelect({ warehouses, value, onChange, disabled }
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('click', onDoc);
+    return () => document.removeEventListener('click', onDoc);
   }, [open]);
 
   useEffect(() => {
@@ -84,16 +89,15 @@ export function ProductWarehouseSelect({ warehouses, value, onChange, disabled }
         {open && (
           <div ref={menuRef} className="product-groups-select-menu" role="listbox">
             {activeWarehouses.map((w) => (
-              <label key={w.id} className="product-groups-select-option">
-                <input
-                  type="radio"
-                  name="product-warehouse"
-                  checked={value === w.id}
-                  onChange={() => {
-                    onChange(w.id);
-                    setOpen(false);
-                  }}
-                />
+              <label
+                key={w.id}
+                className="product-groups-select-option"
+                onClick={(e) => {
+                  e.preventDefault();
+                  pickWarehouse(w.id);
+                }}
+              >
+                <input type="radio" name="product-warehouse" readOnly tabIndex={-1} checked={value === w.id} />
                 <span className="product-groups-select-option-name">{w.name}</span>
               </label>
             ))}

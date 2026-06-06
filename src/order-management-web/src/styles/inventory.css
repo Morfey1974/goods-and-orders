@@ -1,0 +1,331 @@
+/* Inventory pages — aligned with purchase receipt line tables */
+
+.inventory-page {
+  max-width: min(1400px, 99vw);
+}
+
+.inventory-page-header {
+  margin-bottom: 1rem;
+}
+
+.inventory-back-link {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.inventory-page-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
+}
+
+.inventory-page-header .muted {
+  margin: 0;
+  font-size: 0.9rem;
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+.inventory-form {
+  padding: 1.15rem 1.35rem;
+}
+
+.inventory-draft-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.inventory-draft-status {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.inventory-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.inventory-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.15rem;
+}
+
+@media (max-width: 640px) {
+  .inventory-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inventory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 1rem;
+}
+
+.inventory-toolbar .pr-field--date {
+  min-width: 10rem;
+}
+
+.inventory-detailed-toggle {
+  margin: 0;
+  max-width: 22rem;
+}
+
+.inventory-detailed-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.35;
+}
+
+.inventory-detailed-hint {
+  font-size: 0.82rem;
+}
+
+/* Opening balance — editable lines (extends pr-lines-table) */
+
+.inv-opening-lines col.inv-col-product {
+  width: 42%;
+}
+
+.inv-opening-lines col.inv-col-warehouse {
+  width: 22%;
+}
+
+.inv-opening-lines col.inv-col-qty {
+  width: 12%;
+}
+
+.inv-opening-lines col.inv-col-cost {
+  width: 16%;
+}
+
+.inv-opening-lines col.inv-col-actions {
+  width: 8%;
+}
+
+.inv-opening-lines th {
+  text-align: center;
+}
+
+.inv-opening-lines td.inv-col-product {
+  text-align: start;
+}
+
+.inv-opening-lines td.inv-col-warehouse,
+.inv-opening-lines td.inv-col-qty,
+.inv-opening-lines td.inv-col-cost {
+  text-align: center;
+}
+
+.inv-opening-lines td.inv-col-actions {
+  text-align: end;
+}
+
+.inv-opening-lines td.inv-col-qty input,
+.inv-opening-lines td.inv-col-cost input {
+  text-align: center;
+}
+
+/* Valuation report */
+
+.inventory-report-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.inventory-report-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1.25rem;
+  margin: 0;
+  padding: 0.75rem 1.15rem;
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+
+.inventory-report-summary strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+
+.inv-report-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.inv-report-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+/* Detailed FIFO: 8 columns — wider table, headers may wrap */
+.inv-report-table.inv-report-table--detailed {
+  table-layout: fixed;
+  min-width: 72rem;
+  width: 100%;
+}
+
+.inv-report-table col.inv-col-warehouse {
+  width: 14%;
+}
+
+.inv-report-table col.inv-col-article {
+  width: 12%;
+}
+
+.inv-report-table col.inv-col-product {
+  width: 34%;
+}
+
+.inv-report-table col.inv-col-qty {
+  width: 10%;
+}
+
+.inv-report-table col.inv-col-cost {
+  width: 14%;
+}
+
+.inv-report-table col.inv-col-total {
+  width: 16%;
+}
+
+.inv-report-table--detailed col.inv-col-warehouse {
+  width: 11%;
+}
+
+.inv-report-table--detailed col.inv-col-article {
+  width: 9%;
+}
+
+.inv-report-table--detailed col.inv-col-product {
+  width: 18%;
+}
+
+.inv-report-table--detailed col.inv-col-lot-date {
+  width: 9%;
+}
+
+.inv-report-table--detailed col.inv-col-lot-source {
+  width: 16%;
+}
+
+.inv-report-table--detailed col.inv-col-qty {
+  width: 7%;
+}
+
+.inv-report-table--detailed col.inv-col-cost {
+  width: 13%;
+}
+
+.inv-report-table--detailed col.inv-col-total {
+  width: 17%;
+}
+
+.inv-report-table th {
+  padding: 0.45rem 0.65rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.inv-report-table--detailed th {
+  white-space: normal;
+  line-height: 1.25;
+  hyphens: auto;
+  padding: 0.5rem 0.45rem;
+  font-size: 0.68rem;
+}
+
+.inv-report-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  vertical-align: middle;
+}
+
+.inv-report-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inv-report-table th.inv-col-qty,
+.inv-report-table td.inv-col-qty,
+.inv-report-table th.inv-col-cost,
+.inv-report-table td.inv-col-cost {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-report-table th.inv-col-total,
+.inv-report-table td.inv-col-total {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-report-table td.inv-col-warehouse {
+  font-size: 0.82rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.inv-report-table--detailed td.inv-col-lot-source {
+  font-size: 0.82rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.inv-report-table td.inv-col-product {
+  word-break: break-word;
+}
+
+.inv-report-table td.inv-col-article code {
+  font-size: 0.82rem;
+}
+
+.inv-report-table .inv-report-empty {
+  padding: 1.25rem 0.65rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.inv-report-table tfoot td {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+.inv-report-table tfoot .inv-col-total {
+  text-align: end;
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
+.text-end {
+  text-align: end;
+}
+
+.product-lots-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}

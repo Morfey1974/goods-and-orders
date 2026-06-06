@@ -291,6 +291,10 @@ export default {
     close: 'Close',
     tabGeneral: 'General details',
     tabMovements: 'Stock movements',
+    tabLots: 'FIFO batches',
+    noLots: 'No open batches with remaining quantity.',
+    lotsHint: 'Each row is a separate receipt (opening balance or purchase) at a fixed unit cost in ₪.',
+    movementUnitCost: 'Unit cost',
     activeItem: 'Item is active',
     currency: 'Currency',
     inventoryTitle: 'Inventory',
@@ -467,6 +471,15 @@ export default {
     balancesPdfTitle: 'Stock balances report',
     movementsPdfTitle: 'Stock movements report',
   },
+  inventory: {
+    valuationDetailed: 'FIFO batch detail',
+    valuationDetailedHint: 'One row per receipt with its own unit cost in ₪',
+    lotReceivedAt: 'Received',
+    lotSource: 'Source',
+    lotSourceOpening: 'Opening balance · {{date}}',
+    lotSourceReceipt: 'Receipt {{number}}',
+    lotSourceReceiptUnknown: 'Purchase receipt',
+  },
   settings: {
     title: 'Business settings',
     sectionGeneral: 'General details',
@@ -572,6 +585,17 @@ export default {
       nextNumber: 'Next number',
       save: 'Save numbering',
       saved: 'Numbering saved',
+    },
+    stockReset: {
+      sectionTitle: 'Warehouse: reset stock data',
+      hint:
+        'Deletes all movements, balances and FIFO/WAC layers for your company. Products and warehouses stay. Use before entering opening inventory from scratch. Cannot be undone.',
+      action: 'Reset warehouse data',
+      confirmTitle: 'Reset warehouse?',
+      confirmMessage:
+        'All movements, balances and FIFO batches will be deleted. Products are kept. “Track inventory” will be turned off for all products. The opening-balance draft will be cleared too. Continue?',
+      confirmAction: 'Yes, reset',
+      success: 'Warehouse reset: {{movements}} movements and {{balances}} balances removed.',
     },
   },
   auth: {

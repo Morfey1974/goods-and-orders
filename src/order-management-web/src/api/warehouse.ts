@@ -55,6 +55,7 @@ export type Warehouse = {
 export type StockBalance = {
   productId: string;
   articleCode: string;
+  legacySku?: string | null;
   productName: string;
   productType: string;
   quantity: number;
@@ -65,10 +66,13 @@ export type StockBalance = {
 export type StockMovement = {
   id: string;
   articleCode: string;
+  legacySku?: string | null;
   productName: string;
   movementType: string;
   quantity: number;
   balanceAfter: number;
+  unitCostIls?: number | null;
+  totalCostIls?: number | null;
   notes?: string;
   createdAt: string;
   warehouseId: string;
@@ -91,6 +95,7 @@ function mapBalance(raw: Record<string, unknown>): StockBalance {
   return {
     productId: String(raw.productId ?? raw.ProductId),
     articleCode: String(raw.articleCode ?? raw.ArticleCode ?? ''),
+    legacySku: (raw.legacySku ?? raw.LegacySku) as string | null | undefined,
     productName: String(raw.productName ?? raw.ProductName ?? ''),
     productType: String(raw.productType ?? raw.ProductType ?? ''),
     quantity: normalizeStockQuantity(Number(raw.quantity ?? raw.Quantity ?? 0)),
@@ -148,10 +153,19 @@ export const warehouseApi = {
     return data.map((m) => ({
       id: String(m.id ?? m.Id),
       articleCode: String(m.articleCode ?? m.ArticleCode ?? ''),
+      legacySku: (m.legacySku ?? m.LegacySku) as string | null | undefined,
       productName: String(m.productName ?? m.ProductName ?? ''),
       movementType: String(m.movementType ?? m.MovementType ?? ''),
       quantity: normalizeStockQuantity(Number(m.quantity ?? m.Quantity ?? 0)),
       balanceAfter: normalizeStockQuantity(Number(m.balanceAfter ?? m.BalanceAfter ?? 0)),
+      unitCostIls:
+        m.unitCostIls != null || m.UnitCostIls != null
+          ? Number(m.unitCostIls ?? m.UnitCostIls)
+          : null,
+      totalCostIls:
+        m.totalCostIls != null || m.TotalCostIls != null
+          ? Number(m.totalCostIls ?? m.TotalCostIls)
+          : null,
       notes: (m.notes ?? m.Notes) as string | undefined,
       createdAt: String(m.createdAt ?? m.CreatedAt ?? ''),
       warehouseId: String(m.warehouseId ?? m.WarehouseId ?? ''),
@@ -168,6 +182,7 @@ export const warehouseApi = {
     return data.map((p) => ({
       id: String(p.id ?? p.Id),
       articleCode: String(p.articleCode ?? p.ArticleCode ?? ''),
+      legacySku: (p.legacySku ?? p.LegacySku) as string | null | undefined,
       name: String(p.name ?? p.Name ?? ''),
     }));
   },

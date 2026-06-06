@@ -7,9 +7,11 @@ import {
   type Product,
   type StockMovement,
 } from '../../api/catalog';
+import { inventoryApi, type InventoryLot } from '../../api/inventory';
 import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { warehouseApi, type Warehouse } from '../../api/warehouse';
 import { defaultWarehouseForProductType, resolveProductWarehouseId } from '../../lib/defaultWarehouse';
+import { formatInventoryLotSource } from '../../lib/inventoryLotLabel';
 import { formatStockQuantity } from '../../lib/stockQuantity';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductGroupsMultiSelect } from './ProductGroupsMultiSelect';
@@ -121,6 +123,11 @@ function parseUnitPriceInput(value: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function formatMovementCost(value?: number | null): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return '—';
+  return `${value.toFixed(2)} ₪`;
+}
+
 async function syncProductGroupMembership(
   token: string,
   productId: string,
@@ -163,7 +170,7 @@ type Props = {
   duplicateFrom?: Product | null;
   nextArticle: string;
   components: Product[];
-  initialTab?: 'general' | 'movements';
+  initialTab?: 'general' | 'movements' | 'lots';
   onClose: () => void;
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
@@ -194,9 +201,11 @@ export function ProductEditModal({
   const [savedProduct, setSavedProduct] = useState<Product | null>(null);
   const effectiveProduct = product ?? savedProduct;
   const editing = effectiveProduct !== null;
-  const [tab, setTab] = useState<'general' | 'movements'>(initialTab);
+  const [tab, setTab] = useState<'general' | 'movements' | 'lots'>(initialTab);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [lots, setLots] = useState<InventoryLot[]>([]);
   const [loadingMovements, setLoadingMovements] = useState(false);
+  const [loadingLots, setLoadingLots] = useState(false);
   const [previewArticle, setPreviewArticle] = useState(nextArticle);
   const [newArticlePreview, setNewArticlePreview] = useState<string | null>(null);
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
@@ -342,7 +351,7 @@ export function ProductEditModal({
       trackInventory: productTypeCanTrackStock(productType) ? f.trackInventory : false,
     }));
     setWarehouseId(defaultWarehouseForProductType(productType, warehouses));
-    if (!productTypeCanTrackStock(productType) && tab === 'movements') setTab('general');
+    if (!productTypeCanTrackStock(productType) && (tab === 'movements' || tab === 'lots')) setTab('general');
   };
 
   useEffect(() => {
@@ -353,6 +362,16 @@ export function ProductEditModal({
       .then(setMovements)
       .catch(() => setMovements([]))
       .finally(() => setLoadingMovements(false));
+  }, [open, tab, effectiveProduct, token]);
+
+  useEffect(() => {
+    if (!open || tab !== 'lots' || !effectiveProduct || !token) return;
+    setLoadingLots(true);
+    inventoryApi
+      .lots(token, { productId: effectiveProduct.id })
+      .then(setLots)
+      .catch(() => setLots([]))
+      .finally(() => setLoadingLots(false));
   }, [open, tab, effectiveProduct, token]);
 
   const showBom = form.productType === 'FinishedGood' || form.productType === 'Bundle';
@@ -517,6 +536,15 @@ export function ProductEditModal({
           >
             {t('products.tabGeneral')}
           </button>
+          {editing && tracksStock && (
+            <button
+              type="button"
+              className={tab === 'lots' ? 'active' : ''}
+              onClick={() => setTab('lots')}
+            >
+              {t('products.tabLots')}
+            </button>
+          )}
           {editing && tracksStock && (
             <button
               type="button"
@@ -757,6 +785,7 @@ export function ProductEditModal({
                   <tr>
                     <th>{t('warehouse.type')}</th>
                     <th>{t('warehouse.qty')}</th>
+                    <th>{t('products.movementUnitCost')}</th>
                     <th>{t('warehouse.after')}</th>
                     <th>{t('warehouse.date')}</th>
                   </tr>
@@ -770,8 +799,54 @@ export function ProductEditModal({
                         })}
                       </td>
                       <td>{formatStockQuantity(m.quantity)}</td>
+                      <td>{formatMovementCost(m.unitCostIls)}</td>
                       <td>{formatStockQuantity(m.balanceAfter)}</td>
                       <td>{new Date(m.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          </div>
+          <div className="product-card-footer">
+            <button type="button" className="btn btn-ghost-inline" onClick={requestClose} disabled={saving}>
+              {t('products.close')}
+            </button>
+          </div>
+          </>
+        )}
+
+        {tab === 'lots' && editing && (
+          <>
+          <div className="product-card-scroll">
+          <div className="product-movements-panel">
+            <p className="muted product-lots-hint">{t('products.lotsHint')}</p>
+            {loadingLots && <p className="muted">{t('products.loading')}</p>}
+            {!loadingLots && lots.length === 0 && (
+              <p className="muted">{t('products.noLots')}</p>
+            )}
+            {!loadingLots && lots.length > 0 && (
+              <table className="data-table data-table-compact">
+                <thead>
+                  <tr>
+                    <th>{t('products.warehouseCol')}</th>
+                    <th>{t('inventory.lotReceivedAt')}</th>
+                    <th>{t('inventory.lotSource')}</th>
+                    <th>{t('warehouse.qty')}</th>
+                    <th>{t('inventory.unitCostIls')}</th>
+                    <th>{t('purchaseReceipts.lineSum')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lots.map((lot) => (
+                    <tr key={lot.id}>
+                      <td>{lot.warehouseName}</td>
+                      <td>{lot.receivedAt}</td>
+                      <td>{formatInventoryLotSource(lot.sourceLabel, t)}</td>
+                      <td>{formatStockQuantity(lot.quantityRemaining)}</td>
+                      <td>{lot.unitCostIls.toFixed(2)}</td>
+                      <td>{lot.totalValueIls.toFixed(2)} ₪</td>
                     </tr>
                   ))}
                 </tbody>

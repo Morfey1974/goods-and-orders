@@ -8,6 +8,8 @@ import { WAREHOUSE_MOVEMENTS_RESIZE } from '../lib/resizablePanelKeys';
 
 import { formatStockQuantity } from '../lib/stockQuantity';
 
+import { ProductCodeCell } from './products/ProductCodeCell';
+
 import { DocumentPdfPreviewModal } from './documents/DocumentPdfPreviewModal';
 
 import { AppModal } from './ui/AppModal';
@@ -272,6 +274,8 @@ export function WarehouseMovementsModal({
 
                     <th>{t('warehouse.qty')}</th>
 
+                    <th>{t('products.movementUnitCost')}</th>
+
                     <th>{t('warehouse.after')}</th>
 
                     <th>{t('warehouse.date')}</th>
@@ -288,13 +292,19 @@ export function WarehouseMovementsModal({
 
                       {showWarehouseColumn && <td>{m.warehouseName}</td>}
 
-                      <td><code>{m.articleCode}</code></td>
+                      <td><ProductCodeCell articleCode={m.articleCode} legacySku={m.legacySku} /></td>
 
                       <td>{m.productName}</td>
 
                       <td>{t(`warehouse.moveTypes.${m.movementType}`)}</td>
 
                       <td>{formatStockQuantity(m.quantity)}</td>
+
+                      <td>
+                        {m.unitCostIls != null && m.unitCostIls > 0
+                          ? `${m.unitCostIls.toFixed(2)} ₪`
+                          : '—'}
+                      </td>
 
                       <td>{formatStockQuantity(m.balanceAfter)}</td>
 

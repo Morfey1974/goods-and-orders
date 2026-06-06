@@ -21,18 +21,49 @@ public record PostInventoryOpeningBalanceResult(
 public record InventoryValuationLineDto(
     Guid ProductId,
     string ArticleCode,
+    string? LegacySku,
     string ProductName,
     Guid WarehouseId,
     string WarehouseName,
     decimal Quantity,
     decimal UnitCostIls,
-    decimal TotalValueIls);
+    decimal TotalValueIls,
+    Guid? LotId = null,
+    DateTime? ReceivedAt = null,
+    string? SourceType = null,
+    string? SourceLabel = null);
+
+public record InventoryLotDto(
+    Guid Id,
+    Guid ProductId,
+    string ArticleCode,
+    string? LegacySku,
+    string ProductName,
+    Guid WarehouseId,
+    string WarehouseName,
+    decimal QuantityRemaining,
+    decimal UnitCostIls,
+    decimal TotalValueIls,
+    DateTime ReceivedAt,
+    string SourceType,
+    Guid? SourceId,
+    string? SourceLabel);
 
 public record InventoryValuationReportDto(
     DateTime AsOfDate,
     string CostMethod,
     IReadOnlyList<InventoryValuationLineDto> Lines,
-    decimal GrandTotalIls);
+    decimal GrandTotalIls,
+    bool Detailed = false);
+
+public record StockInventoryResetResultDto(
+    int LotAllocationsDeleted,
+    int LotsDeleted,
+    int AverageCostsDeleted,
+    int MovementsDeleted,
+    int BalancesDeleted,
+    int OrdersStockFlagReset,
+    int ProductsTrackInventoryReset);
 
 public static class InventoryCostMethodNames
 {

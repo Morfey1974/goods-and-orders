@@ -23,8 +23,8 @@ export function ProductGroupsMultiSelect({ groups, selectedGroupIds, onChange, d
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('click', onDoc);
+    return () => document.removeEventListener('click', onDoc);
   }, [open]);
 
   useEffect(() => {
@@ -62,6 +62,7 @@ export function ProductGroupsMultiSelect({ groups, selectedGroupIds, onChange, d
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
     onChange(next);
+    setOpen(false);
   };
 
   if (groups.length === 0) {
@@ -104,11 +105,19 @@ export function ProductGroupsMultiSelect({ groups, selectedGroupIds, onChange, d
             aria-multiselectable="true"
           >
             {groups.map((g) => (
-              <label key={g.id} className="product-groups-select-option">
+              <label
+                key={g.id}
+                className="product-groups-select-option"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleGroup(g.id);
+                }}
+              >
                 <input
                   type="checkbox"
+                  readOnly
+                  tabIndex={-1}
                   checked={selectedGroupIds.has(g.id)}
-                  onChange={() => toggleGroup(g.id)}
                 />
                 <span className="product-groups-select-option-name">{g.name}</span>
               </label>

@@ -203,6 +203,8 @@ export type StockMovement = {
   movementType: string;
   quantity: number;
   balanceAfter: number;
+  unitCostIls?: number | null;
+  totalCostIls?: number | null;
   notes?: string;
   createdAt: string;
 };
@@ -429,10 +431,32 @@ export const catalogApi = {
     },
   },
   warehouse: {
-    movements: (token: string, limit = 50, productId?: string) => {
+    movements: async (token: string, limit = 50, productId?: string) => {
       const params = new URLSearchParams({ limit: String(limit) });
       if (productId) params.set('productId', productId);
-      return request<StockMovement[]>(`/api/warehouse/movements?${params}`, {}, token);
+      const data = await request<Record<string, unknown>[]>(
+        `/api/warehouse/movements?${params}`,
+        {},
+        token
+      );
+      return data.map((m) => ({
+        id: String(m.id ?? m.Id),
+        articleCode: String(m.articleCode ?? m.ArticleCode ?? ''),
+        productName: String(m.productName ?? m.ProductName ?? ''),
+        movementType: String(m.movementType ?? m.MovementType ?? ''),
+        quantity: Number(m.quantity ?? m.Quantity ?? 0),
+        balanceAfter: Number(m.balanceAfter ?? m.BalanceAfter ?? 0),
+        unitCostIls:
+          m.unitCostIls != null || m.UnitCostIls != null
+            ? Number(m.unitCostIls ?? m.UnitCostIls)
+            : null,
+        totalCostIls:
+          m.totalCostIls != null || m.TotalCostIls != null
+            ? Number(m.totalCostIls ?? m.TotalCostIls)
+            : null,
+        notes: (m.notes ?? m.Notes) as string | undefined,
+        createdAt: String(m.createdAt ?? m.CreatedAt ?? ''),
+      })) as StockMovement[];
     },
   },
 };

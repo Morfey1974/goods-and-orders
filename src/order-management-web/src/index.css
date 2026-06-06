@@ -171,6 +171,19 @@ a {
   border-radius: 8px;
   padding: 0.5rem 1rem;
   font-size: 1rem;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  line-height: 1.5;
+}
+
+a.btn-primary,
+a.btn-secondary {
+  color: #fff;
+}
+
+a.btn-ghost-inline {
+  color: var(--text);
 }
 
 .btn-primary {

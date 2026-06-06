@@ -13,6 +13,7 @@ import { tenantAssetsApi, type TenantAssetsSummary } from '../api/tenantAssets';
 import { TenantBrandingSection } from '../components/settings/TenantBrandingSection';
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
 import { DocumentSequencesSection } from '../components/settings/DocumentSequencesSection';
+import { StockResetSettingsSection } from '../components/settings/StockResetSettingsSection';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
@@ -620,6 +621,21 @@ export function SettingsPage() {
         <div className="settings-section-body">
           {token && (
             <DocumentSequencesSection
+              token={token}
+              onError={setError}
+              onMessage={setMessage}
+            />
+          )}
+        </div>
+      </section>
+
+      <section className="card settings-section settings-section--standalone settings-section--danger">
+        <div className="settings-section-head">
+          <h2 className="settings-section-title">{t('settings.stockReset.sectionTitle')}</h2>
+        </div>
+        <div className="settings-section-body">
+          {token && (
+            <StockResetSettingsSection
               token={token}
               onError={setError}
               onMessage={setMessage}

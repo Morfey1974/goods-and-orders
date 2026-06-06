@@ -86,6 +86,7 @@ public class WarehouseReportPdfService(
             .Select(x => new StockBalanceDto(
                 x.b.ProductId,
                 x.p.ArticleCode,
+                x.p.LegacySku,
                 x.p.Name,
                 x.p.ProductType.ToString(),
                 x.b.Quantity,
@@ -140,10 +141,13 @@ public class WarehouseReportPdfService(
             .Select(x => new StockMovementDto(
                 x.m.Id,
                 x.p.ArticleCode,
+                x.p.LegacySku,
                 x.p.Name,
                 x.m.MovementType.ToString(),
                 x.m.Quantity,
                 x.m.BalanceAfter,
+                x.m.UnitCost,
+                x.m.TotalCost,
                 x.m.Notes,
                 x.m.CreatedAt,
                 x.w.Id,

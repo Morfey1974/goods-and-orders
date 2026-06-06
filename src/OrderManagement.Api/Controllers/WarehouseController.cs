@@ -111,6 +111,7 @@ public class WarehouseController(
             .Select(x => new StockBalanceDto(
                 x.b.ProductId,
                 x.p.ArticleCode,
+                x.p.LegacySku,
                 x.p.Name,
                 x.p.ProductType.ToString(),
                 x.b.Quantity,
@@ -157,10 +158,13 @@ public class WarehouseController(
             .Select(x => new StockMovementDto(
                 x.m.Id,
                 x.p.ArticleCode,
+                x.p.LegacySku,
                 x.p.Name,
                 x.m.MovementType.ToString(),
                 x.m.Quantity,
                 x.m.BalanceAfter,
+                x.m.UnitCost,
+                x.m.TotalCost,
                 x.m.Notes,
                 x.m.CreatedAt,
                 x.w.Id,
@@ -248,9 +252,10 @@ public class WarehouseController(
                 StockMovementType.Receipt, qty, request.Notes, ct);
 
             return Ok(new StockMovementDto(
-                movement.Id, product.ArticleCode, product.Name,
+                movement.Id, product.ArticleCode, product.LegacySku, product.Name,
                 movement.MovementType.ToString(), movement.Quantity,
-                movement.BalanceAfter, movement.Notes, movement.CreatedAt,
+                movement.BalanceAfter, movement.UnitCost, movement.TotalCost,
+                movement.Notes, movement.CreatedAt,
                 wh.Id, wh.Name));
         }
         catch (InvalidOperationException ex)

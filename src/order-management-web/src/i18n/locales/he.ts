@@ -291,6 +291,10 @@ export default {
     close: 'סגירה',
     tabGeneral: 'פרטים כלליים',
     tabMovements: 'תנועות מלאי',
+    tabLots: 'מנות FIFO',
+    noLots: 'אין מנות פתוחות עם יתרה.',
+    lotsHint: 'כל שורה — קליטה נפרדת (מלאי פתיחה או תעודת קליטה) בעלות קבועה בש״ח.',
+    movementUnitCost: 'עלות יחידה',
     activeItem: 'פריט פעיל',
     currency: 'מטבע',
     inventoryTitle: 'ניהול מלאי',
@@ -467,6 +471,15 @@ export default {
     balancesPdfTitle: 'דוח יתרות מלאי',
     movementsPdfTitle: 'דוח תנועות מלאי',
   },
+  inventory: {
+    valuationDetailed: 'פירוט מנות FIFO',
+    valuationDetailedHint: 'שורה לכל קליטה עם עלות יחידה משלה בש״ח',
+    lotReceivedAt: 'תאריך קליטה',
+    lotSource: 'מקור',
+    lotSourceOpening: 'מלאי פתיחה · {{date}}',
+    lotSourceReceipt: 'תעודה {{number}}',
+    lotSourceReceiptUnknown: 'תעודת קליטה',
+  },
   settings: {
     title: 'פרטי העסק',
     sectionGeneral: 'פרטי עסק כללי',
@@ -572,6 +585,17 @@ export default {
       nextNumber: 'מספר הבא',
       save: 'שמור מספור',
       saved: 'המספור נשמר',
+    },
+    stockReset: {
+      sectionTitle: 'מחסן: איפוס נתוני מלאי',
+      hint:
+        'מוחק את כל התנועות, היתרות ו-FIFO/WAC של החברה. מוצרים ומחסנים נשארים. לשימוש לפני הזנת מלאי פתיחה מחדש. לא ניתן לביטול.',
+      action: 'אפס נתוני מחסן',
+      confirmTitle: 'לאפס את המחסן?',
+      confirmMessage:
+        'כל התנועות, היתרות ומנות FIFO יימחקו. המוצרים יישארו. «מעקב מלאי» יכובה לכל המוצרים. גם טיוטת מלאי הפתיחה תימחק. להמשיך?',
+      confirmAction: 'כן, אפס',
+      success: 'המחסן אופס: נמחקו {{movements}} תנועות ו-{{balances}} יתרות.',
     },
   },
   auth: {

@@ -187,6 +187,7 @@ public record NextArticleDto(string ArticleCode);
 public record StockBalanceDto(
     Guid ProductId,
     string ArticleCode,
+    string? LegacySku,
     string ProductName,
     string ProductType,
     decimal Quantity,
@@ -215,10 +216,13 @@ public record UpdateWarehouseRequest(
 public record StockMovementDto(
     Guid Id,
     string ArticleCode,
+    string? LegacySku,
     string ProductName,
     string MovementType,
     decimal Quantity,
     decimal BalanceAfter,
+    decimal? UnitCostIls,
+    decimal? TotalCostIls,
     string? Notes,
     DateTime CreatedAt,
     Guid WarehouseId,
