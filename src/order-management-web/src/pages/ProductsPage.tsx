@@ -10,6 +10,8 @@ import { ProductPhoto } from '../components/products/ProductPhoto';
 import { ProductCodeCell } from '../components/products/ProductCodeCell';
 import { BidiText } from '../components/BidiText';
 import { ProductGroupsModal } from '../components/products/ProductGroupsModal';
+import { DataTablePanel } from '../components/ui/DataTablePanel';
+import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { productGroupsApi, type ProductGroup } from '../api/productGroups';
 import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
 import { isServiceProductType } from '../lib/productKind';
@@ -20,11 +22,10 @@ import {
   PRODUCTS_CATALOG_DEFAULT_WIDTHS,
   type ProductsCatalogColumnKey,
 } from '../lib/productsCatalogColumns';
+import { PRODUCTS_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 import { normalizeStockQuantity } from '../lib/stockQuantity';
 import { warehouseLabelForProductType } from '../lib/warehouseLabel';
 import '../styles/products-catalog.css';
-
-const PAGE_SIZES = [50, 100, 200] as const;
 
 type SortKey = 'articleCode' | 'name' | 'unitPrice' | 'stockQuantity' | 'isActive';
 type SortDir = 'asc' | 'desc';
@@ -439,138 +440,137 @@ export function ProductsPage() {
 
   return (
     <div className="page products-catalog-page">
-      <div className="catalog-header">
-        <div className="catalog-title-row">
-          <h1>{t('nav.products')}</h1>
-          <span className="result-count">
-            {t('products.results', { count: filtered.length })}
-          </span>
-        </div>
-        <div className="catalog-header-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => setGroupsOpen(true)}>
-            {t('products.groupsTitle')}
-          </button>
-          <button type="button" className="btn-new-item" onClick={openCreate}>
-            + {t('products.newItem')}
-          </button>
-          <div className="icon-toolbar" ref={actionsRef}>
-            <button
-              type="button"
-              className="icon-btn"
-              title={t('products.import')}
-              onClick={() => setImportOpen(true)}
-            >
-              ⬇
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              title={t('products.export')}
-              onClick={onExport}
-            >
-              ⬆
-            </button>
-            <div className="dropdown-wrap">
-              <button
-                type="button"
-                className={`icon-btn ${actionsOpen ? 'active' : ''}`}
-                title={t('products.actions')}
-                onClick={() => setActionsOpen((v) => !v)}
-              >
-                💼
-              </button>
-              {actionsOpen && (
-                <div className="dropdown-menu">
-                  <button type="button" onClick={() => setFiltersVisible((v) => !v)}>
-                    {filtersVisible ? t('products.hideFilters') : t('products.showFilters')}
-                  </button>
-                  <button type="button" onClick={() => { setActionsOpen(false); setImportOpen(true); }}>
-                    {t('products.importItems')}
-                  </button>
-                  <button type="button" onClick={onExport}>
-                    {t('products.exportItems')}
-                  </button>
-                  <button type="button" className="danger" onClick={onDeactivateAll}>
-                    {t('products.deactivateAll')}
-                  </button>
-                  <button type="button" disabled title={t('products.comingSoon')}>
-                    {t('products.bulkSku')}
-                  </button>
-                  <button type="button" disabled title={t('products.comingSoon')}>
-                    {t('products.transferWarehouses')}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-          {list.length === 0 && (
-            <button type="button" className="btn btn-secondary" onClick={restoreImported}>
-              {t('products.showImported')}
-            </button>
-          )}
-        </div>
-      </div>
-
       {message && <div className="success-banner">{message}</div>}
       {error && !modalOpen && !importOpen && <div className="error-banner">{error}</div>}
 
-      {filtersVisible && (
-        <div className="catalog-filters-bar">
-          <div className="catalog-search">
-            <span className="catalog-search-icon">🔍</span>
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('products.searchPlaceholder')}
+      <DataTablePanel
+        resize={PRODUCTS_PANEL_RESIZE}
+        toolbar={
+          <div className="dt-panel__toolbar-row">
+            <DataTablePanelHeading
+              title={t('nav.products')}
+              count={t('products.results', { count: filtered.length })}
             />
+            <div className="catalog-header-actions dt-panel__toolbar-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setGroupsOpen(true)}>
+                {t('products.groupsTitle')}
+              </button>
+              <button type="button" className="btn-new-item" onClick={openCreate}>
+                + {t('products.newItem')}
+              </button>
+              <div className="icon-toolbar" ref={actionsRef}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title={t('products.import')}
+                  onClick={() => setImportOpen(true)}
+                >
+                  ⬇
+                </button>
+                <button type="button" className="icon-btn" title={t('products.export')} onClick={onExport}>
+                  ⬆
+                </button>
+                <div className="dropdown-wrap">
+                  <button
+                    type="button"
+                    className={`icon-btn ${actionsOpen ? 'active' : ''}`}
+                    title={t('products.actions')}
+                    onClick={() => setActionsOpen((v) => !v)}
+                  >
+                    💼
+                  </button>
+                  {actionsOpen && (
+                    <div className="dropdown-menu">
+                      <button type="button" onClick={() => setFiltersVisible((v) => !v)}>
+                        {filtersVisible ? t('products.hideFilters') : t('products.showFilters')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionsOpen(false);
+                          setImportOpen(true);
+                        }}
+                      >
+                        {t('products.importItems')}
+                      </button>
+                      <button type="button" onClick={onExport}>
+                        {t('products.exportItems')}
+                      </button>
+                      <button type="button" className="danger" onClick={onDeactivateAll}>
+                        {t('products.deactivateAll')}
+                      </button>
+                      <button type="button" disabled title={t('products.comingSoon')}>
+                        {t('products.bulkSku')}
+                      </button>
+                      <button type="button" disabled title={t('products.comingSoon')}>
+                        {t('products.transferWarehouses')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {list.length === 0 && (
+                <button type="button" className="btn btn-secondary" onClick={restoreImported}>
+                  {t('products.showImported')}
+                </button>
+              )}
+            </div>
           </div>
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-            <option value="">{t('products.filterSkuType')}</option>
-            {PRODUCT_TYPES.map((pt) => (
-              <option key={pt} value={pt}>
-                {t(`products.types.${pt}`)}
-              </option>
-            ))}
-          </select>
-          {groups.length > 0 && (
-            <select value={filterGroupId} onChange={(e) => setFilterGroupId(e.target.value)}>
-              <option value="">{t('products.filterGroup')}</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <select value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
-            <option value="">{t('products.filterStock')}</option>
-            <option value="inStock">{t('products.stockIn')}</option>
-            <option value="zero">{t('products.stockZero')}</option>
-          </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-            <option value="">{t('products.filterStatus')}</option>
-            <option value="active">{t('products.statusActive')}</option>
-            <option value="inactive">{t('products.statusInactive')}</option>
-          </select>
-          <div className="page-size-select">
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              aria-label={t('products.pageSize')}
-            >
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      <div className="card catalog-table-wrap" ref={tableTopRef}>
-        <div className="catalog-table-scroll">
+        }
+        toolbarSecondary={
+          filtersVisible ? (
+            <div className="catalog-filters-bar" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+              <div className="catalog-search">
+                <span className="catalog-search-icon">🔍</span>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t('products.searchPlaceholder')}
+                />
+              </div>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                <option value="">{t('products.filterSkuType')}</option>
+                {PRODUCT_TYPES.map((pt) => (
+                  <option key={pt} value={pt}>
+                    {t(`products.types.${pt}`)}
+                  </option>
+                ))}
+              </select>
+              {groups.length > 0 && (
+                <select value={filterGroupId} onChange={(e) => setFilterGroupId(e.target.value)}>
+                  <option value="">{t('products.filterGroup')}</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
+                <option value="">{t('products.filterStock')}</option>
+                <option value="inStock">{t('products.stockIn')}</option>
+                <option value="zero">{t('products.stockZero')}</option>
+              </select>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <option value="">{t('products.filterStatus')}</option>
+                <option value="active">{t('products.statusActive')}</option>
+                <option value="inactive">{t('products.statusInactive')}</option>
+              </select>
+            </div>
+          ) : undefined
+        }
+        pagination={{
+          page,
+          pageCount,
+          pageSize,
+          total: sorted.length,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
+      >
+        <div className="catalog-table-wrap" ref={tableTopRef}>
+          <div className="catalog-table-scroll">
         <table className="catalog-table" style={{ minWidth: tableMinWidth }}>
           <colgroup>
             {PRODUCTS_CATALOG_COLUMN_KEYS.map((key) => (
@@ -750,34 +750,10 @@ export function ProductsPage() {
             ))}
           </tbody>
         </table>
-        </div>
-        {filtered.length === 0 && (
-          <p className="muted empty-table">{t('products.empty')}</p>
-        )}
-        {filtered.length > pageSize && (
-          <div className="catalog-pagination">
-            <button
-              type="button"
-              className="btn btn-ghost-inline"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              ←
-            </button>
-            <span className="muted">
-              {page + 1} / {pageCount}
-            </span>
-            <button
-              type="button"
-              className="btn btn-ghost-inline"
-              disabled={page >= pageCount - 1}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              →
-            </button>
           </div>
-        )}
-      </div>
+          {filtered.length === 0 && <p className="muted empty-table">{t('products.empty')}</p>}
+        </div>
+      </DataTablePanel>
 
       <AppModal open={importOpen} onClose={closeImport} preventClose={importing} size="md">
             <h2>{t('products.importTitle')}</h2>

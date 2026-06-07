@@ -4,9 +4,21 @@ import { Link, useNavigate } from 'react-router-dom';
 import { suppliersApi, type Supplier } from '../api/suppliers';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { AppModal } from '../components/ui/AppModal';
+import { DataTablePanel } from '../components/ui/DataTablePanel';
+import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useAuth } from '../context/AuthContext';
-import '../styles/customers.css';
-import '../styles/products-catalog.css';
+import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
+import {
+  SUPPLIERS_COLUMN_CLASS,
+  SUPPLIERS_COLUMN_KEYS,
+  SUPPLIERS_COLUMN_WIDTHS_KEY,
+  SUPPLIERS_DEFAULT_WIDTHS,
+  SUPPLIERS_TEXT_START_COLUMNS,
+  type SuppliersColumnKey,
+} from '../lib/listTableColumns';
+import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
+import { SUPPLIERS_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
 export function SuppliersPage() {
   const { t } = useTranslation();
@@ -27,8 +39,12 @@ export function SuppliersPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const rowMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [rowMenuSupplier, setRowMenuSupplier] = useState<Supplier | null>(null);
-
   const [inactiveCount, setInactiveCount] = useState(0);
+
+  const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
+    SUPPLIERS_COLUMN_WIDTHS_KEY,
+    SUPPLIERS_DEFAULT_WIDTHS
+  );
 
   const load = useCallback(() => {
     if (!token) return;
@@ -55,10 +71,7 @@ export function SuppliersPage() {
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
-      if (
-        !el.closest('.action-plus-wrap') &&
-        !el.closest('.row-menu--portal')
-      ) {
+      if (!el.closest('.action-plus-wrap') && !el.closest('.row-menu--portal')) {
         setRowMenuSupplier(null);
       }
     };
@@ -80,6 +93,12 @@ export function SuppliersPage() {
     () => [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     [list]
   );
+
+  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(filtered, [
+    search,
+    country,
+    includeInactive,
+  ]);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -131,140 +150,186 @@ export function SuppliersPage() {
     }
   };
 
+  const columnLabel = (key: SuppliersColumnKey): string => {
+    switch (key) {
+      case 'name':
+        return t('suppliers.colName');
+      case 'status':
+        return t('customers.status');
+      case 'country':
+        return t('suppliers.colCountry');
+      case 'taxId':
+        return t('suppliers.colTaxId');
+      case 'currency':
+        return t('suppliers.colCurrency');
+      case 'contact':
+        return t('suppliers.colContact');
+      case 'actions':
+        return t('products.actions');
+      default:
+        return key;
+    }
+  };
+
+  const cellClass = (key: SuppliersColumnKey) =>
+    `${SUPPLIERS_COLUMN_CLASS[key]}${SUPPLIERS_TEXT_START_COLUMNS.has(key) ? ' dt-col-text-start' : ''}`;
+
   return (
     <div className="page customers-page">
-      <div className="customers-page-toolbar">
-        <div className="customers-page-title-row">
-          <h1>{t('nav.suppliers')}</h1>
-          <span className="customers-count-badge">
-            {t('suppliers.resultsCount', { count: filtered.length })}
-          </span>
-        </div>
-        <div className="customers-page-actions">
-          {inactiveCount > 0 && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={activatingAll}
-              onClick={onActivateAll}
-            >
-              {activatingAll ? t('suppliers.activatingAll') : t('suppliers.activateAll')}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            title={t('suppliers.import')}
-            onClick={() => setImportOpen(true)}
-          >
-            ⬇ {t('suppliers.import')}
-          </button>
-          <Link to="/purchase-receipts/new" className="btn btn-secondary">
-            + {t('purchaseReceipts.add')}
-          </Link>
-          <Link to="/suppliers/new" className="btn btn-primary customers-add-btn">
-            + {t('suppliers.add')}
-          </Link>
-        </div>
-      </div>
-
       {message && <div className="success-banner">{message}</div>}
       {error && !importOpen && <div className="error-banner">{error}</div>}
 
-      <div className="customers-filters card">
-        <label className="customers-search">
-          <span className="sr-only">{t('suppliers.search')}</span>
-          <input
-            type="search"
-            autoComplete="off"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('suppliers.searchPlaceholder')}
-          />
-        </label>
-        <label>
-          <span className="muted" style={{ fontSize: '0.82rem' }}>{t('suppliers.countryFilter')}</span>
-          <input
-            type="text"
-            maxLength={2}
-            value={country}
-            onChange={(e) => setCountry(e.target.value.toUpperCase())}
-            placeholder="IL"
-            style={{ width: '4rem', marginLeft: '0.35rem' }}
-          />
-        </label>
-        <label className="customers-filter-active">
-          <input
-            type="checkbox"
-            checked={includeInactive}
-            onChange={(e) => setIncludeInactive(e.target.checked)}
-          />
-          {t('suppliers.showInactive')}
-        </label>
-      </div>
-
-      <div className="card customers-table-wrap">
-        <table className="customers-table">
+      <DataTablePanel
+        resize={SUPPLIERS_PANEL_RESIZE}
+        toolbar={
+          <div className="dt-panel__toolbar-row">
+            <DataTablePanelHeading
+              title={t('nav.suppliers')}
+              count={t('suppliers.resultsCount', { count: total })}
+            />
+            <div className="dt-panel__toolbar-actions">
+              {inactiveCount > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={activatingAll}
+                  onClick={onActivateAll}
+                >
+                  {activatingAll ? t('suppliers.activatingAll') : t('suppliers.activateAll')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                title={t('suppliers.import')}
+                onClick={() => setImportOpen(true)}
+              >
+                ⬇ {t('suppliers.import')}
+              </button>
+              <Link to="/purchase-receipts/new" className="btn btn-secondary">
+                + {t('purchaseReceipts.add')}
+              </Link>
+              <Link to="/suppliers/new" className="btn btn-primary">
+                + {t('suppliers.add')}
+              </Link>
+            </div>
+          </div>
+        }
+        toolbarSecondary={
+          <div className="dt-panel-filters">
+            <label className="dt-panel-search">
+              <span className="sr-only">{t('suppliers.search')}</span>
+              <input
+                type="search"
+                autoComplete="off"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('suppliers.searchPlaceholder')}
+              />
+            </label>
+            <label>
+              <span>{t('suppliers.countryFilter')}</span>
+              <input
+                type="text"
+                maxLength={2}
+                value={country}
+                onChange={(e) => setCountry(e.target.value.toUpperCase())}
+                placeholder="IL"
+                style={{ width: '4rem' }}
+              />
+            </label>
+            <label className="dt-panel-filter-check">
+              <input
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(e) => setIncludeInactive(e.target.checked)}
+              />
+              {t('suppliers.showInactive')}
+            </label>
+          </div>
+        }
+        pagination={{
+          page,
+          pageCount,
+          pageSize,
+          total,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
+      >
+        <table className="dt-panel-table" style={{ minWidth: tableMinWidth }}>
+          <colgroup>
+            {SUPPLIERS_COLUMN_KEYS.map((key) => (
+              <col key={key} style={{ width: widths[key] }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>{t('suppliers.colName')}</th>
-              <th>{t('customers.status')}</th>
-              <th>{t('suppliers.colCountry')}</th>
-              <th>{t('suppliers.colTaxId')}</th>
-              <th>{t('suppliers.colCurrency')}</th>
-              <th>{t('suppliers.colContact')}</th>
-              <th className="customers-col-actions">{t('products.actions')}</th>
+              {SUPPLIERS_COLUMN_KEYS.map((key) =>
+                renderDataTableHeaderCell(
+                  key,
+                  columnLabel(key),
+                  SUPPLIERS_COLUMN_CLASS[key],
+                  onResizeHandleMouseDown,
+                  t('products.resizeColumn'),
+                  SUPPLIERS_TEXT_START_COLUMNS.has(key)
+                )
+              )}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s) => (
-              <tr
-                key={s.id}
-                className={!s.isActive ? 'customers-row--inactive' : ''}
-                onClick={() => navigate(`/suppliers/${s.id}`)}
-              >
-                <td className="customers-cell-name">
-                  <span className="customers-name-link">{s.name}</span>
-                </td>
-                <td>
-                  {s.isActive ? (
-                    <span className="customers-badge customers-badge--active">{t('suppliers.active')}</span>
-                  ) : (
-                    <span className="customers-badge customers-badge--inactive">{t('suppliers.inactive')}</span>
-                  )}
-                </td>
-                <td>{s.countryCode || '—'}</td>
-                <td>{s.taxId || '—'}</td>
-                <td>{s.defaultCurrency}</td>
-                <td>{s.email || s.phone || s.mobilePhone || '—'}</td>
-                <td className="customers-cell-actions table-actions-cell" onClick={(e) => e.stopPropagation()}>
-                  <div className="action-plus-wrap">
-                    <button
-                      type="button"
-                      className={`action-plus-btn${rowMenuSupplier?.id === s.id ? ' is-open' : ''}`}
-                      aria-label={t('suppliers.rowActions')}
-                      aria-expanded={rowMenuSupplier?.id === s.id}
-                      aria-haspopup="menu"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleRowMenu(s, e.currentTarget);
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
+            {pageItems.length === 0 ? (
+              <tr>
+                <td colSpan={SUPPLIERS_COLUMN_KEYS.length} className="dt-panel-empty muted">
+                  {t('suppliers.empty')}
                 </td>
               </tr>
-            ))}
+            ) : (
+              pageItems.map((s) => (
+                <tr
+                  key={s.id}
+                  className={`dt-panel-row-clickable${!s.isActive ? ' customers-row--inactive' : ''}`}
+                  onClick={() => navigate(`/suppliers/${s.id}`)}
+                >
+                  <td className={cellClass('name')}>
+                    <span className="customers-name-link">{s.name}</span>
+                  </td>
+                  <td className={cellClass('status')}>
+                    {s.isActive ? (
+                      <span className="customers-badge customers-badge--active">{t('suppliers.active')}</span>
+                    ) : (
+                      <span className="customers-badge customers-badge--inactive">{t('suppliers.inactive')}</span>
+                    )}
+                  </td>
+                  <td className={cellClass('country')}>{s.countryCode || '—'}</td>
+                  <td className={cellClass('taxId')}>{s.taxId || '—'}</td>
+                  <td className={cellClass('currency')}>{s.defaultCurrency}</td>
+                  <td className={cellClass('contact')}>{s.email || s.phone || s.mobilePhone || '—'}</td>
+                  <td className={`${cellClass('actions')} customers-cell-actions table-actions-cell`} onClick={(e) => e.stopPropagation()}>
+                    <div className="action-plus-wrap">
+                      <button
+                        type="button"
+                        className={`action-plus-btn${rowMenuSupplier?.id === s.id ? ' is-open' : ''}`}
+                        aria-label={t('suppliers.rowActions')}
+                        aria-expanded={rowMenuSupplier?.id === s.id}
+                        aria-haspopup="menu"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleRowMenu(s, e.currentTarget);
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-        {filtered.length === 0 && <p className="muted customers-empty">{t('suppliers.empty')}</p>}
-      </div>
+      </DataTablePanel>
 
-      <CatalogRowMenu
-        open={rowMenuSupplier !== null}
-        anchorRef={rowMenuAnchorRef}
-      >
+      <CatalogRowMenu open={rowMenuSupplier !== null} anchorRef={rowMenuAnchorRef}>
         {rowMenuSupplier && (
           <>
             <button

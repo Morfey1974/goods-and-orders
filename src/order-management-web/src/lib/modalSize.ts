@@ -12,6 +12,13 @@ export type ResizablePanelConfig = ModalSizeLimits & {
   defaultSize: ModalSize;
   /** If false, only restore saved size; CSS defaults when nothing saved */
   applyDefaultWhenEmpty?: boolean;
+  /** Max width = parent element width (for in-page data table panels) */
+  expandToParent?: boolean;
+  /**
+   * Width grows from center (margin-inline: auto). Bottom-right handle needs 2× horizontal
+   * mouse delta so the corner tracks the cursor.
+   */
+  resizeWidthFromCenter?: boolean;
 };
 
 const DEFAULT_MAX_W = 0.96;
@@ -20,36 +27,55 @@ const DEFAULT_MAX_H = 0.92;
 export function clampModalSize(
   width: number,
   height: number,
-  limits: ModalSizeLimits
+  limits: ModalSizeLimits,
+  overrides?: { maxWidthPx?: number; maxHeightPx?: number }
 ): ModalSize {
-  const maxW = window.innerWidth * (limits.maxWidthRatio ?? DEFAULT_MAX_W);
-  const maxH = window.innerHeight * (limits.maxHeightRatio ?? DEFAULT_MAX_H);
+  const maxW = overrides?.maxWidthPx ?? window.innerWidth * (limits.maxWidthRatio ?? DEFAULT_MAX_W);
+  const maxH = overrides?.maxHeightPx ?? window.innerHeight * (limits.maxHeightRatio ?? DEFAULT_MAX_H);
   return {
     width: Math.round(Math.min(maxW, Math.max(limits.minWidth, width))),
     height: Math.round(Math.min(maxH, Math.max(limits.minHeight, height))),
   };
 }
 
+export function resolveMaxPanelWidth(
+  el: HTMLElement | null,
+  limits: ModalSizeLimits,
+  expandToParent?: boolean
+): number {
+  if (expandToParent && el?.parentElement) {
+    return el.parentElement.clientWidth;
+  }
+  return window.innerWidth * (limits.maxWidthRatio ?? DEFAULT_MAX_W);
+}
+
 export function loadModalSize(
   storageKey: string,
   limits: ModalSizeLimits,
-  defaultSize: ModalSize
+  defaultSize: ModalSize,
+  overrides?: { maxWidthPx?: number; maxHeightPx?: number }
 ): ModalSize {
   try {
     const raw = localStorage.getItem(storageKey);
-    if (!raw) return clampModalSize(defaultSize.width, defaultSize.height, limits);
+    if (!raw) return clampModalSize(defaultSize.width, defaultSize.height, limits, overrides);
     const parsed = JSON.parse(raw) as Partial<ModalSize>;
     if (typeof parsed.width !== 'number' || typeof parsed.height !== 'number') {
-      return clampModalSize(defaultSize.width, defaultSize.height, limits);
+      return clampModalSize(defaultSize.width, defaultSize.height, limits, overrides);
     }
-    return clampModalSize(parsed.width, parsed.height, limits);
+    return clampModalSize(parsed.width, parsed.height, limits, overrides);
   } catch {
-    return clampModalSize(defaultSize.width, defaultSize.height, limits);
+    return clampModalSize(defaultSize.width, defaultSize.height, limits, overrides);
   }
 }
 
-export function saveModalSize(storageKey: string, width: number, height: number, limits: ModalSizeLimits) {
-  const size = clampModalSize(width, height, limits);
+export function saveModalSize(
+  storageKey: string,
+  width: number,
+  height: number,
+  limits: ModalSizeLimits,
+  overrides?: { maxWidthPx?: number; maxHeightPx?: number }
+) {
+  const size = clampModalSize(width, height, limits, overrides);
   localStorage.setItem(storageKey, JSON.stringify(size));
 }
 

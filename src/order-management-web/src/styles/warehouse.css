@@ -1,0 +1,42 @@
+/* Warehouse balances page */
+
+.warehouse-page {
+  width: 100%;
+  max-width: none;
+}
+
+.warehouse-page-header {
+  margin-bottom: 0.75rem;
+}
+
+.warehouse-page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.warehouse-toolbar .warehouse-filter-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  min-width: 12rem;
+  font-size: 0.88rem;
+}
+
+.warehouse-toolbar .warehouse-filter-label select {
+  min-height: 2.25rem;
+}
+
+.warehouse-toolbar-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .warehouse-toolbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+.warehouse-balances-card {
+  margin-top: 0;
+}

@@ -1,6 +1,7 @@
 @import './styles/app-modal.css';
 @import './styles/ui-actions.css';
 @import './styles/bidi.css';
+@import './styles/data-table-panel.css';
 
 :root {
   /* Палитра бренда (CMYK) */

@@ -1,0 +1,524 @@
+/* Shared resizable data-table panel — toolbar + table resize together */
+
+.dt-panel {
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+/* In-page panels: no modal viewport cap; width set inline by useResizablePanel */
+.dt-panel.app-modal__panel--resizable {
+  max-width: none;
+  max-height: none;
+}
+
+.dt-panel__toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.dt-panel__toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.dt-panel__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.65rem;
+  min-width: 0;
+}
+
+.dt-panel__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.dt-panel__count {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  white-space: nowrap;
+}
+
+.dt-panel__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+.dt-panel__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dt-panel__toolbar-secondary {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+  padding: 0.65rem 1.15rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) 35%, var(--surface));
+}
+
+.dt-panel__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.75rem 1.15rem;
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dt-panel__summary-text {
+  min-width: 0;
+}
+
+/* Table zone — table body + resize handle in bottom-right corner */
+.dt-panel__table-zone {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.75rem 0;
+  background: color-mix(in srgb, var(--bg) 22%, var(--surface));
+}
+
+.dt-panel__table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fixed at panel bottom-right — never scrolls with table content */
+.dt-panel > .dt-panel__resize-handle {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
+  z-index: 8;
+  pointer-events: auto;
+}
+
+.dt-panel-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.65rem 2.25rem 0.85rem 1rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dt-panel-page-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.dt-panel-page-size-label select {
+  min-width: 4rem;
+}
+
+.dt-panel-page-size--top {
+  margin-inline-start: auto;
+}
+
+.dt-panel-page-size--inline {
+  margin-inline-start: 0.5rem;
+}
+
+/* Rounded controls everywhere inside data-table panels */
+
+.dt-panel {
+  --dt-radius: 8px;
+}
+
+.dt-panel input[type='search'],
+.dt-panel input[type='text'],
+.dt-panel input[type='date'],
+.dt-panel input[type='number'],
+.dt-panel input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']),
+.dt-panel select,
+.dt-panel .catalog-filters-bar input,
+.dt-panel .catalog-filters-bar select,
+.dt-panel .catalog-search input,
+.dt-panel-filters input[type='search'],
+.dt-panel-filters input[type='text'],
+.dt-panel-filters input[type='date'],
+.dt-panel-filters select,
+.dt-panel-page-size-label select {
+  border-radius: var(--dt-radius);
+  border: 1px solid var(--border);
+}
+
+.dt-panel .page-header-count {
+  border-radius: 999px;
+}
+
+/* Table head / body — rounded row blocks, no vertical grid lines */
+
+.dt-panel__table-scroll table {
+  border-collapse: separate;
+  border-spacing: 0 0.38rem;
+  width: 100%;
+}
+
+.dt-panel__table-scroll thead th,
+.dt-panel__table-scroll .inv-report-table thead th,
+.dt-panel__table-scroll .catalog-table thead th {
+  border: 1px solid var(--border);
+  border-inline-start: none;
+  border-inline-end: none;
+  box-shadow: none;
+}
+
+.dt-panel__table-scroll thead th:first-child,
+.dt-panel__table-scroll .inv-report-table thead th:first-child,
+.dt-panel__table-scroll .catalog-table thead th:first-child {
+  border-inline-start: 1px solid var(--border);
+  border-start-start-radius: var(--dt-radius);
+  border-end-start-radius: var(--dt-radius);
+}
+
+.dt-panel__table-scroll thead th:last-child,
+.dt-panel__table-scroll .inv-report-table thead th:last-child,
+.dt-panel__table-scroll .catalog-table thead th:last-child {
+  border-inline-end: 1px solid var(--border);
+  border-start-end-radius: var(--dt-radius);
+  border-end-end-radius: var(--dt-radius);
+}
+
+.dt-panel__table-scroll tbody::before,
+.dt-panel__table-scroll .inv-report-table tbody::before {
+  display: none;
+}
+
+.dt-panel__table-scroll tbody tr td,
+.dt-panel__table-scroll .inv-report-table tbody tr td,
+.dt-panel__table-scroll .catalog-table tbody tr td {
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-inline-start: none;
+  border-inline-end: none;
+  box-shadow: none;
+}
+
+.dt-panel__table-scroll tbody tr td:first-child,
+.dt-panel__table-scroll .inv-report-table tbody tr td:first-child,
+.dt-panel__table-scroll .catalog-table tbody tr td:first-child {
+  border-inline-start: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-start-start-radius: var(--dt-radius);
+  border-end-start-radius: var(--dt-radius);
+}
+
+.dt-panel__table-scroll tbody tr td:last-child,
+.dt-panel__table-scroll .inv-report-table tbody tr td:last-child,
+.dt-panel__table-scroll .catalog-table tbody tr td:last-child {
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-start-end-radius: var(--dt-radius);
+  border-end-end-radius: var(--dt-radius);
+}
+
+.dt-panel__table-scroll tbody tr:last-child td,
+.dt-panel__table-scroll .inv-report-table tbody tr:last-child td,
+.dt-panel__table-scroll .catalog-table tbody tr:last-child td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.dt-panel__table-scroll .inv-report-wrap {
+  overflow-x: auto;
+}
+
+.dt-panel__table-scroll .inv-report-table th,
+.dt-panel__table-scroll .inv-report-table td {
+  border-inline-end: none;
+}
+
+.dt-panel__table-scroll .inv-report-table tfoot td {
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-inline-start: none;
+  border-inline-end: none;
+  box-shadow: none;
+}
+
+.dt-panel__table-scroll .inv-report-table tfoot tr td:first-child {
+  border-inline-start: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-end-start-radius: var(--dt-radius);
+}
+
+.dt-panel__table-scroll .inv-report-table tfoot tr td:last-child {
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-end-end-radius: var(--dt-radius);
+}
+
+/* Generic list table */
+
+.dt-panel-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.88rem;
+}
+
+.dt-panel-table th {
+  padding: 0.45rem 0.65rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.dt-panel-table td {
+  padding: 0.5rem 0.65rem;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.dt-panel-table th.dt-col-text-start,
+.dt-panel-table td.dt-col-text-start {
+  text-align: start;
+}
+
+.dt-panel-table tbody tr.dt-panel-row-clickable {
+  cursor: pointer;
+}
+
+.dt-panel-table tbody tr.dt-panel-row-clickable:hover td {
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.dt-panel-table .dt-panel-empty {
+  padding: 1.25rem 0.65rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.dt-th-resizable {
+  position: relative;
+  padding-inline-end: 0.85rem;
+}
+
+.dt-th-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-panel-table th.dt-col-text-start .dt-th-label {
+  justify-content: flex-start;
+}
+
+.dt-col-resize-handle {
+  position: absolute;
+  top: 0;
+  inset-inline-end: -1px;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.dt-col-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--primary) 45%, var(--border));
+  pointer-events: none;
+  user-select: none;
+}
+
+.dt-col-resize-handle:hover::before,
+.dt-col-resize-handle:active::before {
+  background: var(--primary);
+  width: 3px;
+}
+
+.dt-col-resize-handle:hover,
+.dt-col-resize-handle:active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+/* Filter fields inside panel toolbar */
+
+.dt-panel-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+  width: 100%;
+}
+
+.dt-panel-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.dt-panel-filters label span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.dt-panel-filters input[type='search'],
+.dt-panel-filters input[type='text'],
+.dt-panel-filters input[type='date'],
+.dt-panel-filters select {
+  min-width: 8rem;
+}
+
+.dt-panel-filters .dt-panel-search {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.dt-panel-filters .dt-panel-search input {
+  width: 100%;
+}
+
+.dt-panel-filters .dt-panel-filter-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+/* Documents month groups inside panel */
+
+.dt-panel-doc-groups {
+  padding: 0;
+}
+
+.dt-panel-table tbody td.dt-panel-doc-month {
+  text-align: start;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.65rem 1.15rem 0.35rem;
+  background: color-mix(in srgb, var(--bg) 25%, var(--surface));
+  border: none;
+  border-radius: var(--dt-radius);
+}
+
+/* Products catalog inside panel */
+
+.dt-panel .catalog-table-scroll {
+  overflow-x: auto;
+}
+
+.dt-panel .catalog-table-wrap {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.dt-panel .catalog-inline-input {
+  border-radius: var(--dt-radius);
+}
+
+/* Suppress legacy grid lines from report/catalog tables inside panels */
+.dt-panel__table-scroll .inv-report-table th,
+.dt-panel__table-scroll .inv-report-table td,
+.dt-panel__table-scroll .catalog-table th,
+.dt-panel__table-scroll .catalog-table td {
+  border-inline-end: none !important;
+}
+
+.dt-panel__table-scroll .inv-report-table tbody tr:last-child td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+/* List pages — full content width, centered resizable panel */
+
+.orders-page,
+.customers-page,
+.suppliers-page,
+.purchase-receipts-page,
+.documents-page,
+.products-catalog-page,
+.inventory-page,
+.warehouse-page {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.page-header-with-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-header-with-actions h1 {
+  margin: 0;
+}
+
+.page-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.page-header-count {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+}

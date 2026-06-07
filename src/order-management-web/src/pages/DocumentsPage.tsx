@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { catalogApi, type Product } from '../api/catalog';
@@ -10,6 +10,8 @@ import { ReceiptEditWizard } from '../components/documents/ReceiptEditWizard';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AppModal } from '../components/ui/AppModal';
+import { DataTablePanel } from '../components/ui/DataTablePanel';
+import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { bidiAutoInputProps } from '../components/BidiText';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { DocumentEmailModal } from '../components/documents/DocumentEmailModal';
@@ -19,6 +21,18 @@ import {
 } from '../components/documents/DocumentIssueMenu';
 import { documentsApi, type Document, type DocumentListResponse } from '../api/documents';
 import { useAuth } from '../context/AuthContext';
+import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
+import {
+  DOCUMENTS_COLUMN_CLASS,
+  DOCUMENTS_COLUMN_KEYS,
+  DOCUMENTS_COLUMN_WIDTHS_KEY,
+  DOCUMENTS_DEFAULT_WIDTHS,
+  DOCUMENTS_TEXT_START_COLUMNS,
+  type DocumentsColumnKey,
+} from '../lib/listTableColumns';
+import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
+import { DOCUMENTS_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 import '../styles/products-catalog.css';
 import '../styles/documents.css';
 
@@ -226,6 +240,46 @@ export function DocumentsPage() {
     () => data?.groups.flatMap((g) => g.documents) ?? [],
     [data]
   );
+
+  type DocumentWithMonth = Document & { monthKey: string; year: number; month: number };
+
+  const documentsWithMonth = useMemo<DocumentWithMonth[]>(
+    () =>
+      data?.groups.flatMap((g) =>
+        g.documents.map((d) => ({
+          ...d,
+          monthKey: g.monthKey,
+          year: g.year,
+          month: g.month,
+        }))
+      ) ?? [],
+    [data]
+  );
+
+  const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
+    DOCUMENTS_COLUMN_WIDTHS_KEY,
+    DOCUMENTS_DEFAULT_WIDTHS
+  );
+
+  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(
+    documentsWithMonth,
+    [search, filterType, filterStatus]
+  );
+
+  const pageGroups = useMemo(() => {
+    const groups: { monthKey: string; year: number; month: number; documents: DocumentWithMonth[] }[] = [];
+    const indexByKey = new Map<string, number>();
+    for (const doc of pageItems) {
+      const idx = indexByKey.get(doc.monthKey);
+      if (idx === undefined) {
+        indexByKey.set(doc.monthKey, groups.length);
+        groups.push({ monthKey: doc.monthKey, year: doc.year, month: doc.month, documents: [doc] });
+      } else {
+        groups[idx].documents.push(doc);
+      }
+    }
+    return groups;
+  }, [pageItems]);
 
   const issueContextMap = useMemo(
     () => buildIssueContextMap(allDocuments),
@@ -495,190 +549,247 @@ export function DocumentsPage() {
 
   const summary = data?.summary;
 
-  return (
-    <div className="page documents-page">
-      <div className="documents-header-row">
-        <div>
-          <h1>{t('nav.documents')}</h1>
-          {summary && (
-            <div className="documents-summary">
-              <div className="documents-summary-item">
-                <span className="label">{t('documents.totalReceipts')}</span>
-                <span className="value">{formatMoney(summary.totalReceipts)}</span>
-              </div>
-              <div className="documents-summary-item">
-                <span className="label">{t('documents.totalChargeInvoices')}</span>
-                <span className="value">{formatMoney(summary.totalChargeInvoices)}</span>
-              </div>
-              <div className="documents-summary-item">
-                <span className="label">{t('documents.totalQuotes')}</span>
-                <span className="value">{formatMoney(summary.totalQuotes)}</span>
-              </div>
-              <div className="documents-summary-item receivable">
-                <span className="label">{t('documents.totalReceivable')}</span>
-                <span className="value">{formatMoney(summary.totalReceivable)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="documents-create-wrap">
+  const columnLabel = (key: DocumentsColumnKey): string => {
+    switch (key) {
+      case 'number':
+        return t('documents.colNumber');
+      case 'status':
+        return t('documents.colStatus');
+      case 'type':
+        return t('documents.colType');
+      case 'customer':
+        return t('documents.colCustomer');
+      case 'description':
+        return t('documents.colDescription');
+      case 'payment':
+        return t('documents.colPayment');
+      case 'date':
+        return t('documents.colDate');
+      case 'due':
+        return t('documents.colDue');
+      case 'amount':
+        return t('documents.colAmount');
+      case 'actions':
+        return t('products.actions');
+      default:
+        return key;
+    }
+  };
+
+  const cellClass = (key: DocumentsColumnKey) =>
+    `${DOCUMENTS_COLUMN_CLASS[key]}${DOCUMENTS_TEXT_START_COLUMNS.has(key) ? ' dt-col-text-start' : ''}`;
+
+  const renderDocumentRow = (doc: Document) => (
+    <tr key={doc.id}>
+      <td className={cellClass('number')}>
+        {supportsDocumentPdf(doc) ? (
           <button
             type="button"
-            className="btn btn-primary"
-            onClick={() => setMenuOpen((v) => !v)}
+            className="doc-number-link"
+            onClick={() => void openPdfPreview(doc)}
+            title={t('documents.previewPdf')}
           >
-            + {t('documents.create')}
+            <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
           </button>
-          {menuOpen && (
-            <div className="documents-create-menu">
-              <h3>{t('documents.createNew')}</h3>
-              <button type="button" onClick={() => openCreate('Quote')}>
-                {t('documents.types.Quote')}
-              </button>
-              <button type="button" onClick={() => openCreate('ChargeInvoice')}>
-                {t('documents.types.ChargeInvoice')}
-              </button>
-              <button type="button" onClick={() => openCreate('Receipt')}>
-                {t('documents.types.Receipt')}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="documents-toolbar">
-        <input
-          type="search"
-          placeholder={t('documents.search')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+        ) : (
+          <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+        )}
+      </td>
+      <td className={cellClass('status')}>
+        <span className={`doc-badge doc-badge-${STATUS_CLASS[doc.status] ?? 'draft'}`}>
+          {t(`documents.statuses.${STATUS_CLASS[doc.status] ?? 'draft'}`)}
+        </span>
+      </td>
+      <td className={cellClass('type')}>
+        <span className={`doc-type-${TYPE_CLASS[doc.documentType] ?? 'quote'}`}>
+          {t(`documents.types.${doc.documentType}`)}
+        </span>
+      </td>
+      <td className={`${cellClass('customer')} bidi-auto`}>{doc.customerName}</td>
+      <td className={cellClass('description')}>{doc.description ?? '—'}</td>
+      <td className={cellClass('payment')}>{doc.paymentMethod ?? '—'}</td>
+      <td className={cellClass('date')}>{formatDate(doc.issueDate)}</td>
+      <td className={cellClass('due')}>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
+      <td className={cellClass('amount')}>{formatMoney(doc.totalAmount)}</td>
+      <td className={`${cellClass('actions')} doc-actions table-actions-cell`}>
+        <DocumentIssueMenu
+          doc={doc}
+          context={issueContextMap.get(doc.id) ?? {}}
+          busy={issueBusy}
+          onIssueCharge={(q) => void onIssueCharge(q)}
+          onIssueReceipt={(d) => void onIssueReceipt(d)}
         />
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          <option value="">{t('documents.allTypes')}</option>
-          <option value="Quote">{t('documents.types.Quote')}</option>
-          <option value="ChargeInvoice">{t('documents.types.ChargeInvoice')}</option>
-          <option value="Receipt">{t('documents.types.Receipt')}</option>
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">{t('documents.allStatuses')}</option>
-          <option value="Open">{t('documents.statuses.open')}</option>
-          <option value="Sent">{t('documents.statuses.sent')}</option>
-          <option value="Paid">{t('documents.statuses.paid')}</option>
-          <option value="Closed">{t('documents.statuses.closed')}</option>
-          <option value="Draft">{t('documents.statuses.draft')}</option>
-        </select>
-        <button type="button" className="btn btn-ghost-inline" onClick={load}>
-          {t('documents.refresh')}
-        </button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".csv,.txt,text/csv"
-          className="documents-import-input"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void onImportCsv(file);
-          }}
-        />
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={importBusy}
-          onClick={() => importInputRef.current?.click()}
-        >
-          {importBusy ? t('documents.importing') : t('documents.importCsv')}
-        </button>
-      </div>
+        {documentHasActions(doc) && (
+          <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="row-menu-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRowMenu(doc, e.currentTarget);
+              }}
+              aria-label={t('products.actions')}
+              aria-expanded={rowMenuDoc?.id === doc.id}
+            >
+              ⋮
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
+  );
 
+  return (
+    <div className="page documents-page">
       {message && <div className="success-banner">{message}</div>}
       {error && !createOpen && !wizardType && <div className="error-banner">{error}</div>}
 
-      {!data?.groups.length && <p className="muted">{t('documents.empty')}</p>}
-
-      {data?.groups.map((group) => (
-        <section key={group.monthKey}>
-          <h2 className="documents-month-title">{monthLabel(group.year, group.month)}</h2>
-          <div className="card table-wrap documents-table">
-            <table className="data-table">
+      <DataTablePanel
+        resize={DOCUMENTS_PANEL_RESIZE}
+        toolbar={
+          <>
+            <div className="dt-panel__toolbar-row">
+              <DataTablePanelHeading
+                title={t('nav.documents')}
+                count={t('products.results', { count: total })}
+              />
+              <div className="documents-create-wrap dt-panel__toolbar-actions">
+                <button type="button" className="btn btn-primary" onClick={() => setMenuOpen((v) => !v)}>
+                  + {t('documents.create')}
+                </button>
+                {menuOpen && (
+                  <div className="documents-create-menu">
+                    <h3>{t('documents.createNew')}</h3>
+                    <button type="button" onClick={() => openCreate('Quote')}>
+                      {t('documents.types.Quote')}
+                    </button>
+                    <button type="button" onClick={() => openCreate('ChargeInvoice')}>
+                      {t('documents.types.ChargeInvoice')}
+                    </button>
+                    <button type="button" onClick={() => openCreate('Receipt')}>
+                      {t('documents.types.Receipt')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            {summary && (
+              <div className="documents-summary">
+                <div className="documents-summary-item">
+                  <span className="label">{t('documents.totalReceipts')}</span>
+                  <span className="value">{formatMoney(summary.totalReceipts)}</span>
+                </div>
+                <div className="documents-summary-item">
+                  <span className="label">{t('documents.totalChargeInvoices')}</span>
+                  <span className="value">{formatMoney(summary.totalChargeInvoices)}</span>
+                </div>
+                <div className="documents-summary-item">
+                  <span className="label">{t('documents.totalQuotes')}</span>
+                  <span className="value">{formatMoney(summary.totalQuotes)}</span>
+                </div>
+                <div className="documents-summary-item receivable">
+                  <span className="label">{t('documents.totalReceivable')}</span>
+                  <span className="value">{formatMoney(summary.totalReceivable)}</span>
+                </div>
+              </div>
+            )}
+          </>
+        }
+        toolbarSecondary={
+          <div className="dt-panel-filters documents-toolbar" style={{ padding: 0, border: 'none' }}>
+            <input
+              type="search"
+              className="dt-panel-search"
+              placeholder={t('documents.search')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <option value="">{t('documents.allTypes')}</option>
+              <option value="Quote">{t('documents.types.Quote')}</option>
+              <option value="ChargeInvoice">{t('documents.types.ChargeInvoice')}</option>
+              <option value="Receipt">{t('documents.types.Receipt')}</option>
+            </select>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+              <option value="">{t('documents.allStatuses')}</option>
+              <option value="Open">{t('documents.statuses.open')}</option>
+              <option value="Sent">{t('documents.statuses.sent')}</option>
+              <option value="Paid">{t('documents.statuses.paid')}</option>
+              <option value="Closed">{t('documents.statuses.closed')}</option>
+              <option value="Draft">{t('documents.statuses.draft')}</option>
+            </select>
+            <button type="button" className="btn btn-ghost-inline" onClick={load}>
+              {t('documents.refresh')}
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,.txt,text/csv"
+              className="documents-import-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onImportCsv(file);
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={importBusy}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {importBusy ? t('documents.importing') : t('documents.importCsv')}
+            </button>
+          </div>
+        }
+        pagination={{
+          page,
+          pageCount,
+          pageSize,
+          total,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
+      >
+        {total === 0 ? (
+          <p className="muted dt-panel-empty">{t('documents.empty')}</p>
+        ) : (
+          <div className="dt-panel-doc-groups">
+            <table className="dt-panel-table documents-table" style={{ minWidth: tableMinWidth }}>
+              <colgroup>
+                {DOCUMENTS_COLUMN_KEYS.map((key) => (
+                  <col key={key} style={{ width: widths[key] }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
-                  <th className="doc-col-number">{t('documents.colNumber')}</th>
-                  <th className="doc-col-status">{t('documents.colStatus')}</th>
-                  <th>{t('documents.colType')}</th>
-                  <th>{t('documents.colCustomer')}</th>
-                  <th>{t('documents.colDescription')}</th>
-                  <th>{t('documents.colPayment')}</th>
-                  <th>{t('documents.colDate')}</th>
-                  <th>{t('documents.colDue')}</th>
-                  <th>{t('documents.colAmount')}</th>
-                  <th>{t('products.actions')}</th>
+                  {DOCUMENTS_COLUMN_KEYS.map((key) =>
+                    renderDataTableHeaderCell(
+                      key,
+                      columnLabel(key),
+                      DOCUMENTS_COLUMN_CLASS[key],
+                      onResizeHandleMouseDown,
+                      t('products.resizeColumn'),
+                      DOCUMENTS_TEXT_START_COLUMNS.has(key)
+                    )
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {group.documents.map((doc) => (
-                  <tr key={doc.id}>
-                    <td className="doc-col-number">
-                      {supportsDocumentPdf(doc) ? (
-                        <button
-                          type="button"
-                          className="doc-number-link"
-                          onClick={() => void openPdfPreview(doc)}
-                          title={t('documents.previewPdf')}
-                        >
-                          <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
-                        </button>
-                      ) : (
-                        <code>{doc.documentNumber.replace(/^[A-Z]+-/, '')}</code>
-                      )}
-                    </td>
-                    <td className="doc-col-status">
-                      <span className={`doc-badge doc-badge-${STATUS_CLASS[doc.status] ?? 'draft'}`}>
-                        {t(`documents.statuses.${STATUS_CLASS[doc.status] ?? 'draft'}`)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`doc-type-${TYPE_CLASS[doc.documentType] ?? 'quote'}`}>
-                        {t(`documents.types.${doc.documentType}`)}
-                      </span>
-                    </td>
-                    <td className="doc-col-customer">{doc.customerName}</td>
-                    <td className="doc-col-description">{doc.description ?? '—'}</td>
-                    <td>{doc.paymentMethod ?? '—'}</td>
-                    <td>{formatDate(doc.issueDate)}</td>
-                    <td>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
-                    <td>{formatMoney(doc.totalAmount)}</td>
-                    <td className="doc-actions table-actions-cell">
-                      <DocumentIssueMenu
-                        doc={doc}
-                        context={issueContextMap.get(doc.id) ?? {}}
-                        busy={issueBusy}
-                        onIssueCharge={(q) => void onIssueCharge(q)}
-                        onIssueReceipt={(d) => void onIssueReceipt(d)}
-                      />
-                      {documentHasActions(doc) && (
-                        <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
-                          <button
-                            type="button"
-                            className="row-menu-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRowMenu(doc, e.currentTarget);
-                            }}
-                            aria-label={t('products.actions')}
-                            aria-expanded={rowMenuDoc?.id === doc.id}
-                          >
-                            ⋮
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                {pageGroups.map((group) => (
+                  <Fragment key={group.monthKey}>
+                    <tr>
+                      <td colSpan={DOCUMENTS_COLUMN_KEYS.length} className="dt-panel-doc-month">
+                        {monthLabel(group.year, group.month)}
+                      </td>
+                    </tr>
+                    {group.documents.map((doc) => renderDocumentRow(doc))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
-      ))}
+        )}
+      </DataTablePanel>
 
       <CatalogRowMenu open={rowMenuDoc !== null} anchorRef={rowMenuAnchorRef}>
         {rowMenuDoc && (

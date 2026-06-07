@@ -5,6 +5,7 @@ import {
   clampModalSize,
   loadModalSize,
   saveModalSize,
+  resolveMaxPanelWidth,
   type ModalSizeLimits,
   type ResizablePanelConfig,
 } from '../lib/modalSize';
@@ -31,7 +32,8 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
     if (!config || !limits) return;
     const el = panelRef.current;
     if (!el) return;
-    saveModalSize(config.storageKey, el.offsetWidth, el.offsetHeight, limits);
+    const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
+    saveModalSize(config.storageKey, el.offsetWidth, el.offsetHeight, limits, { maxWidthPx });
   }, [config, limits]);
 
   useLayoutEffect(() => {
@@ -39,7 +41,9 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
     const el = panelRef.current;
     if (!el) return;
 
-    const saved = loadModalSize(config.storageKey, limits, config.defaultSize);
+    const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
+    const sizeOverrides = { maxWidthPx };
+    const saved = loadModalSize(config.storageKey, limits, config.defaultSize, sizeOverrides);
     const hasStored = (() => {
       try {
         return !!localStorage.getItem(config.storageKey);
@@ -85,15 +89,21 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
 
     const onMove = (e: globalThis.MouseEvent) => {
       if (!isResizingRef.current || !resizeStartRef.current || !panelRef.current) return;
+      const el = panelRef.current;
       const dx = e.clientX - resizeStartRef.current.x;
       const dy = e.clientY - resizeStartRef.current.y;
+      const widthFromCenter =
+        config.resizeWidthFromCenter ?? config.expandToParent ?? false;
+      const widthDelta = widthFromCenter ? dx * 2 : dx;
+      const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
       const next = clampModalSize(
-        resizeStartRef.current.w + dx,
+        resizeStartRef.current.w + widthDelta,
         resizeStartRef.current.h + dy,
-        limits
+        limits,
+        { maxWidthPx }
       );
-      panelRef.current.style.width = `${next.width}px`;
-      panelRef.current.style.height = `${next.height}px`;
+      el.style.width = `${next.width}px`;
+      el.style.height = `${next.height}px`;
     };
 
     const onUp = () => {

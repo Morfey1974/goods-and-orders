@@ -1,7 +1,8 @@
 /* Inventory pages — aligned with purchase receipt line tables */
 
 .inventory-page {
-  max-width: min(1400px, 99vw);
+  width: 100%;
+  max-width: none;
 }
 
 .inventory-page-header {
@@ -63,27 +64,39 @@
 
 .inventory-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem 1rem;
+  flex-direction: column;
+  gap: 0.65rem;
   padding: 0.85rem 1.15rem;
   margin-bottom: 1rem;
 }
 
-.inventory-toolbar .pr-field--date {
+.inventory-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.inventory-toolbar-date {
   min-width: 10rem;
+  margin: 0;
+}
+
+.inventory-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .inventory-detailed-toggle {
   margin: 0;
-  max-width: 22rem;
 }
 
-.inventory-detailed-toggle span {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  line-height: 1.35;
+.inventory-detailed-toggle--inline span {
+  display: inline;
+  line-height: 1.4;
 }
 
 .inventory-detailed-hint {
@@ -140,18 +153,34 @@
 .inventory-report-card {
   padding: 0;
   overflow: hidden;
+  position: relative;
+  max-width: 100%;
+}
+
+.inventory-report-card--resizable {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.inventory-report-card--resizable .inv-report-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .inventory-report-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
   margin: 0;
   padding: 0.75rem 1.15rem;
   font-size: 0.9rem;
   background: color-mix(in srgb, var(--primary) 6%, var(--surface));
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .inventory-report-summary strong {
@@ -245,8 +274,87 @@
   color: var(--text-muted);
   background: color-mix(in srgb, var(--primary) 6%, var(--surface));
   border-bottom: 1px solid var(--border);
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 85%, var(--text-muted));
   white-space: nowrap;
   vertical-align: bottom;
+}
+
+.inv-report-table th:last-child {
+  border-inline-end: none;
+}
+
+.inv-report-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  vertical-align: middle;
+}
+
+.inv-report-table td:last-child {
+  border-inline-end: none;
+}
+
+.inv-report-table tfoot td {
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.inv-report-table tfoot td:last-child {
+  border-inline-end: none;
+}
+
+.inv-th-resizable {
+  position: relative;
+  padding-inline-end: 0.85rem;
+}
+
+.inv-th-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inv-report-table th.inv-col-product .inv-th-label {
+  justify-content: flex-start;
+}
+
+.inv-col-resize-handle {
+  position: absolute;
+  top: 0;
+  inset-inline-end: -1px;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.inv-col-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--primary) 45%, var(--border));
+  pointer-events: none;
+  user-select: none;
+}
+
+.inv-col-resize-handle:hover::before,
+.inv-col-resize-handle:active::before {
+  background: var(--primary);
+  width: 3px;
+}
+
+.inv-col-resize-handle:hover,
+.inv-col-resize-handle:active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
 .inv-report-table--detailed th {
@@ -257,12 +365,6 @@
   font-size: 0.68rem;
 }
 
-.inv-report-table td {
-  padding: 0.5rem 0.65rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  vertical-align: middle;
-}
-
 .inv-report-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -270,15 +372,24 @@
 .inv-report-table th.inv-col-qty,
 .inv-report-table td.inv-col-qty,
 .inv-report-table th.inv-col-cost,
-.inv-report-table td.inv-col-cost {
+.inv-report-table td.inv-col-cost,
+.inv-report-table th.inv-col-total,
+.inv-report-table td.inv-col-total,
+.inv-report-table th.inv-col-warehouse,
+.inv-report-table td.inv-col-warehouse,
+.inv-report-table th.inv-col-article,
+.inv-report-table td.inv-col-article,
+.inv-report-table th.inv-col-lot-date,
+.inv-report-table td.inv-col-lot-date,
+.inv-report-table th.inv-col-lot-source,
+.inv-report-table td.inv-col-lot-source {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-.inv-report-table th.inv-col-total,
-.inv-report-table td.inv-col-total {
-  text-align: end;
-  font-variant-numeric: tabular-nums;
+.inv-report-table th.inv-col-product,
+.inv-report-table td.inv-col-product {
+  text-align: start;
 }
 
 .inv-report-table td.inv-col-warehouse {
@@ -307,6 +418,10 @@
   font-size: 0.9rem;
 }
 
+.inv-report-table td.inv-col-article .product-code-cell {
+  align-items: center;
+}
+
 .inv-report-table tfoot td {
   font-weight: 600;
   background: color-mix(in srgb, var(--primary) 8%, var(--surface));
@@ -314,10 +429,45 @@
   border-bottom: none;
 }
 
+.inv-report-table tfoot .inv-report-tfoot-label {
+  text-align: center;
+}
+
 .inv-report-table tfoot .inv-col-total {
-  text-align: end;
+  text-align: center;
   font-size: 0.95rem;
   color: var(--primary);
+}
+
+.inventory-report-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem 0.85rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.inventory-page-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.inventory-page-size-label select {
+  min-width: 4rem;
+}
+
+.inventory-page-size--top {
+  margin-inline-start: auto;
+}
+
+.inventory-page-size--inline {
+  margin-inline-start: 0.5rem;
 }
 
 .text-end {

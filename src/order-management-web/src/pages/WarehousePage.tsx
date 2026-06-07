@@ -1,15 +1,32 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+
 import { warehouseApi, type StockBalance, type Warehouse } from '../api/warehouse';
 import { AppModal } from '../components/ui/AppModal';
 import { WarehouseManageModal } from '../components/WarehouseManageModal';
 import { WarehouseMovementsModal } from '../components/WarehouseMovementsModal';
-import { WAREHOUSE_RECEIPT_RESIZE } from '../lib/resizablePanelKeys';
+import { BidiText } from '../components/BidiText';
+import { DataTablePanel } from '../components/ui/DataTablePanel';
+import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
+import { ProductCodeCell } from '../components/products/ProductCodeCell';
+import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
+import {
+  WAREHOUSE_BALANCE_COLUMN_CLASS,
+  WAREHOUSE_BALANCE_COLUMN_WIDTHS_KEY,
+  WAREHOUSE_BALANCE_DEFAULT_WIDTHS,
+  visibleWarehouseBalanceColumns,
+  type WarehouseBalanceColumnKey,
+} from '../lib/warehouseBalancesColumns';
+import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
+import { WAREHOUSE_BALANCES_PANEL_RESIZE, WAREHOUSE_RECEIPT_RESIZE } from '../lib/resizablePanelKeys';
 import { formatStockQuantity, normalizeStockQuantity } from '../lib/stockQuantity';
 import { useAuth } from '../context/AuthContext';
-import { ProductCodeCell } from '../components/products/ProductCodeCell';
+
 import '../styles/documents.css';
+import '../styles/inventory.css';
+import '../styles/warehouse.css';
 
 const ALL_WAREHOUSES = '';
 
@@ -19,7 +36,9 @@ export function WarehousePage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [filterWarehouseId, setFilterWarehouseId] = useState(ALL_WAREHOUSES);
   const [balances, setBalances] = useState<StockBalance[]>([]);
-  const [products, setProducts] = useState<{ id: string; articleCode: string; legacySku?: string | null; name: string }[]>([]);
+  const [products, setProducts] = useState<
+    { id: string; articleCode: string; legacySku?: string | null; name: string }[]
+  >([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -32,22 +51,40 @@ export function WarehousePage() {
     notes: '',
   });
 
+  const showWarehouseColumn = filterWarehouseId === ALL_WAREHOUSES;
+  const visibleColumns = useMemo(
+    () => visibleWarehouseBalanceColumns(showWarehouseColumn),
+    [showWarehouseColumn]
+  );
+
+  const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
+    WAREHOUSE_BALANCE_COLUMN_WIDTHS_KEY,
+    WAREHOUSE_BALANCE_DEFAULT_WIDTHS
+  );
+
+  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(
+    balances,
+    [filterWarehouseId, showWarehouseColumn]
+  );
+
   const loadWarehouses = useCallback(() => {
     if (!token) return;
     warehouseApi.list(token).then(setWarehouses).catch(() => {});
   }, [token]);
 
   const selectedWarehouseId = filterWarehouseId || undefined;
-  const showWarehouseColumn = filterWarehouseId === ALL_WAREHOUSES;
 
   const load = useCallback(() => {
     if (!token) return;
     warehouseApi.balances(token, selectedWarehouseId).then(setBalances).catch((e) => setError(e.message));
     const whForProducts = filterWarehouseId || warehouses.find((w) => w.kind === 'Components')?.id;
     if (whForProducts) {
-      warehouseApi.stockProducts(token, whForProducts).then((p) =>
-        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
-      ).catch(() => {});
+      warehouseApi
+        .stockProducts(token, whForProducts)
+        .then((p) =>
+          setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
+        )
+        .catch(() => {});
     }
   }, [token, selectedWarehouseId, filterWarehouseId, warehouses]);
 
@@ -88,81 +125,162 @@ export function WarehousePage() {
     });
     const whId = filterWarehouseId || warehouses[0]?.id;
     if (whId && token) {
-      warehouseApi.stockProducts(token, whId).then((p) =>
-        setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
-      );
+      warehouseApi
+        .stockProducts(token, whId)
+        .then((p) =>
+          setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
+        );
     }
     setReceiptOpen(true);
   };
 
+  const columnLabel = (key: WarehouseBalanceColumnKey): string => {
+    switch (key) {
+      case 'warehouse':
+        return t('products.warehouseCol');
+      case 'article':
+        return t('products.articleCol');
+      case 'product':
+        return t('products.name');
+      case 'qty':
+        return t('warehouse.qty');
+      default:
+        return key;
+    }
+  };
+
+  const renderHeaderCell = (colKey: WarehouseBalanceColumnKey) =>
+    renderDataTableHeaderCell(
+      colKey,
+      columnLabel(colKey),
+      WAREHOUSE_BALANCE_COLUMN_CLASS[colKey],
+      onResizeHandleMouseDown,
+      t('products.resizeColumn'),
+      colKey === 'product',
+      'inv'
+    );
+
+  const renderCell = (colKey: WarehouseBalanceColumnKey, b: StockBalance) => {
+    const className = WAREHOUSE_BALANCE_COLUMN_CLASS[colKey];
+    switch (colKey) {
+      case 'warehouse':
+        return (
+          <td key={colKey} className={className}>
+            <BidiText>{b.warehouseName}</BidiText>
+          </td>
+        );
+      case 'article':
+        return (
+          <td key={colKey} className={className}>
+            <ProductCodeCell articleCode={b.articleCode} legacySku={b.legacySku} />
+          </td>
+        );
+      case 'product':
+        return (
+          <td key={colKey} className={className}>
+            <BidiText>{b.productName}</BidiText>
+          </td>
+        );
+      case 'qty':
+        return (
+          <td key={colKey} className={className}>
+            {formatStockQuantity(b.quantity)}
+          </td>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1>{t('nav.warehouse')}</h1>
-        <div className="page-header-actions">
-          <Link to="/warehouse/opening-balance" className="btn btn-secondary">
-            {t('inventory.openingNav')}
-          </Link>
-          <Link to="/reports/inventory-valuation" className="btn btn-secondary">
-            {t('inventory.valuationNav')}
-          </Link>
-          <button type="button" className="btn btn-secondary" onClick={() => setManageOpen(true)}>
-            {t('warehouse.manageWarehouses')}
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setMovementsOpen(true)}>
-            {t('warehouse.viewMovements')}
-          </button>
-          <Link to="/purchase-receipts/new" className="btn btn-secondary">
-            {t('purchaseReceipts.add')}
-          </Link>
-          <button type="button" className="btn btn-secondary" onClick={openReceipt}>
-            {t('warehouse.receipt')}
-          </button>
-        </div>
-      </div>
-
-      <div className="documents-toolbar">
-        <label className="warehouse-filter-label">
-          {t('warehouse.filterBy')}
-          <select
-            value={filterWarehouseId}
-            onChange={(e) => setFilterWarehouseId(e.target.value)}
-          >
-            <option value={ALL_WAREHOUSES}>{t('warehouse.allWarehouses')}</option>
-            {warehouses.filter((w) => w.isActive).map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
+    <div className="page warehouse-page">
       {message && <div className="success-banner">{message}</div>}
       {error && !receiptOpen && !manageOpen && !movementsOpen && <div className="error-banner">{error}</div>}
 
-      <h2>{t('warehouse.balances')}</h2>
-      <div className="card table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {showWarehouseColumn && <th>{t('products.warehouseCol')}</th>}
-              <th>{t('products.article')}</th>
-              <th>{t('products.name')}</th>
-              <th>{t('warehouse.qty')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {balances.map((b) => (
-              <tr key={`${b.warehouseId}-${b.productId}`}>
-                {showWarehouseColumn && <td className="bidi-auto">{b.warehouseName}</td>}
-                <td><ProductCodeCell articleCode={b.articleCode} legacySku={b.legacySku} /></td>
-                <td className="bidi-auto">{b.productName}</td>
-                <td>{formatStockQuantity(b.quantity)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {balances.length === 0 && <p className="muted empty-table">{t('warehouse.empty')}</p>}
-      </div>
+      <DataTablePanel
+        resize={WAREHOUSE_BALANCES_PANEL_RESIZE}
+        toolbar={
+          <>
+            <div className="dt-panel__toolbar-row">
+              <DataTablePanelHeading
+                title={t('nav.warehouse')}
+                count={t('products.results', { count: total })}
+              />
+              <div className="dt-panel__toolbar-actions warehouse-toolbar-actions">
+                <Link to="/warehouse/opening-balance" className="btn btn-secondary">
+                  {t('inventory.openingNav')}
+                </Link>
+                <Link to="/reports/inventory-valuation" className="btn btn-secondary">
+                  {t('inventory.valuationNav')}
+                </Link>
+                <button type="button" className="btn btn-secondary" onClick={() => setManageOpen(true)}>
+                  {t('warehouse.manageWarehouses')}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setMovementsOpen(true)}>
+                  {t('warehouse.viewMovements')}
+                </button>
+                <Link to="/purchase-receipts/new" className="btn btn-secondary">
+                  {t('purchaseReceipts.add')}
+                </Link>
+                <button type="button" className="btn btn-secondary" onClick={openReceipt}>
+                  {t('warehouse.receipt')}
+                </button>
+              </div>
+            </div>
+          </>
+        }
+        toolbarSecondary={
+          <label className="warehouse-filter-label inventory-toolbar-date">
+            <span>{t('warehouse.filterBy')}</span>
+            <select value={filterWarehouseId} onChange={(e) => setFilterWarehouseId(e.target.value)}>
+              <option value={ALL_WAREHOUSES}>{t('warehouse.allWarehouses')}</option>
+              {warehouses
+                .filter((w) => w.isActive)
+                .map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        }
+        pagination={{
+          page,
+          pageCount,
+          pageSize,
+          total,
+          onPageChange: setPage,
+          onPageSizeChange: setPageSize,
+        }}
+      >
+        <div className="inv-report-wrap">
+          <table className="inv-report-table" style={{ minWidth: tableMinWidth }}>
+            <colgroup>
+              {visibleColumns.map((key) => (
+                <col key={key} className={WAREHOUSE_BALANCE_COLUMN_CLASS[key]} style={{ width: widths[key] }} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>{visibleColumns.map((key) => renderHeaderCell(key))}</tr>
+            </thead>
+            <tbody>
+              {pageItems.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumns.length} className="inv-report-empty muted">
+                    {t('warehouse.empty')}
+                  </td>
+                </tr>
+              ) : (
+                pageItems.map((b) => (
+                  <tr key={`${b.warehouseId}-${b.productId}`}>
+                    {visibleColumns.map((key) => renderCell(key, b))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </DataTablePanel>
 
       <WarehouseManageModal
         open={manageOpen}
@@ -215,17 +333,30 @@ export function WarehousePage() {
                   const whId = e.target.value;
                   setReceipt({ ...receipt, warehouseId: whId, productId: '' });
                   if (token && whId) {
-                    warehouseApi.stockProducts(token, whId).then((p) =>
-                      setProducts(p.map((x) => ({ id: x.id, articleCode: x.articleCode, legacySku: x.legacySku, name: x.name })))
-                    );
+                    warehouseApi
+                      .stockProducts(token, whId)
+                      .then((p) =>
+                        setProducts(
+                          p.map((x) => ({
+                            id: x.id,
+                            articleCode: x.articleCode,
+                            legacySku: x.legacySku,
+                            name: x.name,
+                          }))
+                        )
+                      );
                   }
                 }}
                 required
               >
                 <option value="">—</option>
-                {warehouses.filter((w) => w.isActive).map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
+                {warehouses
+                  .filter((w) => w.isActive)
+                  .map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
               </select>
             </label>
             <label>
@@ -263,7 +394,9 @@ export function WarehousePage() {
               <button type="button" className="btn btn-ghost-inline" onClick={() => setReceiptOpen(false)}>
                 {t('settings.cancel')}
               </button>
-              <button type="submit" className="btn btn-primary">{t('submit')}</button>
+              <button type="submit" className="btn btn-primary">
+                {t('submit')}
+              </button>
             </div>
           </form>
         </div>
