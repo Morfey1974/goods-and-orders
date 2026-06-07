@@ -446,7 +446,9 @@ export function PurchaseReceiptDetailPage() {
   const [receiptLoading, setReceiptLoading] = useState(() => Boolean(id && id !== 'new'));
   const [docZoom, setDocZoom] = useState(100);
   const [error, setError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
   const [saving, setSaving] = useState(false);
+  const [postConfirmOpen, setPostConfirmOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [docDeleting, setDocDeleting] = useState(false);
   const [baseline, setBaseline] = useState('');
@@ -872,54 +874,79 @@ export function PurchaseReceiptDetailPage() {
     landedCostLines: applyLandedCosts ? rowsToLandedCostPayload(landedCostRows) : [],
   });
 
-  const performSave = useCallback(async (): Promise<boolean> => {
-    if (!token) return false;
+  const persistDraftReceipt = useCallback(async (): Promise<PurchaseReceipt | null> => {
+    if (!token) return null;
     if (!formValidation.canSave) {
       setError(t(formValidation.errorKey ?? 'purchaseReceipts.saveDisabledHint'));
-      return false;
+      return null;
     }
-    setSaving(true);
     setError('');
-    try {
-      let saved: PurchaseReceipt;
-      if (isNew) {
-        saved = await purchaseReceiptsApi.create(token, buildPayload());
-        for (const pending of pendingDocs) {
-          saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, pending.file);
-        }
-        clearPendingDocs();
-      } else {
-        saved = await purchaseReceiptsApi.update(token, id!, buildPayload());
-      }
-
-      try {
-        await purchaseReceiptsApi.post(token, saved.id, saved.version);
-        flushSync(() => setBaseline(serializeForm()));
-        navigate('/purchase-receipts');
-        return true;
-      } catch (postErr) {
-        if (isNew) {
-          navigate(`/purchase-receipts/${saved.id}`, { replace: true });
-        }
-        throw postErr;
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
-      setSaving(false);
-      return false;
+    setSaveSuccess('');
+    let saved: PurchaseReceipt;
+    if (isNew) {
+      saved = await purchaseReceiptsApi.create(token, buildPayload());
+    } else {
+      saved = await purchaseReceiptsApi.update(token, id!, buildPayload());
     }
+    for (const pending of pendingDocs) {
+      saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, pending.file);
+    }
+    clearPendingDocs();
+    applyReceiptWithDocuments(saved);
+    return saved;
   }, [
     token,
     formValidation,
     isNew,
     pendingDocs,
     id,
-    navigate,
     clearPendingDocs,
-    serializeForm,
+    applyReceiptWithDocuments,
     t,
     buildPayload,
   ]);
+
+  const performSaveDraft = useCallback(async (): Promise<boolean> => {
+    if (!token) return false;
+    setSaving(true);
+    try {
+      const saved = await persistDraftReceipt();
+      if (!saved) return false;
+
+      flushSync(() => setBaseline(serializeForm()));
+      setSaveSuccess(t('purchaseReceipts.draftSaved'));
+
+      if (isNew) {
+        navigate(`/purchase-receipts/${saved.id}`, { replace: true });
+      }
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [token, persistDraftReceipt, serializeForm, isNew, navigate, t]);
+
+  const performPost = useCallback(async (): Promise<boolean> => {
+    if (!token) return false;
+    setSaving(true);
+    setPostConfirmOpen(false);
+    try {
+      const saved = await persistDraftReceipt();
+      if (!saved) return false;
+
+      await purchaseReceiptsApi.post(token, saved.id, saved.version);
+      flushSync(() => setBaseline(serializeForm()));
+      navigate('/purchase-receipts');
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [token, persistDraftReceipt, serializeForm, navigate]);
 
   const {
     leaveOpen,
@@ -929,13 +956,21 @@ export function PurchaseReceiptDetailPage() {
     handleLeaveDiscard,
   } = useUnsavedLeaveBlocker({
     when: isDirty && isDraft && !saving,
-    onSave: performSave,
+    onSave: performSaveDraft,
     saveReplacesNavigation: true,
   });
 
   const onSave = async (e?: FormEvent) => {
     e?.preventDefault();
-    await performSave();
+    await performSaveDraft();
+  };
+
+  const onPostClick = () => {
+    if (!formValidation.canSave) {
+      setError(t(formValidation.errorKey ?? 'purchaseReceipts.saveDisabledHint'));
+      return;
+    }
+    setPostConfirmOpen(true);
   };
 
   const onDelete = async () => {
@@ -1005,28 +1040,6 @@ export function PurchaseReceiptDetailPage() {
         } else {
           setDocUploadError(t('purchaseReceipts.documentUploadEmptyResponse'));
         }
-      } catch (err) {
-        setDocUploadError(err instanceof Error ? err.message : 'Error');
-      } finally {
-        setUploading(false);
-      }
-      return;
-    }
-
-    if (isNew && formValidation.canSave) {
-      setUploading(true);
-      setDocUploadError('');
-      setPreviewError('');
-      try {
-        let saved = await purchaseReceiptsApi.create(token, buildPayload());
-        for (const file of files) {
-          saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, file);
-        }
-        for (const pending of pendingDocs) {
-          saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, pending.file);
-        }
-        clearPendingDocs();
-        navigate(`/purchase-receipts/${saved.id}`, { replace: true });
       } catch (err) {
         setDocUploadError(err instanceof Error ? err.message : 'Error');
       } finally {
@@ -1315,6 +1328,7 @@ export function PurchaseReceiptDetailPage() {
       </header>
 
       {error && <div className="error-banner">{error}</div>}
+      {saveSuccess && !error && <div className="success-banner">{saveSuccess}</div>}
 
       <div className="purchase-receipt-workspace">
         <form className="purchase-receipt-main card" onSubmit={onSave}>
@@ -1793,8 +1807,19 @@ export function PurchaseReceiptDetailPage() {
             {isDraft && (
               <>
                 <button
-                  type="submit"
+                  type="button"
                   className="btn btn-primary"
+                  disabled={saving || uploading || !formValidation.canSave}
+                  title={
+                    !formValidation.canSave ? t('purchaseReceipts.saveDisabledHint') : undefined
+                  }
+                  onClick={() => void onPostClick()}
+                >
+                  {saving ? t('settings.saving') : t('purchaseReceipts.postAction')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-secondary"
                   disabled={saving || uploading || !formValidation.canSave}
                   title={
                     !formValidation.canSave ? t('purchaseReceipts.saveDisabledHint') : undefined
@@ -2071,6 +2096,17 @@ export function PurchaseReceiptDetailPage() {
           </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={postConfirmOpen}
+        title={t('purchaseReceipts.postAction')}
+        message={t('purchaseReceipts.postConfirm')}
+        confirmLabel={t('purchaseReceipts.postAction')}
+        cancelLabel={t('settings.cancel')}
+        busy={saving}
+        onConfirm={() => void performPost()}
+        onCancel={() => setPostConfirmOpen(false)}
+      />
 
       <ConfirmDialog
         open={docToRemove !== null}
