@@ -9,8 +9,8 @@ namespace OrderManagement.Api.Services.Pdf;
 
 public static class InventoryValuationPdfRenderer
 {
-    private const string FontRegular = "Noto Sans Hebrew";
-    private const string FontBold = "Noto Sans Hebrew Bold";
+    private const string FontRegular = PdfFontRegistry.HebrewRegular;
+    private const string FontBold = PdfFontRegistry.HebrewBold;
     private static bool _fontsRegistered;
 
     private static readonly string TitleAccentColor = "#3d4f5f";
@@ -29,17 +29,8 @@ public static class InventoryValuationPdfRenderer
     private static void RegisterFonts()
     {
         if (_fontsRegistered) return;
-        RegisterFontFile("NotoSansHebrew-Regular.ttf", FontRegular);
-        RegisterFontFile("NotoSansHebrew-Bold.ttf", FontBold);
+        PdfFontRegistry.EnsureRegistered();
         _fontsRegistered = true;
-    }
-
-    private static void RegisterFontFile(string fileName, string family)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
-        if (!File.Exists(path)) return;
-        using var stream = File.OpenRead(path);
-        FontManager.RegisterFontWithCustomName(family, stream);
     }
 
     public static byte[] Render(InventoryValuationPdfModel model)
@@ -171,10 +162,10 @@ public static class InventoryValuationPdfRenderer
                 DataCell(table.Cell(), FormatQuantity(line.Quantity), zebra, alignCenter: true, compact: true);
                 if (detailed)
                 {
-                    DataCell(table.Cell(), line.SourceLabel ?? "—", zebra);
+                    DataCell(table.Cell(), line.SourceLabel ?? "—", zebra, mixedScript: true);
                     DataCell(table.Cell(), line.ReceivedAtLabel ?? "—", zebra, alignCenter: true, compact: true);
                 }
-                DataCell(table.Cell(), line.ProductName, zebra);
+                DataCell(table.Cell(), line.ProductName, zebra, mixedScript: true);
                 DataCell(table.Cell(), line.ArticleCode, zebra, alignCenter: true);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true, compact: true);
                 rowIndex++;
@@ -205,13 +196,25 @@ public static class InventoryValuationPdfRenderer
             .AlignCenter().Text(text).Style(Bold(fontSize));
     }
 
-    private static void DataCell(IContainer cell, string text, bool altRow, bool alignCenter = false, bool compact = false)
+    private static void DataCell(
+        IContainer cell,
+        string text,
+        bool altRow,
+        bool alignCenter = false,
+        bool compact = false,
+        bool mixedScript = false)
     {
         var bg = altRow ? TableRowAltBg : TableRowBg;
         var fontSize = compact ? 8f : 9f;
         var c = TableCellBorder(cell).Background(bg)
             .PaddingVertical(compact ? 5 : 6)
             .PaddingHorizontal(compact ? 3 : 5);
+        if (mixedScript)
+        {
+            PdfMixedScriptText.Render(c, text, fontSize, alignCenter);
+            return;
+        }
+
         if (alignCenter)
             c.AlignCenter().Text(text).Style(Regular(fontSize));
         else

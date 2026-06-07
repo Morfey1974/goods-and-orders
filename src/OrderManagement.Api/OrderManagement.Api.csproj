@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Update="Assets\Fonts\NotoSans-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\Fonts\NotoSans-Bold.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Assets\Fonts\NotoSansHebrew-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

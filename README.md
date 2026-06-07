@@ -197,6 +197,7 @@ npm run dev
 | **Оценка склада** | Отчёты → стоимость остатков; опция **«Детализация по партиям FIFO»**; **скачивание PDF** отчёта |
 | **Партии FIFO** | Вкладка в карточке товара; API `GET /api/inventory/lots` |
 | Движения | История с **себестоимостью ₪** в карточке товара и модале движений; отчёт PDF |
+| **Смешанный текст в PDF** | Названия товаров (иврит + латиница/кириллица, напр. `RJ-45`, `10X10`) — корректный порядок слов в отчётах; шрифты `NotoSansHebrew` + `NotoSans` |
 | **Отчёты** (вкладка «Отчёты») | PDF с шапкой бизнеса на иврите |
 | Остатки / движения PDF | Фильтры по складу и периоду; быстрый выбор периода |
 
@@ -334,6 +335,7 @@ docker compose down -v
 │   └── ReclassifyProductsToFg/ # переклассификация товаров в FG (dev)
 ├── src/
 │   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов, складские отчёты
+│   │   └── Assets/Fonts/       # NotoSansHebrew + NotoSans (иврит, кириллица, латиница в PDF)
 │   └── order-management-web/   # React + Vite + i18n (ru/en/he), AppModal, отчёты
 └── README.md
 ```
@@ -392,7 +394,8 @@ docker compose down -v
 | API недоступен | `docker compose ps` — сервис `api` Up |
 | CORS | Добавьте origin в `Cors:Origins` в `appsettings.json` |
 | Порт 5432 занят | Смените порт в `docker-compose.yml` или остановите другой PostgreSQL |
-| PDF הצעה не открывается / 500 | Пересоберите API; в контейнере должны быть шрифты `Assets/Fonts/NotoSansHebrew-*.ttf` |
+| PDF не открывается / кириллица в отчёте | Пересоберите API (`docker compose up -d --build api` из корня проекта); в `Assets/Fonts/` нужны `NotoSansHebrew-*.ttf` и `NotoSans-*.ttf` |
+| Иврит в PDF «перемешан» (не как в UI) | Пересоберите API — см. выше; после обновления заново скачайте отчёт (не старый PDF из кэша) |
 | Отчёт по движениям — Internal Server Error при выборе дат | Пересоберите API (`docker compose up -d --build api`); нужна нормализация дат UTC |
 | Модальное окно закрывается при ресайзе | Обновите фронтенд — используется `AppModal`, не сырой `onClick` на overlay |
 | Ошибка concurrency при сохранении накладной | `docker compose up -d --build api`; обновите страницу и сохраните снова |

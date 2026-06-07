@@ -9,8 +9,8 @@ namespace OrderManagement.Api.Services.Pdf;
 /// <summary>Shared layout for הצעת מחיר / חשבון חיוב / קבלה (Yesh / DCM sample).</summary>
 public static class BusinessDocumentPdfRenderer
 {
-    private const string FontRegular = "Noto Sans Hebrew";
-    private const string FontBold = "Noto Sans Hebrew Bold";
+    private const string FontRegular = PdfFontRegistry.HebrewRegular;
+    private const string FontBold = PdfFontRegistry.HebrewBold;
     private static bool _fontsRegistered;
 
     private static readonly string TitleAccentColor = "#3d4f5f";
@@ -29,17 +29,8 @@ public static class BusinessDocumentPdfRenderer
     private static void RegisterFonts()
     {
         if (_fontsRegistered) return;
-        RegisterFontFile("NotoSansHebrew-Regular.ttf", FontRegular);
-        RegisterFontFile("NotoSansHebrew-Bold.ttf", FontBold);
+        PdfFontRegistry.EnsureRegistered();
         _fontsRegistered = true;
-    }
-
-    private static void RegisterFontFile(string fileName, string family)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
-        if (!File.Exists(path)) return;
-        using var stream = File.OpenRead(path);
-        FontManager.RegisterFontWithCustomName(family, stream);
     }
 
     public static byte[] Render(BusinessDocumentPdfModel model)
@@ -169,15 +160,22 @@ public static class BusinessDocumentPdfRenderer
         {
             col.Spacing(2);
             if (!string.IsNullOrWhiteSpace(block.Heading))
-                col.Item().AlignRight().Text($"{block.Heading}: {block.Title}").Style(Bold(block.TitleFontSize));
+            {
+                var headingLine = $"{block.Heading}: {block.Title}";
+                col.Item().AlignRight().Text(t =>
+                    PdfMixedScriptText.ComposeRuns(t, headingLine, block.TitleFontSize, bold: true));
+            }
             else
-                col.Item().AlignRight().Text(block.Title).Style(Bold(block.TitleFontSize));
+                col.Item().AlignRight().Text(t =>
+                    PdfMixedScriptText.ComposeRuns(t, block.Title, block.TitleFontSize, bold: true));
 
             if (!string.IsNullOrWhiteSpace(block.Subtitle))
-                col.Item().AlignRight().Text(block.Subtitle).Style(Regular(10));
+                col.Item().AlignRight().Text(t =>
+                    PdfMixedScriptText.ComposeRuns(t, block.Subtitle!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(block.Address))
-                col.Item().AlignRight().Text(block.Address).Style(Regular(10));
+                col.Item().AlignRight().Text(t =>
+                    PdfMixedScriptText.ComposeRuns(t, block.Address!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(block.DetailLine))
                 col.Item().AlignRight().Text(block.DetailLine).Style(Regular(10));
@@ -247,7 +245,7 @@ public static class BusinessDocumentPdfRenderer
                 DataMoneyCell(table.Cell(), FormatMoney(line.LineTotal), zebra);
                 DataMoneyCell(table.Cell(), FormatMoney(line.UnitPrice), zebra);
                 DataCell(table.Cell(), FormatQuantity(line.Quantity), zebra, alignCenter: true);
-                DataCell(table.Cell(), detail, zebra);
+                DataCell(table.Cell(), detail, zebra, mixedScript: true);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true);
                 rowIndex++;
             }
@@ -301,7 +299,7 @@ public static class BusinessDocumentPdfRenderer
             {
                 var zebra = rowIndex % 2 == 1;
                 DataMoneyCell(table.Cell(), FormatMoney(line.LineTotal), zebra);
-                DataCell(table.Cell(), line.PaymentDetail ?? "—", zebra);
+                DataCell(table.Cell(), line.PaymentDetail ?? "—", zebra, mixedScript: true);
                 DataCell(table.Cell(), line.PaymentTypeLabel ?? "", zebra);
                 DataCell(table.Cell(), line.LineDateDisplay ?? "—", zebra, alignCenter: true);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true);
@@ -334,10 +332,21 @@ public static class BusinessDocumentPdfRenderer
             .PaddingVertical(6).PaddingHorizontal(5)
             .AlignCenter().Text(text).Style(Bold(9));
 
-    private static void DataCell(IContainer cell, string text, bool altRow, bool alignCenter = false)
+    private static void DataCell(
+        IContainer cell,
+        string text,
+        bool altRow,
+        bool alignCenter = false,
+        bool mixedScript = false)
     {
         var bg = altRow ? TableRowAltBg : TableRowBg;
         var c = TableCellBorder(cell).Background(bg).PaddingVertical(6).PaddingHorizontal(5);
+        if (mixedScript)
+        {
+            PdfMixedScriptText.Render(c, text, 9, alignCenter);
+            return;
+        }
+
         if (alignCenter)
             c.AlignCenter().Text(text).Style(Regular(9));
         else
