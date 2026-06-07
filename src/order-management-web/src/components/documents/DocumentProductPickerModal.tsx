@@ -9,6 +9,10 @@ import {
   sanitizePriceDraft,
   sanitizeQuantityDraft,
 } from '../../lib/stockQuantity';
+import { DOCUMENT_PRODUCT_PICKER_RESIZE } from '../../lib/resizablePanelKeys';
+import { useResizablePanel } from '../../hooks/useResizablePanel';
+import { BidiText } from '../BidiText';
+import { ModalResizeHandles } from '../ui/ModalResizeHandles';
 
 export type PickedProductLine = {
   productId: string;
@@ -36,6 +40,10 @@ function draftForProduct(p: Product): RowDraft {
 
 export function DocumentProductPickerModal({ open, products, onClose, onSave }: Props) {
   const { t } = useTranslation();
+  const { panelRef, resizable, persistSize, onResizeHandleMouseDown } = useResizablePanel(
+    open,
+    DOCUMENT_PRODUCT_PICKER_RESIZE
+  );
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [rowDrafts, setRowDrafts] = useState<Record<string, RowDraft>>({});
@@ -103,6 +111,12 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
       });
     }
     if (lines.length) onSave(lines);
+    persistSize();
+    onClose();
+  };
+
+  const handleClose = () => {
+    persistSize();
     onClose();
   };
 
@@ -111,14 +125,15 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
   return createPortal(
     <div className="doc-picker-overlay" role="presentation">
       <div
-        className="doc-picker-modal"
+        ref={panelRef}
+        className={`doc-picker-modal${resizable ? ' doc-picker-modal--resizable' : ''}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="doc-picker-title"
       >
         <header className="doc-picker-header">
-          <button type="button" className="doc-picker-close" onClick={onClose} aria-label={t('products.close')}>
+          <button type="button" className="doc-picker-close" onClick={handleClose} aria-label={t('products.close')}>
             ×
           </button>
           <h2 id="doc-picker-title">{t('documents.pickerTitle')}</h2>
@@ -233,7 +248,9 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
                         }
                       />
                     </td>
-                    <td className="doc-picker-name">{p.name}</td>
+                    <td className="doc-picker-name">
+                      <BidiText as="span">{p.name}</BidiText>
+                    </td>
                     <td>
                       <code>{p.articleCode}</code>
                     </td>
@@ -245,7 +262,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
         </div>
 
         <footer className="doc-picker-footer">
-          <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
+          <button type="button" className="btn btn-ghost-inline" onClick={handleClose}>
             {t('products.close')}
           </button>
           <button
@@ -258,6 +275,7 @@ export function DocumentProductPickerModal({ open, products, onClose, onSave }: 
             {selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
           </button>
         </footer>
+        {resizable && <ModalResizeHandles onMouseDown={onResizeHandleMouseDown} />}
       </div>
     </div>,
     document.body

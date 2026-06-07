@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WAREHOUSE_MANAGE_RESIZE } from '../lib/resizablePanelKeys';
 import { AppModal } from './ui/AppModal';
+import { bidiAutoInputProps } from './BidiText';
 import { warehouseApi, type Warehouse } from '../api/warehouse';
 
 type Props = {
@@ -123,7 +124,7 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
         </div>
 
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table warehouse-manage-table">
             <thead>
               <tr>
                 <th>{t('warehouse.colName')}</th>
@@ -136,11 +137,11 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
             <tbody>
               {list.map((wh) => (
                 <tr key={wh.id}>
-                  <td>
+                  <td className="bidi-auto">
                     <strong>{wh.name}</strong>
                     {wh.isSystem && <span className="warehouse-system-tag">{t('warehouse.system')}</span>}
                   </td>
-                  <td>{wh.description ?? '—'}</td>
+                  <td className="bidi-auto">{wh.description ?? '—'}</td>
                   <td>
                     <span className={wh.isActive ? 'warehouse-status-active' : 'warehouse-status-inactive'}>
                       {wh.isActive ? t('products.statusActive') : t('products.statusInactive')}
@@ -169,6 +170,7 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
             <label>
               {t('warehouse.colName')} *
               <input
+                {...bidiAutoInputProps}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -177,6 +179,7 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
             <label>
               {t('warehouse.colDescription')}
               <input
+                {...bidiAutoInputProps}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />

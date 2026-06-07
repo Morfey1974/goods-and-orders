@@ -18,6 +18,34 @@ export type PurchaseReceiptLine = {
   sortOrder: number;
 };
 
+export type PurchaseReceiptDocument = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
+export type PurchaseReceiptLandedCostLine = {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  category: string;
+  currency: string;
+  amount: number;
+  amountIls?: number;
+  notes?: string;
+  sortOrder: number;
+};
+
+export type PurchaseReceiptLandedCostLineInput = {
+  supplierId: string;
+  category: string;
+  currency: string;
+  amount: number;
+  notes?: string;
+};
+
 export type PurchaseReceiptLineInput = {
   productId: string;
   warehouseId?: string;
@@ -36,7 +64,7 @@ export type PurchaseReceiptListItem = {
   currency: string;
   totalAmount?: number;
   status: string;
-  hasDocument: boolean;
+  documentCount: number;
   createdAt: string;
   postedAt?: string;
 };
@@ -53,12 +81,40 @@ export type PurchaseReceipt = {
   notes?: string;
   status: string;
   postedAt?: string;
-  hasDocument: boolean;
-  documentFileName?: string;
+  documentCount: number;
   version: number;
   createdAt: string;
   lines: PurchaseReceiptLine[];
+  applyLandedCosts: boolean;
+  landedCostLines: PurchaseReceiptLandedCostLine[];
+  documents: PurchaseReceiptDocument[];
 };
+
+function mapDocument(raw: Record<string, unknown>): PurchaseReceiptDocument {
+  return {
+    id: String(raw.id ?? raw.Id),
+    fileName: String(raw.fileName ?? raw.FileName ?? ''),
+    contentType: String(raw.contentType ?? raw.ContentType ?? ''),
+    sortOrder: Number(raw.sortOrder ?? raw.SortOrder ?? 0),
+    createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
+  };
+}
+
+function mapLandedCostLine(raw: Record<string, unknown>): PurchaseReceiptLandedCostLine {
+  return {
+    id: String(raw.id ?? raw.Id),
+    supplierId: String(raw.supplierId ?? raw.SupplierId),
+    supplierName: String(raw.supplierName ?? raw.SupplierName ?? ''),
+    category: String(raw.category ?? raw.Category ?? 'Other'),
+    currency: String(raw.currency ?? raw.Currency ?? 'ILS'),
+    amount: Number(raw.amount ?? raw.Amount ?? 0),
+    amountIls: raw.amountIls != null || raw.AmountIls != null
+      ? Number(raw.amountIls ?? raw.AmountIls)
+      : undefined,
+    notes: (raw.notes ?? raw.Notes) as string | undefined,
+    sortOrder: Number(raw.sortOrder ?? raw.SortOrder ?? 0),
+  };
+}
 
 function mapLine(raw: Record<string, unknown>): PurchaseReceiptLine {
   return {
@@ -86,6 +142,15 @@ function mapReceipt(raw: Record<string, unknown>): PurchaseReceipt {
   const lines = Array.isArray(linesRaw)
     ? linesRaw.map((l) => mapLine(l as Record<string, unknown>))
     : [];
+  const landedRaw = raw.landedCostLines ?? raw.LandedCostLines;
+  const landedCostLines = Array.isArray(landedRaw)
+    ? landedRaw.map((l) => mapLandedCostLine(l as Record<string, unknown>))
+    : [];
+  const documentsRaw = raw.documents ?? raw.Documents;
+  const documents = Array.isArray(documentsRaw)
+    ? documentsRaw.map((d) => mapDocument(d as Record<string, unknown>))
+    : [];
+  const documentCount = Number(raw.documentCount ?? raw.DocumentCount ?? documents.length);
   return {
     id: String(raw.id ?? raw.Id),
     receiptNumber: String(raw.receiptNumber ?? raw.ReceiptNumber ?? ''),
@@ -100,15 +165,19 @@ function mapReceipt(raw: Record<string, unknown>): PurchaseReceipt {
     notes: (raw.notes ?? raw.Notes) as string | undefined,
     status: String(raw.status ?? raw.Status ?? 'Draft'),
     postedAt: (raw.postedAt ?? raw.PostedAt) as string | undefined,
-    hasDocument: Boolean(raw.hasDocument ?? raw.HasDocument),
-    documentFileName: (raw.documentFileName ?? raw.DocumentFileName) as string | undefined,
+    documentCount,
     version: Number(raw.version ?? raw.Version ?? 1),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
     lines,
+    applyLandedCosts: Boolean(raw.applyLandedCosts ?? raw.ApplyLandedCosts),
+    landedCostLines,
+    documents,
   };
 }
 
 function mapListItem(raw: Record<string, unknown>): PurchaseReceiptListItem {
+  const documentsRaw = raw.documents ?? raw.Documents;
+  const documentsCount = Array.isArray(documentsRaw) ? documentsRaw.length : 0;
   return {
     id: String(raw.id ?? raw.Id),
     receiptNumber: String(raw.receiptNumber ?? raw.ReceiptNumber ?? ''),
@@ -119,7 +188,7 @@ function mapListItem(raw: Record<string, unknown>): PurchaseReceiptListItem {
       ? Number(raw.totalAmount ?? raw.TotalAmount)
       : undefined,
     status: String(raw.status ?? raw.Status ?? 'Draft'),
-    hasDocument: Boolean(raw.hasDocument ?? raw.HasDocument),
+    documentCount: Number(raw.documentCount ?? raw.DocumentCount ?? documentsCount),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
     postedAt: (raw.postedAt ?? raw.PostedAt) as string | undefined,
   };
@@ -133,7 +202,9 @@ export type PurchaseReceiptPayload = {
   totalAmount?: number | null;
   notes?: string | null;
   version?: number;
+  applyLandedCosts?: boolean;
   lines: PurchaseReceiptLineInput[];
+  landedCostLines?: PurchaseReceiptLandedCostLineInput[];
 };
 
 export const purchaseReceiptsApi = {
@@ -198,37 +269,123 @@ export const purchaseReceiptsApi = {
     }
   },
 
-  uploadDocument: async (token: string, id: string, file: File) => {
+  uploadDocument: async (token: string, receiptId: string, file: File) => {
     const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(`${API_BASE}/api/purchase-receipts/${id}/document`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((data as { message?: string }).message ?? res.statusText);
-    return mapReceipt(data as Record<string, unknown>);
+    fd.append('file', file, file.name);
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/purchase-receipts/${receiptId}/documents`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        throw new Error(
+          'Не удалось связаться с сервером. Проверьте, что API запущен (docker compose up) и страница открыта через http://localhost:5173'
+        );
+      }
+      throw err;
+    }
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+      message?: string;
+      code?: string;
+    };
+    if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error('Сессия истекла — войдите снова.');
+      }
+      if (res.status === 402 || data.code === 'SUBSCRIPTION_EXPIRED') {
+        throw new Error(data.message ?? 'Пробный период закончился.');
+      }
+      throw new Error(data.message ?? res.statusText);
+    }
+    const mapped = mapReceipt(data);
+    if (!mapped.id) {
+      throw new Error(data.message ?? 'Upload failed: empty server response.');
+    }
+    return mapped;
   },
 
-  deleteDocument: async (token: string, id: string) => {
+  deleteDocument: async (token: string, receiptId: string, documentId: string) => {
     const raw = await request<Record<string, unknown>>(
-      `/api/purchase-receipts/${id}/document`,
+      `/api/purchase-receipts/${receiptId}/documents/${documentId}`,
       { method: 'DELETE' },
       token
     );
     return mapReceipt(raw);
   },
 
-  documentBlobUrl: async (token: string, id: string) => {
-    const res = await fetch(`${API_BASE}/api/purchase-receipts/${id}/document`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  clearLegacyDocument: async (token: string, receiptId: string) => {
+    const raw = await request<Record<string, unknown>>(
+      `/api/purchase-receipts/${receiptId}/document`,
+      { method: 'DELETE' },
+      token
+    );
+    return mapReceipt(raw);
+  },
+
+  fetchDocumentBlob: async (
+    token: string,
+    receiptId: string,
+    documentId: string,
+    fileName?: string
+  ) => {
+    const res = await fetch(
+      `${API_BASE}/api/purchase-receipts/${receiptId}/documents/${documentId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error((data as { message?: string }).message ?? res.statusText);
     }
     const blob = await res.blob();
-    return URL.createObjectURL(blob);
+    let contentType = res.headers.get('Content-Type') ?? blob.type ?? 'application/octet-stream';
+    const looksPdf =
+      contentType.includes('pdf') ||
+      fileName?.toLowerCase().endsWith('.pdf') ||
+      blob.type.includes('pdf');
+    if (looksPdf) contentType = 'application/pdf';
+    const typed =
+      blob.type === contentType
+        ? blob
+        : new Blob([await blob.arrayBuffer()], { type: contentType });
+    return typed;
+  },
+
+  documentBlobUrl: async (
+    token: string,
+    receiptId: string,
+    documentId: string,
+    fileName?: string
+  ) => {
+    const typed = await purchaseReceiptsApi.fetchDocumentBlob(
+      token,
+      receiptId,
+      documentId,
+      fileName
+    );
+    return URL.createObjectURL(typed);
+  },
+
+  downloadDocument: async (
+    token: string,
+    receiptId: string,
+    documentId: string,
+    fileName: string
+  ) => {
+    const blob = await purchaseReceiptsApi.fetchDocumentBlob(
+      token,
+      receiptId,
+      documentId,
+      fileName
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
   },
 };

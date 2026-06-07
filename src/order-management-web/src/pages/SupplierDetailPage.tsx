@@ -519,7 +519,7 @@ export function SupplierDetailPage() {
           </div>
           <div className="settings-section-body">
             <div className="settings-fields">
-              <div className="settings-row settings-row--full settings-row--bank-codes">
+              <div className="settings-row settings-row--full settings-row--bank-codes settings-row--bank-codes--beneficiary-first">
                 <label className="settings-field field-flex-grow">
                   <span className="settings-field-label-row">{t('settings.bankBeneficiary')}</span>
                   <input

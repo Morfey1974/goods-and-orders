@@ -184,27 +184,12 @@ export const documentsApi = {
     return mapDocument(data);
   },
   issueChargeInvoice: async (token: string, quoteId: string) => {
-    const quote = await documentsApi.get(token, quoteId);
-    if (quote.documentType !== 'Quote') {
-      throw new Error('Charge invoice can only be issued from a price quote.');
-    }
-    return documentsApi.create(token, {
-      documentType: 'ChargeInvoice',
-      customerId: quote.customerId,
-      parentDocumentId: quote.id,
-      description: quote.description,
-      issueDate: new Date().toISOString(),
-      dueDate: quote.dueDate,
-      paymentMethod: quote.paymentMethod,
-      discountPercent: quote.discountPercent ?? undefined,
-      discountAmount: quote.discountAmount ?? undefined,
-      lines: quote.lines.map((l) => ({
-        productId: l.productId,
-        description: l.description,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-      })),
-    });
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${quoteId}/issue-charge-invoice`,
+      { method: 'POST' },
+      token
+    );
+    return mapDocument(data);
   },
   issueReceipt: async (token: string, documentId: string, body?: object) => {
     const source = await documentsApi.get(token, documentId);

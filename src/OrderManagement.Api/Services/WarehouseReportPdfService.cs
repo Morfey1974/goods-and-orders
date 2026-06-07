@@ -132,11 +132,12 @@ public class WarehouseReportPdfService(
 
         var fromUtc = ReportDateRange.StartUtc(from);
         var toExclusiveUtc = ReportDateRange.EndExclusiveUtc(to);
-        if (fromUtc.HasValue) query = query.Where(x => x.m.CreatedAt >= fromUtc.Value);
-        if (toExclusiveUtc.HasValue) query = query.Where(x => x.m.CreatedAt < toExclusiveUtc.Value);
+        if (fromUtc.HasValue) query = query.Where(x => x.m.MovementDate >= fromUtc.Value);
+        if (toExclusiveUtc.HasValue) query = query.Where(x => x.m.MovementDate < toExclusiveUtc.Value);
 
         return await query
-            .OrderByDescending(x => x.m.CreatedAt)
+            .OrderByDescending(x => x.m.MovementDate)
+            .ThenByDescending(x => x.m.CreatedAt)
             .Take(Math.Clamp(limit, 1, 1000))
             .Select(x => new StockMovementDto(
                 x.m.Id,
@@ -149,6 +150,7 @@ public class WarehouseReportPdfService(
                 x.m.UnitCost,
                 x.m.TotalCost,
                 x.m.Notes,
+                x.m.MovementDate,
                 x.m.CreatedAt,
                 x.w.Id,
                 x.w.Name))

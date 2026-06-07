@@ -948,6 +948,21 @@
   box-shadow: 0 20px 56px rgba(0, 0, 0, 0.22);
 }
 
+.doc-picker-modal--resizable {
+  position: relative;
+  width: auto;
+  max-width: 96vw;
+  max-height: 92vh;
+}
+
+.doc-picker-modal--resizable .doc-picker-table-wrap {
+  min-height: 0;
+}
+
+.doc-picker-modal--resizable .doc-picker-footer {
+  flex-shrink: 0;
+}
+
 .doc-picker-header {
   display: flex;
   align-items: center;

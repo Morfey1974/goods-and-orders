@@ -36,7 +36,7 @@ function rowFromPick(pick: PickedReceiptProduct): Row {
     productId: pick.product.id,
     warehouseId: pick.product.warehouseId ?? '',
     quantity: normalizeStockQuantity(pick.quantity),
-    unitCostIls: String(pick.unitPrice),
+    unitCostIls: '',
   };
 }
 
@@ -164,7 +164,7 @@ export function InventoryOpeningBalancePage() {
         updateRow(pickerReplaceKey, {
           productId: pick.product.id,
           quantity: normalizeStockQuantity(pick.quantity),
-          unitCostIls: String(pick.unitPrice),
+          unitCostIls: '',
           warehouseId: pick.product.warehouseId ?? '',
         });
       }

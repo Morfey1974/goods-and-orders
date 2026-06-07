@@ -10,6 +10,7 @@ import { ReceiptEditWizard } from '../components/documents/ReceiptEditWizard';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AppModal } from '../components/ui/AppModal';
+import { bidiAutoInputProps } from '../components/BidiText';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { DocumentEmailModal } from '../components/documents/DocumentEmailModal';
 import {
@@ -640,8 +641,8 @@ export function DocumentsPage() {
                         {t(`documents.types.${doc.documentType}`)}
                       </span>
                     </td>
-                    <td>{doc.customerName}</td>
-                    <td>{doc.description ?? '—'}</td>
+                    <td className="doc-col-customer">{doc.customerName}</td>
+                    <td className="doc-col-description">{doc.description ?? '—'}</td>
                     <td>{doc.paymentMethod ?? '—'}</td>
                     <td>{formatDate(doc.issueDate)}</td>
                     <td>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
@@ -914,6 +915,7 @@ export function DocumentsPage() {
                   <label>
                     {t('documents.colDescription')}
                     <input
+                      {...bidiAutoInputProps}
                       value={form.description}
                       onChange={(e) => setForm({ ...form, description: e.target.value })}
                     />

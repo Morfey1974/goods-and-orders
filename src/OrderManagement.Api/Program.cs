@@ -42,8 +42,16 @@ builder.Services.AddScoped<PasswordResetMailer>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<InventoryCostService>();
 builder.Services.AddScoped<InventoryValuationService>();
+builder.Services.AddScoped<InventoryValuationPdfService>();
 builder.Services.AddScoped<PurchaseReceiptService>();
+builder.Services.AddScoped<ExchangeRateService>();
 builder.Services.AddScoped<SupplierImportService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient(nameof(ExchangeRateService), client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("OrderManagement/1.0");
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddSingleton<SubscriptionService>();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

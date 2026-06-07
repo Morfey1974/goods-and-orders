@@ -1,0 +1,56 @@
+/* User-generated text: Hebrew + embedded Latin (RJ-45, codes) in any UI language. */
+
+.bidi-auto,
+.product-cell-name,
+.customers-cell-name,
+.customers-name-link,
+.doc-picker-name,
+.doc-col-customer,
+.doc-col-description,
+.doc-customer-item,
+.doc-customer-selected strong,
+.doc-line-desc,
+.doc-textarea,
+.inv-col-product,
+.inv-col-warehouse,
+.inv-report-table td.inv-col-product,
+.inv-report-table td.inv-col-warehouse,
+.inv-report-table td.inv-col-lot-source,
+.inv-opening-lines td.inv-col-product,
+.inv-opening-lines td.inv-col-warehouse,
+.pr-col-product,
+.pr-col-warehouse,
+.pr-line-product-name,
+.product-groups-select-option-name,
+.product-groups-checklist .product-groups-check > span:not(.product-groups-check-type),
+.product-groups-list .product-groups-item > span:first-child,
+.receipt-lines-col-detail,
+.warehouse-manage-table td.bidi-auto {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+.bidi-auto:is(input, textarea),
+.doc-line-desc,
+.doc-textarea,
+.settings-section-body input[type='text'],
+.settings-section-body input[type='search'],
+.settings-section-body textarea,
+.product-groups-search,
+.product-groups-new input,
+.doc-customer-search input,
+.doc-picker-filters input[type='search'],
+.pr-picker-filter input[type='search'],
+.warehouse-edit-form input[type='text'],
+.warehouse-edit-form textarea {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+html[dir='rtl'] .bidi-auto:is(input, textarea),
+html[dir='rtl'] .doc-line-desc,
+html[dir='rtl'] .doc-textarea,
+html[dir='rtl'] .settings-section-body input[type='text'],
+html[dir='rtl'] .settings-section-body textarea {
+  text-align: start;
+}

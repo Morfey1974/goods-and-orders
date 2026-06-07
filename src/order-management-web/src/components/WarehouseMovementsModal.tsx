@@ -16,8 +16,14 @@ import { AppModal } from './ui/AppModal';
 
 
 
-type Props = {
+function formatMovementDate(iso: string): string {
+  const d = iso.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return iso;
+  const [y, m, day] = d.split('-');
+  return `${day}.${m}.${y}`;
+}
 
+type Props = {
   open: boolean;
 
   onClose: () => void;
@@ -290,11 +296,11 @@ export function WarehouseMovementsModal({
 
                     <tr key={m.id}>
 
-                      {showWarehouseColumn && <td>{m.warehouseName}</td>}
+                      {showWarehouseColumn && <td className="bidi-auto">{m.warehouseName}</td>}
 
                       <td><ProductCodeCell articleCode={m.articleCode} legacySku={m.legacySku} /></td>
 
-                      <td>{m.productName}</td>
+                      <td className="bidi-auto">{m.productName}</td>
 
                       <td>{t(`warehouse.moveTypes.${m.movementType}`)}</td>
 
@@ -308,7 +314,7 @@ export function WarehouseMovementsModal({
 
                       <td>{formatStockQuantity(m.balanceAfter)}</td>
 
-                      <td>{new Date(m.createdAt).toLocaleString()}</td>
+                      <td>{formatMovementDate(m.movementDate)}</td>
 
                     </tr>
 

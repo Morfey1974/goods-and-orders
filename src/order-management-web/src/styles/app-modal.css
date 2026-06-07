@@ -53,6 +53,10 @@
   --app-modal-resize-gutter: 32px;
 }
 
+.app-modal__panel--resizable.card:not(.product-groups-modal) {
+  overflow: auto;
+}
+
 /* Bottom strip reserves space so vertical scrollbar arrows sit above the resize grip */
 .app-modal__resize-gutter {
   flex: 0 0 var(--app-modal-resize-gutter);

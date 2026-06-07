@@ -8,6 +8,7 @@ import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ProductEditModal } from '../components/products/ProductEditModal';
 import { ProductPhoto } from '../components/products/ProductPhoto';
 import { ProductCodeCell } from '../components/products/ProductCodeCell';
+import { BidiText } from '../components/BidiText';
 import { ProductGroupsModal } from '../components/products/ProductGroupsModal';
 import { productGroupsApi, type ProductGroup } from '../api/productGroups';
 import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
@@ -665,8 +666,14 @@ export function ProductsPage() {
                   </button>
                 </td>
                 <td className="product-cell-name">
-                  <strong>{p.name}</strong>
-                  {p.description && <div className="sub">{p.description}</div>}
+                  <strong>
+                    <BidiText as="span">{p.name}</BidiText>
+                  </strong>
+                  {p.description && (
+                    <div className="sub">
+                      <BidiText as="span">{p.description}</BidiText>
+                    </div>
+                  )}
                 </td>
                 <td>
                   <span
@@ -684,7 +691,7 @@ export function ProductsPage() {
                     .filter(Boolean)
                     .join(', ') || '—'}
                 </td>
-                <td>{p.warehouseName ?? warehouseLabelForProductType(p.productType, t)}</td>
+                <td className="bidi-auto">{p.warehouseName ?? warehouseLabelForProductType(p.productType, t)}</td>
                 <td>
                   <input
                     type="number"

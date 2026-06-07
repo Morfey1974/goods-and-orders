@@ -13,6 +13,7 @@ import { warehouseApi, type Warehouse } from '../../api/warehouse';
 import { defaultWarehouseForProductType, resolveProductWarehouseId } from '../../lib/defaultWarehouse';
 import { formatInventoryLotSource } from '../../lib/inventoryLotLabel';
 import { formatStockQuantity } from '../../lib/stockQuantity';
+import { BidiText, bidiAutoInputProps } from '../BidiText';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductGroupsMultiSelect } from './ProductGroupsMultiSelect';
 import { ProductWarehouseSelect } from './ProductWarehouseSelect';
@@ -500,7 +501,9 @@ export function ProductEditModal({
 
         <div className="product-card-identity">
           <div className="product-card-title-block">
-            <strong className="product-card-name">{form.name || t('products.newItem')}</strong>
+            <strong className="product-card-name">
+              <BidiText as="span">{form.name || t('products.newItem')}</BidiText>
+            </strong>
             <span className="muted product-card-sku">
               {t('products.article')}:{' '}
               {effectiveProduct
@@ -594,6 +597,7 @@ export function ProductEditModal({
             <label>
               {t('products.name')} *
               <input
+                {...bidiAutoInputProps}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -603,6 +607,7 @@ export function ProductEditModal({
             <label>
               {t('products.description')}
               <textarea
+                {...bidiAutoInputProps}
                 rows={2}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -651,19 +656,21 @@ export function ProductEditModal({
               </label>
             )}
 
-            {tracksInventory && (
-              <ProductWarehouseSelect
-                warehouses={warehouses}
-                value={warehouseId}
-                onChange={setWarehouseId}
-              />
-            )}
+            <div className="product-card-select-row">
+              {tracksInventory && (
+                <ProductWarehouseSelect
+                  warehouses={warehouses}
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                />
+              )}
 
-            <ProductGroupsMultiSelect
-              groups={productGroups}
-              selectedGroupIds={selectedGroupIds}
-              onChange={setSelectedGroupIds}
-            />
+              <ProductGroupsMultiSelect
+                groups={productGroups}
+                selectedGroupIds={selectedGroupIds}
+                onChange={setSelectedGroupIds}
+              />
+            </div>
 
             {tracksInventory && editing && (
               <div className="inventory-box">
@@ -841,7 +848,7 @@ export function ProductEditModal({
                 <tbody>
                   {lots.map((lot) => (
                     <tr key={lot.id}>
-                      <td>{lot.warehouseName}</td>
+                      <td className="bidi-auto">{lot.warehouseName}</td>
                       <td>{lot.receivedAt}</td>
                       <td>{formatInventoryLotSource(lot.sourceLabel, t)}</td>
                       <td>{formatStockQuantity(lot.quantityRemaining)}</td>

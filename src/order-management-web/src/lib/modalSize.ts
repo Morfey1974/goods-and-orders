@@ -62,3 +62,32 @@ export function clearModalInlineSize(el: HTMLElement) {
   el.style.removeProperty('width');
   el.style.removeProperty('height');
 }
+
+export type ModalSizePreset = 'sm' | 'md' | 'lg' | 'xl' | 'fit';
+
+const MODAL_SIZE_PRESETS: Record<
+  ModalSizePreset,
+  { minWidth: number; minHeight: number; defaultSize: ModalSize }
+> = {
+  sm: { minWidth: 320, minHeight: 180, defaultSize: { width: 440, height: 260 } },
+  md: { minWidth: 400, minHeight: 280, defaultSize: { width: 480, height: 420 } },
+  lg: { minWidth: 520, minHeight: 360, defaultSize: { width: 720, height: 560 } },
+  xl: { minWidth: 640, minHeight: 420, defaultSize: { width: 960, height: 720 } },
+  fit: { minWidth: 480, minHeight: 360, defaultSize: { width: 900, height: 680 } },
+};
+
+function sanitizeModalResizeKey(key: string): string {
+  const cleaned = key.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return cleaned || 'modal';
+}
+
+/** Default persisted resize for AppModal when `resize` prop is omitted. */
+export function buildModalResizeConfig(size: ModalSizePreset, key: string): ResizablePanelConfig {
+  const preset = MODAL_SIZE_PRESETS[size];
+  return {
+    storageKey: `ordermgmt.modal-size.${sanitizeModalResizeKey(key)}`,
+    minWidth: preset.minWidth,
+    minHeight: preset.minHeight,
+    defaultSize: preset.defaultSize,
+  };
+}

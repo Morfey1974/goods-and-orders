@@ -30,6 +30,7 @@ public class PurchaseReceiptsController(
 
         var query = db.PurchaseReceipts
             .Include(r => r.Supplier)
+            .Include(r => r.Documents)
             .Where(r => r.TenantId == tenantId);
 
         if (supplierId.HasValue) query = query.Where(r => r.SupplierId == supplierId);
@@ -154,29 +155,48 @@ public class PurchaseReceiptsController(
         }
     }
 
-    [HttpPost("{id:guid}/document")]
+    [HttpPost("{id:guid}/documents")]
     [RequestSizeLimit(TenantFileService.PurchaseDocumentMaxBytes)]
+    [Consumes("multipart/form-data")]
     public async Task<ActionResult<PurchaseReceiptDto>> UploadDocument(
         Guid id,
-        IFormFile file,
+        [FromForm] IFormFile file,
         CancellationToken ct)
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
 
         var receipt = await db.PurchaseReceipts
+            .Include(r => r.Documents)
             .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct);
         if (receipt is null) return NotFound();
-        if (receipt.Status != PurchaseReceiptStatus.Draft)
-            return BadRequest(new { message = "Document can only be attached to draft receipts." });
+
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "File is required." });
 
         try
         {
+            var docId = Guid.NewGuid();
             var (path, contentType, originalName) = await files.SavePurchaseReceiptDocumentAsync(
-                tenantId.Value, id, file, receipt.DocumentPath, ct);
-            receipt.DocumentPath = path;
-            receipt.DocumentContentType = contentType;
-            receipt.DocumentFileName = originalName;
+                tenantId.Value, id, docId, file, ct);
+
+            var sortOrder = receipt.Documents.Count > 0
+                ? receipt.Documents.Max(d => d.SortOrder) + 1
+                : 0;
+
+            var doc = new PurchaseReceiptDocument
+            {
+                Id = docId,
+                PurchaseReceiptId = receipt.Id,
+                FilePath = path,
+                FileName = originalName,
+                ContentType = contentType,
+                SortOrder = sortOrder,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            db.PurchaseReceiptDocuments.Add(doc);
+            ClearLegacyDocumentFields(receipt);
             receipt.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
 
@@ -187,10 +207,25 @@ public class PurchaseReceiptsController(
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
-    [HttpDelete("{id:guid}/document")]
-    public async Task<ActionResult<PurchaseReceiptDto>> DeleteDocument(Guid id, CancellationToken ct)
+    [HttpPost("{id:guid}/document")]
+    [RequestSizeLimit(TenantFileService.PurchaseDocumentMaxBytes)]
+    public Task<ActionResult<PurchaseReceiptDto>> UploadDocumentLegacy(
+        Guid id,
+        IFormFile file,
+        CancellationToken ct) =>
+        UploadDocument(id, file, ct);
+
+    [HttpDelete("{id:guid}/documents/{documentId:guid}")]
+    public async Task<ActionResult<PurchaseReceiptDto>> DeleteDocument(
+        Guid id,
+        Guid documentId,
+        CancellationToken ct)
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
@@ -198,13 +233,76 @@ public class PurchaseReceiptsController(
         var receipt = await db.PurchaseReceipts
             .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct);
         if (receipt is null) return NotFound();
-        if (receipt.Status != PurchaseReceiptStatus.Draft)
-            return BadRequest(new { message = "Document can only be removed from draft receipts." });
 
-        files.DeleteFile(receipt.DocumentPath);
-        receipt.DocumentPath = null;
-        receipt.DocumentContentType = null;
-        receipt.DocumentFileName = null;
+        var doc = await db.PurchaseReceiptDocuments
+            .FirstOrDefaultAsync(d => d.Id == documentId && d.PurchaseReceiptId == id, ct);
+        if (doc is null) return NotFound();
+
+        files.DeleteFile(doc.FilePath);
+        db.PurchaseReceiptDocuments.Remove(doc);
+        if (!await db.PurchaseReceiptDocuments.AnyAsync(d => d.PurchaseReceiptId == id, ct))
+        {
+            receipt.DocumentPath = null;
+            receipt.DocumentFileName = null;
+            receipt.DocumentContentType = null;
+        }
+        receipt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var loaded = await purchaseReceipts.LoadAsync(tenantId.Value, id, ct);
+        return Ok(await ToDtoWithWarehousesAsync(loaded!, ct));
+    }
+
+    [HttpGet("{id:guid}/documents/{documentId:guid}")]
+    public async Task<IActionResult> DownloadDocument(
+        Guid id,
+        Guid documentId,
+        [FromQuery] bool download = false,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var doc = await db.PurchaseReceiptDocuments
+            .AsNoTracking()
+            .Include(d => d.PurchaseReceipt)
+            .FirstOrDefaultAsync(
+                d => d.Id == documentId &&
+                     d.PurchaseReceiptId == id &&
+                     d.PurchaseReceipt.TenantId == tenantId,
+                ct);
+        if (doc is null) return NotFound();
+
+        var absolute = files.GetAbsolutePath(doc.FilePath);
+        if (!System.IO.File.Exists(absolute)) return NotFound();
+
+        var contentType = doc.ContentType ?? "application/octet-stream";
+        if (download)
+        {
+            return PhysicalFile(
+                absolute,
+                contentType,
+                doc.FileName,
+                enableRangeProcessing: true);
+        }
+
+        return PhysicalFile(absolute, contentType, enableRangeProcessing: true);
+    }
+
+    [HttpDelete("{id:guid}/document")]
+    public async Task<ActionResult<PurchaseReceiptDto>> ClearLegacyDocument(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var receipt = await db.PurchaseReceipts
+            .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct);
+        if (receipt is null) return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(receipt.DocumentPath))
+            files.DeleteFile(receipt.DocumentPath);
+
+        ClearLegacyDocumentFields(receipt);
         receipt.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
@@ -213,15 +311,22 @@ public class PurchaseReceiptsController(
     }
 
     [HttpGet("{id:guid}/document")]
-    public async Task<IActionResult> DownloadDocument(Guid id, CancellationToken ct)
+    public async Task<IActionResult> DownloadDocumentLegacy(Guid id, CancellationToken ct)
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
 
         var receipt = await db.PurchaseReceipts
             .AsNoTracking()
+            .Include(r => r.Documents)
             .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct);
-        if (receipt is null || string.IsNullOrEmpty(receipt.DocumentPath)) return NotFound();
+        if (receipt is null) return NotFound();
+
+        var doc = receipt.Documents.OrderBy(d => d.SortOrder).ThenBy(d => d.CreatedAt).FirstOrDefault();
+        if (doc is not null)
+            return await DownloadDocument(id, doc.Id, download: false, ct);
+
+        if (string.IsNullOrEmpty(receipt.DocumentPath)) return NotFound();
 
         var absolute = files.GetAbsolutePath(receipt.DocumentPath);
         if (!System.IO.File.Exists(absolute)) return NotFound();
@@ -256,5 +361,12 @@ public class PurchaseReceiptsController(
         }).ToList();
 
         return dto with { Lines = lines };
+    }
+
+    private static void ClearLegacyDocumentFields(PurchaseReceipt receipt)
+    {
+        receipt.DocumentPath = null;
+        receipt.DocumentFileName = null;
+        receipt.DocumentContentType = null;
     }
 }

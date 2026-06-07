@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { catalogApi } from '../api/catalog';
 import { ordersApi, type Order } from '../api/orders';
 import { AppModal } from '../components/ui/AppModal';
+import { bidiAutoInputProps } from '../components/BidiText';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_KEYS: Record<string, string> = {
@@ -129,7 +130,7 @@ export function OrdersPage() {
             {orders.map((o) => (
               <tr key={o.id}>
                 <td><code>{o.orderNumber}</code></td>
-                <td>{o.customerName}</td>
+                <td className="bidi-auto">{o.customerName}</td>
                 <td>
                   <span className={`status-badge status-${STATUS_KEYS[o.status] ?? 'draft'}`}>
                     {t(`orders.statuses.${STATUS_KEYS[o.status] ?? 'draft'}`)}
@@ -206,7 +207,7 @@ export function OrdersPage() {
               </label>
               <label>
                 {t('warehouse.notes')}
-                <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <input {...bidiAutoInputProps} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </label>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost-inline" onClick={() => setCreateOpen(false)}>

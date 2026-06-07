@@ -150,17 +150,65 @@ public class TenantFileService(IWebHostEnvironment env, IConfiguration config)
 
     private static async Task<bool> LooksLikePdfAsync(Stream stream, CancellationToken ct)
     {
-        var header = new byte[5];
-        var read = await stream.ReadAsync(header.AsMemory(0, 5), ct);
+        var buffer = new byte[1024];
+        var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
         if (read < 5)
             return false;
-        return header[0] == (byte)'%' &&
-               header[1] == (byte)'P' &&
-               header[2] == (byte)'D' &&
-               header[3] == (byte)'F' &&
-               header[4] == (byte)'-';
+
+        var start = 0;
+        while (start < read - 4 && buffer[start] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
+            start++;
+
+        for (var i = start; i <= read - 5; i++)
+        {
+            if (buffer[i] == (byte)'%' &&
+                buffer[i + 1] == (byte)'P' &&
+                buffer[i + 2] == (byte)'D' &&
+                buffer[i + 3] == (byte)'F' &&
+                buffer[i + 4] == (byte)'-')
+                return true;
+        }
+
+        return false;
     }
 
+    public async Task<(string RelativePath, string ContentType, string OriginalFileName)> SavePurchaseReceiptDocumentAsync(
+        Guid tenantId,
+        Guid receiptId,
+        Guid documentId,
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file.Length == 0)
+            throw new InvalidOperationException("File is empty.");
+        if (file.Length > PurchaseDocumentMaxBytes)
+            throw new InvalidOperationException($"File must be at most {PurchaseDocumentMaxBytes / (1024 * 1024)} MB.");
+
+        var ext = Path.GetExtension(file.FileName);
+        var isPdf = string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase);
+        var isImage = ImageExtensions.Contains(ext);
+        if (!isPdf && !isImage)
+            throw new InvalidOperationException("Use PDF, JPG, PNG or WebP.");
+
+        var safeName = Path.GetFileName(file.FileName);
+        var storedExt = isPdf ? ".pdf" : ext.ToLowerInvariant();
+        var relative = $"{tenantId:N}/purchases/{receiptId:N}/{documentId:N}{storedExt}";
+        var absolute = GetAbsolutePath(relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+
+        await using (var stream = File.Create(absolute))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var contentType = isPdf
+            ? "application/pdf"
+            : GetImageContentType(relative);
+
+        return (relative, contentType, safeName);
+    }
+
+    [Obsolete("Use SavePurchaseReceiptDocumentAsync with documentId for multi-document receipts.")]
     public async Task<(string RelativePath, string ContentType, string OriginalFileName)> SavePurchaseReceiptDocumentAsync(
         Guid tenantId,
         Guid receiptId,

@@ -19,7 +19,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { SuppliersPage } from './pages/SuppliersPage';
 import { SupplierDetailPage } from './pages/SupplierDetailPage';
 import { PurchaseReceiptsPage } from './pages/PurchaseReceiptsPage';
-import { PurchaseReceiptDetailPage } from './pages/PurchaseReceiptDetailPage';
+import { PurchaseReceiptDetailRoute } from './pages/PurchaseReceiptDetailPage';
 import { InventoryOpeningBalancePage } from './pages/InventoryOpeningBalancePage';
 import { InventoryValuationPage } from './pages/InventoryValuationPage';
 
@@ -46,8 +46,7 @@ const router = createBrowserRouter([
       { path: 'suppliers/new', element: <SupplierDetailPage /> },
       { path: 'suppliers/:id', element: <SupplierDetailPage /> },
       { path: 'purchase-receipts', element: <PurchaseReceiptsPage /> },
-      { path: 'purchase-receipts/new', element: <PurchaseReceiptDetailPage /> },
-      { path: 'purchase-receipts/:id', element: <PurchaseReceiptDetailPage /> },
+      { path: 'purchase-receipts/:id', element: <PurchaseReceiptDetailRoute /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'warehouse/opening-balance', element: <InventoryOpeningBalancePage /> },

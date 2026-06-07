@@ -1,23 +1,33 @@
 @echo off
-chcp 65001 >nul
-title Учёт заказов — веб
+setlocal EnableExtensions
+title OrderWeb
 
 cd /d "%~dp0..\src\order-management-web"
 if not exist "package.json" (
-    echo [Ошибка] Не найдена папка фронтенда:
+    echo ERROR: frontend folder not found.
     echo %~dp0..\src\order-management-web
     pause
     exit /b 1
 )
 
 where npm >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [Ошибка] Node.js не установлен. Скачайте с https://nodejs.org
+if errorlevel 1 (
+    echo ERROR: npm not found. Install Node.js from https://nodejs.org
     pause
     exit /b 1
 )
 
-echo Запуск веб-интерфейса...
-echo Адрес: http://localhost:5173
+REM Free port 5173 if another dev server is stuck (PowerShell, ASCII-safe)
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
 echo.
+echo  Web UI: http://localhost:5173
+echo  Keep this window open while using the app.
+echo.
+
 npm run dev
+if errorlevel 1 (
+    echo.
+    echo ERROR: npm run dev failed.
+    pause
+)

@@ -69,11 +69,11 @@ public static class WarehouseReportPdfBuilder
             {
                 var row = 1;
                 var lines = g
-                    .OrderByDescending(m => m.CreatedAt)
+                    .OrderByDescending(m => m.MovementDate)
                     .ThenBy(m => m.ArticleCode)
                     .Select(m => new WarehouseMovementLineModel(
                         row++,
-                        m.CreatedAt,
+                        m.MovementDate,
                         m.ArticleCode,
                         m.ProductName,
                         MovementTypeLabel(m.MovementType),

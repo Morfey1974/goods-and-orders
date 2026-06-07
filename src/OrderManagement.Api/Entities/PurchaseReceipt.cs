@@ -26,4 +26,10 @@ public class PurchaseReceipt
 
     public Supplier Supplier { get; set; } = null!;
     public ICollection<PurchaseReceiptLine> Lines { get; set; } = new List<PurchaseReceiptLine>();
+    /// <summary>When true, landed cost lines are allocated into product unitCostIls on post.</summary>
+    public bool ApplyLandedCosts { get; set; }
+    public ICollection<PurchaseReceiptLandedCostLine> LandedCostLines { get; set; } =
+        new List<PurchaseReceiptLandedCostLine>();
+    public ICollection<PurchaseReceiptDocument> Documents { get; set; } =
+        new List<PurchaseReceiptDocument>();
 }

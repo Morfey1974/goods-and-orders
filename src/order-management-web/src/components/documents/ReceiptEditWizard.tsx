@@ -5,6 +5,7 @@ import { api, type TenantProfile } from '../../api/client';
 import { documentsApi, type Document, type ReceiptPaymentLine } from '../../api/documents';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { RECEIPT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
+import { bidiAutoInput } from '../BidiText';
 import { ISRAELI_BANKS } from '../../data/israeliBanks';
 import {
   RECEIPT_PAYMENT_TABS,
@@ -966,7 +967,7 @@ export function ReceiptEditWizard({
                 <label className="doc-field-block" style={{ gridColumn: '1 / -1' }}>
                   <span className="doc-panel-label">{t('documents.contentDescriptionHint')}</span>
                   <textarea
-                    className="doc-textarea"
+                    {...bidiAutoInput('doc-textarea')}
                     rows={2}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -1099,7 +1100,7 @@ export function ReceiptEditWizard({
                 <label className="doc-field-block receipt-notes-block">
                   <span className="doc-panel-label">{t('documents.receiptNotes')}</span>
                   <textarea
-                    className="doc-textarea"
+                    {...bidiAutoInput('doc-textarea')}
                     rows={4}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}

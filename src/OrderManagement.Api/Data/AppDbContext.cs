@@ -15,6 +15,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SupplierContact> SupplierContacts => Set<SupplierContact>();
     public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
     public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
+    public DbSet<PurchaseReceiptLandedCostLine> PurchaseReceiptLandedCostLines => Set<PurchaseReceiptLandedCostLine>();
+    public DbSet<PurchaseReceiptDocument> PurchaseReceiptDocuments => Set<PurchaseReceiptDocument>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
     public DbSet<ProductGroupMember> ProductGroupMembers => Set<ProductGroupMember>();
@@ -211,6 +213,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<PurchaseReceiptDocument>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FilePath).HasMaxLength(512);
+            e.Property(x => x.FileName).HasMaxLength(256);
+            e.Property(x => x.ContentType).HasMaxLength(128);
+            e.HasIndex(x => x.PurchaseReceiptId);
+            e.HasOne(x => x.PurchaseReceipt)
+                .WithMany(r => r.Documents)
+                .HasForeignKey(x => x.PurchaseReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<PurchaseReceiptLine>(e =>
         {
             e.HasKey(x => x.Id);
@@ -226,6 +241,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.Product)
                 .WithMany()
                 .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PurchaseReceiptLandedCostLine>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+            e.Property(x => x.AmountIls).HasPrecision(18, 2);
+            e.Property(x => x.Notes).HasMaxLength(512);
+            e.HasIndex(x => new { x.PurchaseReceiptId, x.SupplierId });
+            e.HasIndex(x => x.SupplierId);
+            e.HasOne(x => x.PurchaseReceipt)
+                .WithMany(r => r.LandedCostLines)
+                .HasForeignKey(x => x.PurchaseReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Supplier)
+                .WithMany()
+                .HasForeignKey(x => x.SupplierId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

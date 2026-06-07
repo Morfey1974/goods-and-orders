@@ -4,6 +4,7 @@
 
 Подробный план: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)  
 Склад FIFO / себестоимость: [docs/INVENTORY_COSTING_PLAN.md](docs/INVENTORY_COSTING_PLAN.md)  
+Доп. расходы в закупках: [docs/LANDED_COST.md](docs/LANDED_COST.md)  
 Палитра цветов: [docs/color-palette.html](docs/color-palette.html)
 
 **Удалённый репозиторий:** https://github.com/Morfey1974/goods-and-orders
@@ -90,6 +91,9 @@ docker compose up -d --build api
 - `AddProductWarehouseId` — склад по умолчанию в карточке товара
 - `DocumentNumberByTypeAndPlainNumbers` — номера документов **без префикса** (377, 40051, 80036)
 - `SetTrackInventoryDefaultFalse` — по умолчанию «Учитывать на складе» = **Нет** (для поэтапной корректировки остатков)
+- `AddPurchaseReceiptLandedCosts` — доп. расходы (таможня, логистика) в приходных накладных
+- `AddPurchaseReceiptDocuments` — **несколько вложений** PDF/изображений на одну накладную
+- `ClearLegacyPurchaseReceiptDocumentFields` — перенос старого одиночного вложения в таблицу документов
 
 Фронтенд при изменениях UI:
 
@@ -144,7 +148,10 @@ npm run dev
 | Возможность | Описание |
 |-------------|----------|
 | **Поставщики** | Справочник с международными полями (страна ISO, VAT, валюта, банк, адрес), карточка поставщика |
-| **Приходные накладные** | Поставщик, дата, № инвойса, строки товаров, вложение PDF/изображение (инвойс) |
+| **Приходные накладные** | Поставщик, дата, № инвойса, валюта (USD/ILS), строки товаров, **несколько вложений** PDF/изображение (инвойс, декларация, чек и т.д.) |
+| **Доп. расходы (landed cost)** | Таможня, логистика, налог — распределение на себестоимость строк при оприходовании (см. [docs/LANDED_COST.md](docs/LANDED_COST.md)) |
+| **Курс USD/ILS** | Автоподстановка курса Банка Израиля на дату документа (`GET /api/exchange-rates/usd-ils`) |
+| **Вложения** | Несколько PDF/изображений на накладную; полоска переключения; предпросмотр в iframe; в списке — 📎 × количество |
 | **Сохранение** | Кнопка **«Сохранить документ»** сохраняет накладную и **сразу оприходует** товары на склады (движения `Receipt`); возврат в список «Закупки» |
 | **Обязательные поля** | Поставщик; в каждой строке — **склад** (для товаров со складским учётом) и **цена закупки** > 0 |
 | **Выбор товаров** | Модальное окно по образцу מחירון: отметка строк, **Сохранить** добавляет позиции в накладную |
@@ -157,9 +164,11 @@ npm run dev
 - `GET/POST/PUT/DELETE /api/suppliers`, `GET /api/suppliers/{id}`
 - `GET/POST /api/purchase-receipts`, `GET/PUT/DELETE /api/purchase-receipts/{id}`
 - `POST /api/purchase-receipts/{id}/post` — оприходование (вызывается из UI при сохранении)
-- `POST/DELETE /api/purchase-receipts/{id}/document` — вложение PDF/изображение
+- `POST/GET/DELETE /api/purchase-receipts/{id}/documents/{documentId?}` — вложения (несколько файлов на накладную)
+- `POST/DELETE /api/purchase-receipts/{id}/document` — legacy-эндпоинт одиночного вложения (совместимость)
+- `GET /api/exchange-rates/usd-ils?date=` — курс USD→ILS на дату
 
-Миграции: `AddSuppliersAndPurchaseReceipts`, `AddProductTrackInventory`.
+Миграции: `AddSuppliersAndPurchaseReceipts`, `AddProductTrackInventory`, `AddPurchaseReceiptLandedCosts`, `AddPurchaseReceiptDocuments`.
 
 ---
 
@@ -185,7 +194,7 @@ npm run dev
 | Склад | Остатки по складам; **артикул + старый מק"ט** в таблице; приход, движения |
 | **Себестоимость** | FIFO (партии) или WAC (средняя) — в настройках; закупочная цена в **приходных накладных** и **начальном остатке** (`unitCostIls`); **цена продажи** — в карточке товара (`unitPrice`) |
 | **Начальный остаток** | Склад → **«Начальный מלאי»**; черновик в `localStorage`; оприходование создаёт партии FIFO (перенос из YeshInvoice / PDF) |
-| **Оценка склада** | Отчёты → стоимость остатков; опция **«Детализация по партиям FIFO»** — отдельная строка на каждый приход с датой и источником |
+| **Оценка склада** | Отчёты → стоимость остатков; опция **«Детализация по партиям FIFO»**; **скачивание PDF** отчёта |
 | **Партии FIFO** | Вкладка в карточке товара; API `GET /api/inventory/lots` |
 | Движения | История с **себестоимостью ₪** в карточке товара и модале движений; отчёт PDF |
 | **Отчёты** (вкладка «Отчёты») | PDF с шапкой бизнеса на иврите |
@@ -197,6 +206,7 @@ npm run dev
 
 - `POST /api/inventory/opening-balance` — оприходование начального остатка
 - `GET /api/inventory/valuation?asOf=&detailed=` — оценка (сводно или по партиям)
+- `GET /api/inventory/valuation/pdf?asOf=&detailed=` — PDF отчёта оценки склада
 - `GET /api/inventory/lots?productId=&warehouseId=&asOf=` — открытые партии FIFO
 - `POST /api/inventory/reset-stock` — полный сброс складских данных (tenant)
 - `GET /api/warehouse/balances`, `/movements` — в ответе `legacySku`, в движениях — `unitCostIls`
@@ -319,7 +329,9 @@ docker compose down -v
 ├── tools/
 │   ├── HashPassword/           # хеш пароля (dev)
 │   ├── ClearStockData/         # сброс движений и остатков tenant
-│   └── SeedOpeningBalance/     # одноразовая загрузка начального מלאי из PDF
+│   ├── SeedOpeningBalance/     # одноразовая загрузка начального מלאי из PDF
+│   ├── DeletePurchaseReceipts/ # удаление накладных (dev)
+│   └── ReclassifyProductsToFg/ # переклассификация товаров в FG (dev)
 ├── src/
 │   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов, складские отчёты
 │   └── order-management-web/   # React + Vite + i18n (ru/en/he), AppModal, отчёты
@@ -345,13 +357,16 @@ docker compose down -v
 | GET/POST/PUT/DELETE | `/api/suppliers` | Поставщики |
 | GET/POST/PUT/DELETE | `/api/purchase-receipts` | Приходные накладные |
 | POST | `/api/purchase-receipts/{id}/post` | Оприходование на склад |
-| POST/DELETE | `/api/purchase-receipts/{id}/document` | Вложение к накладной |
+| POST/GET/DELETE | `/api/purchase-receipts/{id}/documents/{documentId?}` | Вложения к накладной (несколько файлов) |
+| POST/DELETE | `/api/purchase-receipts/{id}/document` | Legacy: одно вложение |
+| GET | `/api/exchange-rates/usd-ils?date=` | Курс USD→ILS (Банк Израиля) |
 | GET/POST/PUT/DELETE | `/api/product-groups` | Группы товаров |
 | PUT | `/api/product-groups/{id}/members` | Состав группы |
 | GET/PUT | `/api/document-sequences` | Счётчики номеров документов (без префикса) |
 | POST | `/api/documents/import` | Импорт CSV документов из YeshInvoice |
 | GET/POST | `/api/inventory/opening-balance` | Начальный остаток (оприходование партий FIFO) |
 | GET | `/api/inventory/valuation?asOf=&detailed=` | Оценка склада (сводно / по партиям) |
+| GET | `/api/inventory/valuation/pdf?asOf=&detailed=` | PDF отчёта оценки склада |
 | GET | `/api/inventory/lots?productId=&asOf=` | Открытые партии FIFO |
 | POST | `/api/inventory/reset-stock` | Сброс всех складских данных tenant |
 | PUT | `/api/documents/{id}/receipt` | Сохранение קבלה (`paymentLines`, `finalize: true/false`) |
@@ -382,6 +397,8 @@ docker compose down -v
 | Модальное окно закрывается при ресайзе | Обновите фронтенд — используется `AppModal`, не сырой `onClick` на overlay |
 | Ошибка concurrency при сохранении накладной | `docker compose up -d --build api`; обновите страницу и сохраните снова |
 | Кнопка «Сохранить документ» неактивна | Заполните поставщика, склад и цену закупки во всех строках |
+| Не добавляется вложение к накладной | Перезапустите фронт (`npm run dev` на порту **5173**); проверьте вкладку Network — `POST …/documents` |
+| Сайт не открывается (localhost:5173) | Запустите `scripts\start-web.bat` или `npm run dev` в `src\order-management-web` |
 
 ---
 

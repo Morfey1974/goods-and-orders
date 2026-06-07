@@ -15,7 +15,8 @@ namespace OrderManagement.Api.Controllers;
 public class InventoryController(
     AppDbContext db,
     InventoryCostService inventoryCost,
-    InventoryValuationService valuation) : ControllerBase
+    InventoryValuationService valuation,
+    InventoryValuationPdfService valuationPdf) : ControllerBase
 {
     [HttpPost("opening-balance")]
     public async Task<ActionResult<PostInventoryOpeningBalanceResult>> PostOpeningBalance(
@@ -98,6 +99,26 @@ public class InventoryController(
 
         var report = await valuation.BuildCurrentAsync(tenantId.Value, asOf, detailed, ct);
         return Ok(report);
+    }
+
+    [HttpGet("valuation/pdf")]
+    public async Task<IActionResult> ValuationPdf(
+        [FromQuery] DateTime? asOf,
+        [FromQuery] bool detailed = false,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        try
+        {
+            var pdf = await valuationPdf.GenerateAsync(tenantId.Value, asOf, detailed, ct);
+            return File(pdf, "application/pdf", "inventory-valuation.pdf", enableRangeProcessing: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("lots")]

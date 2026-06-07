@@ -1,5 +1,6 @@
 @import './styles/app-modal.css';
 @import './styles/ui-actions.css';
+@import './styles/bidi.css';
 
 :root {
   /* Палитра бренда (CMYK) */
@@ -723,4 +724,16 @@ a.btn-ghost-inline {
     border-inline-end: none;
     border-bottom: 1px solid var(--border);
   }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

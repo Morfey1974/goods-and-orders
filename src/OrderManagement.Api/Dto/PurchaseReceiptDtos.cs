@@ -26,6 +26,31 @@ public record PurchaseReceiptLineInput(
     string? SupplierSku,
     string? Notes);
 
+public record PurchaseReceiptLandedCostLineDto(
+    Guid Id,
+    Guid SupplierId,
+    string SupplierName,
+    string Category,
+    string Currency,
+    decimal Amount,
+    decimal? AmountIls,
+    string? Notes,
+    int SortOrder);
+
+public record PurchaseReceiptLandedCostLineInput(
+    [Required] Guid SupplierId,
+    [Required] string Category,
+    string? Currency,
+    [Range(0.01, double.MaxValue)] decimal Amount,
+    string? Notes);
+
+public record PurchaseReceiptDocumentDto(
+    Guid Id,
+    string FileName,
+    string ContentType,
+    int SortOrder,
+    DateTime CreatedAt);
+
 public record PurchaseReceiptListItemDto(
     Guid Id,
     string ReceiptNumber,
@@ -34,7 +59,7 @@ public record PurchaseReceiptListItemDto(
     string Currency,
     decimal? TotalAmount,
     string Status,
-    bool HasDocument,
+    int DocumentCount,
     DateTime CreatedAt,
     DateTime? PostedAt);
 
@@ -50,11 +75,13 @@ public record PurchaseReceiptDto(
     string? Notes,
     string Status,
     DateTime? PostedAt,
-    bool HasDocument,
-    string? DocumentFileName,
+    int DocumentCount,
     int Version,
     DateTime CreatedAt,
-    IReadOnlyList<PurchaseReceiptLineDto> Lines);
+    IReadOnlyList<PurchaseReceiptLineDto> Lines,
+    bool ApplyLandedCosts,
+    IReadOnlyList<PurchaseReceiptLandedCostLineDto> LandedCostLines,
+    IReadOnlyList<PurchaseReceiptDocumentDto> Documents);
 
 public record CreatePurchaseReceiptRequest(
     [Required] Guid SupplierId,
@@ -63,7 +90,9 @@ public record CreatePurchaseReceiptRequest(
     string? Currency,
     decimal? TotalAmount,
     string? Notes,
-    IReadOnlyList<PurchaseReceiptLineInput> Lines);
+    bool ApplyLandedCosts,
+    IReadOnlyList<PurchaseReceiptLineInput> Lines,
+    IReadOnlyList<PurchaseReceiptLandedCostLineInput>? LandedCostLines);
 
 public record UpdatePurchaseReceiptRequest(
     [Required] Guid SupplierId,
@@ -73,10 +102,14 @@ public record UpdatePurchaseReceiptRequest(
     decimal? TotalAmount,
     string? Notes,
     int Version,
-    IReadOnlyList<PurchaseReceiptLineInput> Lines);
+    bool ApplyLandedCosts,
+    IReadOnlyList<PurchaseReceiptLineInput> Lines,
+    IReadOnlyList<PurchaseReceiptLandedCostLineInput>? LandedCostLines);
 
 public static class PurchaseReceiptMappers
 {
+    public static int DocumentCount(PurchaseReceipt r) => r.Documents.Count;
+
     public static PurchaseReceiptListItemDto ToListItem(PurchaseReceipt r) => new(
         r.Id,
         r.ReceiptNumber,
@@ -85,9 +118,16 @@ public static class PurchaseReceiptMappers
         r.Currency,
         r.TotalAmount,
         r.Status.ToString(),
-        !string.IsNullOrEmpty(r.DocumentPath),
+        DocumentCount(r),
         r.CreatedAt,
         r.PostedAt);
+
+    public static PurchaseReceiptDocumentDto ToDocumentDto(PurchaseReceiptDocument doc) => new(
+        doc.Id,
+        doc.FileName,
+        doc.ContentType,
+        doc.SortOrder,
+        doc.CreatedAt);
 
     public static PurchaseReceiptDto ToDto(PurchaseReceipt r) => new(
         r.Id,
@@ -101,14 +141,35 @@ public static class PurchaseReceiptMappers
         r.Notes,
         r.Status.ToString(),
         r.PostedAt,
-        !string.IsNullOrEmpty(r.DocumentPath),
-        r.DocumentFileName,
+        DocumentCount(r),
         r.Version,
         r.CreatedAt,
         r.Lines
             .OrderBy(l => l.SortOrder)
             .Select(ToLineDto)
+            .ToList(),
+        r.ApplyLandedCosts,
+        r.LandedCostLines
+            .OrderBy(l => l.SortOrder)
+            .Select(ToLandedCostLineDto)
+            .ToList(),
+        r.Documents
+            .OrderBy(d => d.SortOrder)
+            .ThenBy(d => d.CreatedAt)
+            .Select(ToDocumentDto)
             .ToList());
+
+    public static PurchaseReceiptLandedCostLineDto ToLandedCostLineDto(PurchaseReceiptLandedCostLine line) =>
+        new(
+            line.Id,
+            line.SupplierId,
+            line.Supplier.Name,
+            line.Category.ToString(),
+            line.Currency,
+            line.Amount,
+            line.AmountIls,
+            line.Notes,
+            line.SortOrder);
 
     public static PurchaseReceiptLineDto ToLineDto(PurchaseReceiptLine line)
     {

@@ -13,6 +13,11 @@ export const RESIZABLE_PANEL_KEYS = {
   warehouseReceipt: 'ordermgmt.warehouse-receipt-modal-size',
   complianceEmail: 'ordermgmt.compliance-email-modal-size',
   productsCatalogColumns: 'ordermgmt.products-catalog-column-widths',
+  productGroups: 'ordermgmt.product-groups-modal-size',
+  documentProductPicker: 'ordermgmt.document-product-picker-size',
+  purchaseReceiptPicker: 'ordermgmt.purchase-receipt-picker-size',
+  purchaseReceiptLinesColumns: 'ordermgmt.purchase-receipt-lines-column-widths',
+  productPhotoPreview: 'ordermgmt.product-photo-preview-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -85,4 +90,32 @@ export const COMPLIANCE_EMAIL_RESIZE: ResizablePanelConfig = {
   minWidth: 480,
   minHeight: 420,
   defaultSize: { width: 720, height: 640 },
+};
+
+export const PRODUCT_GROUPS_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.productGroups,
+  minWidth: 720,
+  minHeight: 480,
+  defaultSize: { width: 1000, height: 720 },
+};
+
+export const DOCUMENT_PRODUCT_PICKER_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.documentProductPicker,
+  minWidth: 720,
+  minHeight: 480,
+  defaultSize: { width: 1100, height: 760 },
+};
+
+export const PURCHASE_RECEIPT_PICKER_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.purchaseReceiptPicker,
+  minWidth: 720,
+  minHeight: 480,
+  defaultSize: { width: 1100, height: 760 },
+};
+
+export const PRODUCT_PHOTO_PREVIEW_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.productPhotoPreview,
+  minWidth: 320,
+  minHeight: 280,
+  defaultSize: { width: 640, height: 720 },
 };

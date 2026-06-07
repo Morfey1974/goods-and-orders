@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
 import { optimizeProductImage } from '../../utils/optimizeProductImage';
-import { ProductPhoto } from './ProductPhoto';
+import { ProductPhoto, type ProductPhotoHandle } from './ProductPhoto';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 
@@ -17,13 +17,20 @@ type Props = {
 export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError }: Props) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<ProductPhotoHandle>(null);
   const [uploading, setUploading] = useState(false);
+  const blockReplaceUntilRef = useRef(0);
 
   const hasImage = product?.hasImage ?? false;
 
   const openFilePicker = () => {
     if (!canEdit || !product || uploading) return;
+    if (Date.now() < blockReplaceUntilRef.current) return;
     inputRef.current?.click();
+  };
+
+  const blockReplaceBriefly = () => {
+    blockReplaceUntilRef.current = Date.now() + 400;
   };
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,6 +64,26 @@ export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError
     }
   };
 
+  const onExpandPreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    blockReplaceBriefly();
+    photoRef.current?.openPreview();
+  };
+
+  const onPreviewOpenChange = (open: boolean) => {
+    if (!open) blockReplaceBriefly();
+  };
+
+  const onSlotClick = () => {
+    if (hasImage) return;
+    openFilePicker();
+  };
+
+  const onSlotDoubleClick = () => {
+    if (!hasImage) return;
+    openFilePicker();
+  };
+
   return (
     <div className="product-photo-editor">
       {canEdit && hasImage && (
@@ -71,34 +98,62 @@ export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError
         </button>
       )}
 
+      {canEdit && hasImage && (
+        <button
+          type="button"
+          className="product-photo-expand-btn product-photo-expand-btn--editor"
+          onClick={onExpandPreview}
+          aria-label={t('products.viewPhoto', { name: product?.name ?? '' })}
+          title={t('products.viewPhoto', { name: product?.name ?? '' })}
+        >
+          ⤢
+        </button>
+      )}
+
       <div
-        className={`product-photo-slot ${canEdit ? 'clickable' : 'disabled'}`}
-        onClick={openFilePicker}
+        className={`product-photo-slot ${canEdit ? 'clickable' : 'disabled'}${hasImage ? ' has-image' : ''}`}
+        onClick={onSlotClick}
+        onDoubleClick={onSlotDoubleClick}
         onKeyDown={(e) => {
-          if (canEdit && (e.key === 'Enter' || e.key === ' ')) {
+          if (!canEdit) return;
+          if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
+            if (hasImage) return;
             openFilePicker();
           }
         }}
-        role={canEdit ? 'button' : undefined}
-        tabIndex={canEdit ? 0 : undefined}
-        aria-label={canEdit ? t('products.photoPick') : t('products.photoSaveFirst')}
+        role={canEdit && !hasImage ? 'button' : undefined}
+        tabIndex={canEdit && !hasImage ? 0 : undefined}
+        aria-label={
+          canEdit
+            ? hasImage
+              ? t('products.photoReplaceHint')
+              : t('products.photoPick')
+            : t('products.photoSaveFirst')
+        }
+        title={canEdit && hasImage ? t('products.photoReplaceHint') : undefined}
       >
-        {product && hasImage ? (
-          <ProductPhoto
-            key={`${product.id}-${product.hasImage}-${product.version}`}
-            productId={product.id}
-            token={token}
-            hasImage
-            alt={product.name}
-            size="lg"
-          />
-        ) : (
-          <span className="product-photo-empty" aria-hidden>
-            <span className="product-photo-empty-icon">📦</span>
-            <span className="product-photo-empty-camera">📷</span>
-          </span>
-        )}
+        <div className="product-photo-slot-inner">
+          {product && hasImage ? (
+            <ProductPhoto
+              ref={photoRef}
+              key={`${product.id}-${product.hasImage}-${product.version}`}
+              productId={product.id}
+              token={token}
+              hasImage
+              alt={product.name}
+              size="lg"
+              showPreviewButton
+              externalExpandButton
+              onPreviewOpenChange={onPreviewOpenChange}
+            />
+          ) : (
+            <span className="product-photo-empty" aria-hidden>
+              <span className="product-photo-empty-icon">📦</span>
+              <span className="product-photo-empty-camera">📷</span>
+            </span>
+          )}
+        </div>
         {uploading && <span className="product-photo-loading" aria-live="polite">…</span>}
       </div>
 

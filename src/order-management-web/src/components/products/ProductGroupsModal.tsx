@@ -4,6 +4,8 @@ import { catalogApi, type Product } from '../../api/catalog';
 import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { useAuth } from '../../context/AuthContext';
 import { AppModal } from '../ui/AppModal';
+import { BidiText } from '../BidiText';
+import { PRODUCT_GROUPS_RESIZE } from '../../lib/resizablePanelKeys';
 
 type Props = {
   open: boolean;
@@ -131,7 +133,13 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
   };
 
   return (
-    <AppModal open={open} onClose={onClose} size="xl" labelledBy="product-groups-title">
+    <AppModal
+      open={open}
+      onClose={onClose}
+      resize={PRODUCT_GROUPS_RESIZE}
+      className="product-groups-modal"
+      labelledBy="product-groups-title"
+    >
       <header className="product-groups-header">
         <h2 id="product-groups-title" className="app-modal__title">
           {t('products.groupsTitle')}
@@ -218,7 +226,7 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
                       onChange={() => toggleMember(p.id)}
                     />
                     <code>{p.articleCode}</code>
-                    <span>{p.name}</span>
+                    <BidiText as="span">{p.name}</BidiText>
                     <span className="muted product-groups-check-type">{t(`products.types.${p.productType}`)}</span>
                   </label>
                 ))}

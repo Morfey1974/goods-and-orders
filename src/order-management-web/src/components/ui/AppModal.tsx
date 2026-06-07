@@ -7,10 +7,10 @@ import {
   type Ref,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslation } from 'react-i18next';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { mergeRefs } from '../../lib/mergeRefs';
-import type { ResizablePanelConfig } from '../../lib/modalSize';
+import { buildModalResizeConfig, type ModalSizePreset, type ResizablePanelConfig } from '../../lib/modalSize';
+import { ModalResizeHandles } from './ModalResizeHandles';
 
 /** sm=440, md=480, lg=720, xl=960 */
 export type AppModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'fit';
@@ -21,8 +21,10 @@ export type AppModalProps = {
   children: ReactNode;
   /** Panel width preset (ignored when `resize` is set) */
   size?: AppModalSize;
-  /** Persisted draggable resize — use RESIZABLE_PANEL_KEYS + defaults from resizablePanelKeys.ts */
-  resize?: ResizablePanelConfig;
+  /** Persisted resize; omit for default (all modals are resizable). Pass `false` to disable. */
+  resize?: ResizablePanelConfig | false;
+  /** localStorage key suffix when using default resize (defaults to labelledBy / className) */
+  resizeKey?: string;
   className?: string;
   overlayClassName?: string;
   shellClassName?: string;
@@ -54,6 +56,7 @@ export function AppModal({
   children,
   size = 'md',
   resize,
+  resizeKey,
   className = '',
   overlayClassName = '',
   shellClassName = '',
@@ -67,14 +70,22 @@ export function AppModal({
   noCard = false,
   role = 'dialog',
 }: AppModalProps) {
-  const { t } = useTranslation();
+  const resizeStorageKey =
+    resizeKey ??
+    labelledBy ??
+    ariaLabel ??
+    className.split(/\s+/).find((part) => part && part !== 'card') ??
+    'modal';
+  const resizeConfig =
+    resize === false ? undefined : (resize ?? buildModalResizeConfig(size as ModalSizePreset, resizeStorageKey));
+
   const {
     panelRef: resizePanelRef,
     resizable,
     persistSize,
     onResizeHandleMouseDown,
     shouldSuppressBackdropClose,
-  } = useResizablePanel(open, resize);
+  } = useResizablePanel(open, resizeConfig);
 
   const handleClose = useCallback(() => {
     if (preventClose) return;
@@ -129,15 +140,7 @@ export function AppModal({
           aria-label={ariaLabel}
         >
           {children}
-          {resizable && <div className="app-modal__resize-gutter" aria-hidden />}
-          {resizable && (
-            <div
-              className="app-modal__resize-handle"
-              onMouseDown={onResizeHandleMouseDown}
-              title={t('common.resizeModal')}
-              aria-hidden
-            />
-          )}
+          {resizable && <ModalResizeHandles onMouseDown={onResizeHandleMouseDown} />}
         </div>
       </div>
     </div>,

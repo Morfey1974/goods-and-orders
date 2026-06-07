@@ -1,21 +1,26 @@
-/** Center-crop to square and resize for circular product thumbnail (512×512 JPEG). */
-const OUTPUT_SIZE = 512;
+/** Resize product photo preserving aspect ratio — no center crop. */
+const MAX_SIDE = 1600;
 const JPEG_QUALITY = 0.88;
 
 export async function optimizeProductImage(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
   try {
-    const side = Math.min(bitmap.width, bitmap.height);
-    const sx = Math.floor((bitmap.width - side) / 2);
-    const sy = Math.floor((bitmap.height - side) / 2);
+    let targetW = bitmap.width;
+    let targetH = bitmap.height;
+    const longest = Math.max(targetW, targetH);
+    if (longest > MAX_SIDE) {
+      const scale = MAX_SIDE / longest;
+      targetW = Math.round(targetW * scale);
+      targetH = Math.round(targetH * scale);
+    }
 
     const canvas = document.createElement('canvas');
-    canvas.width = OUTPUT_SIZE;
-    canvas.height = OUTPUT_SIZE;
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas not supported');
 
-    ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(

@@ -169,7 +169,7 @@ export function CustomersPage() {
                     <span className="customers-badge customers-badge--inactive">{t('customers.inactive')}</span>
                   )}
                 </td>
-                <td>{c.documentName || c.name}</td>
+                <td className="bidi-auto">{c.documentName || c.name}</td>
                 <td>{c.mobilePhone || c.phone || '—'}</td>
                 <td>{idDisplay(c)}</td>
                 <td>{c.paymentTerms || '—'}</td>

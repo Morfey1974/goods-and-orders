@@ -149,11 +149,12 @@ public class WarehouseController(
 
         var fromUtc = ReportDateRange.StartUtc(from);
         var toExclusiveUtc = ReportDateRange.EndExclusiveUtc(to);
-        if (fromUtc.HasValue) query = query.Where(x => x.m.CreatedAt >= fromUtc.Value);
-        if (toExclusiveUtc.HasValue) query = query.Where(x => x.m.CreatedAt < toExclusiveUtc.Value);
+        if (fromUtc.HasValue) query = query.Where(x => x.m.MovementDate >= fromUtc.Value);
+        if (toExclusiveUtc.HasValue) query = query.Where(x => x.m.MovementDate < toExclusiveUtc.Value);
 
         var list = await query
-            .OrderByDescending(x => x.m.CreatedAt)
+            .OrderByDescending(x => x.m.MovementDate)
+            .ThenByDescending(x => x.m.CreatedAt)
             .Take(Math.Clamp(limit, 1, 200))
             .Select(x => new StockMovementDto(
                 x.m.Id,
@@ -166,6 +167,7 @@ public class WarehouseController(
                 x.m.UnitCost,
                 x.m.TotalCost,
                 x.m.Notes,
+                x.m.MovementDate,
                 x.m.CreatedAt,
                 x.w.Id,
                 x.w.Name))
@@ -255,7 +257,7 @@ public class WarehouseController(
                 movement.Id, product.ArticleCode, product.LegacySku, product.Name,
                 movement.MovementType.ToString(), movement.Quantity,
                 movement.BalanceAfter, movement.UnitCost, movement.TotalCost,
-                movement.Notes, movement.CreatedAt,
+                movement.Notes, movement.MovementDate, movement.CreatedAt,
                 wh.Id, wh.Name));
         }
         catch (InvalidOperationException ex)

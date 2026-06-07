@@ -224,6 +224,7 @@ public record StockMovementDto(
     decimal? UnitCostIls,
     decimal? TotalCostIls,
     string? Notes,
+    DateTime MovementDate,
     DateTime CreatedAt,
     Guid WarehouseId,
     string WarehouseName);

@@ -1,7 +1,20 @@
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogApi } from '../../api/catalog';
+import {
+  DEFAULT_PRODUCT_PHOTO_VIEW,
+  loadProductPhotoView,
+  PRODUCT_PHOTO_CIRCLE_PX,
+  productPhotoThumbLayout,
+  saveProductPhotoView,
+  type ProductPhotoViewState,
+} from '../../lib/productPhotoView';
+import { ProductPhotoLightbox } from './ProductPhotoLightbox';
+
+export type ProductPhotoHandle = {
+  openPreview: () => void;
+  canPreview: boolean;
+};
 
 type Props = {
   productId: string;
@@ -12,26 +25,62 @@ type Props = {
   size?: 'sm' | 'md' | 'lg';
   /** Click thumbnail to open full-size preview (catalog table). */
   previewable?: boolean;
+  /** Expand button in product card (does not steal click from parent upload slot). */
+  showPreviewButton?: boolean;
+  /** Render expand control in parent (ProductPhotoEditor) — avoids clipping inside circle. */
+  externalExpandButton?: boolean;
+  onPreviewOpenChange?: (open: boolean) => void;
 };
 
-export function ProductPhoto({
-  productId,
-  token,
-  hasImage,
-  alt,
-  className = '',
-  size = 'md',
-  previewable = false,
-}: Props) {
+export const ProductPhoto = forwardRef<ProductPhotoHandle, Props>(function ProductPhoto(
+  {
+    productId,
+    token,
+    hasImage,
+    alt,
+    className = '',
+    size = 'md',
+    previewable = false,
+    showPreviewButton = false,
+    externalExpandButton = false,
+    onPreviewOpenChange,
+  },
+  ref
+) {
   const { t } = useTranslation();
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [thumbView, setThumbView] = useState<ProductPhotoViewState>(DEFAULT_PRODUCT_PHOTO_VIEW);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+
+  const containerPx = PRODUCT_PHOTO_CIRCLE_PX[size];
+  const persistView = previewable || showPreviewButton;
+
+  const setPreview = (open: boolean) => {
+    setPreviewOpen(open);
+    onPreviewOpenChange?.(open);
+  };
+
+  useEffect(() => {
+    setThumbView(loadProductPhotoView(productId));
+    setNatural(null);
+  }, [productId, hasImage]);
+
+  useEffect(() => {
+    const onViewChanged = (e: Event) => {
+      const detail = (e as CustomEvent<{ productId: string; view: ProductPhotoViewState }>).detail;
+      if (detail?.productId === productId) setThumbView(detail.view);
+    };
+    window.addEventListener('productPhotoViewChanged', onViewChanged);
+    return () => window.removeEventListener('productPhotoViewChanged', onViewChanged);
+  }, [productId]);
 
   useEffect(() => {
     if (!hasImage || !token) {
       setSrc(null);
       setFailed(false);
+      setNatural(null);
       return;
     }
 
@@ -56,77 +105,107 @@ export function ProductPhoto({
     };
   }, [productId, token, hasImage]);
 
-  useEffect(() => {
-    if (!previewOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPreviewOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [previewOpen]);
-
   const sizeClass =
     size === 'sm' ? 'product-photo-sm' : size === 'lg' ? 'product-photo-lg' : 'product-photo-md';
 
   const canPreview = previewable && hasImage && src && !failed;
+  const canExpand = showPreviewButton && hasImage && src && !failed;
+  const thumbLayout = natural ? productPhotoThumbLayout(thumbView, natural, containerPx) : null;
 
-  const lightbox =
-    previewOpen && src
-      ? createPortal(
-          <div
-            className="product-photo-lightbox"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('products.photoPreview', { name: alt })}
-            onClick={() => setPreviewOpen(false)}
-          >
-            <div
-              className="product-photo-lightbox-frame"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="product-photo-lightbox-close"
-                onClick={() => setPreviewOpen(false)}
-                aria-label={t('products.closePhoto')}
-              >
-                ×
-              </button>
-              <img src={src} alt={alt} className="product-photo-lightbox-img" />
-            </div>
-          </div>,
-          document.body
-        )
-      : null;
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    setNatural({
+      w: e.currentTarget.naturalWidth,
+      h: e.currentTarget.naturalHeight,
+    });
+  };
+
+  const onCloseWithView = (view: ProductPhotoViewState) => {
+    setThumbView(view);
+    if (persistView) saveProductPhotoView(productId, view);
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openPreview: () => {
+        if (canExpand || canPreview) setPreview(true);
+      },
+      canPreview: Boolean(canExpand || canPreview),
+    }),
+    [canExpand, canPreview]
+  );
 
   if (hasImage && src && !failed) {
     return (
       <>
-        <img
+        <span
+          className={`product-photo-wrap product-photo-wrap--circle-thumb ${sizeClass} ${className}`.trim()}
+        >
+          <div
+            className="product-photo-thumb-pan"
+            style={
+              thumbLayout
+                ? { transform: `translate(${thumbLayout.panX}px, ${thumbLayout.panY}px)` }
+                : undefined
+            }
+          >
+            <img
+              src={src}
+              alt={alt}
+              className={`product-photo-img product-photo-img--circle-thumb${canPreview ? ' product-photo-clickable' : ''}`}
+              style={
+                thumbLayout
+                  ? { width: thumbLayout.imgW, height: thumbLayout.imgH }
+                  : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }
+              }
+              onLoad={onImageLoad}
+              draggable={false}
+              onClick={
+                canPreview
+                  ? (e) => {
+                      e.stopPropagation();
+                      setPreview(true);
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                canPreview
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setPreview(true);
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={canPreview ? 0 : undefined}
+              role={canPreview ? 'button' : undefined}
+              aria-label={canPreview ? t('products.viewPhoto', { name: alt }) : undefined}
+            />
+          </div>
+          {canExpand && !externalExpandButton && (
+            <button
+              type="button"
+              className="product-photo-expand-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreview(true);
+              }}
+              aria-label={t('products.viewPhoto', { name: alt })}
+              title={t('products.viewPhoto', { name: alt })}
+            >
+              ⤢
+            </button>
+          )}
+        </span>
+        <ProductPhotoLightbox
+          open={previewOpen}
           src={src}
           alt={alt}
-          className={`product-photo-img ${sizeClass} ${className}${canPreview ? ' product-photo-clickable' : ''}`}
-          onClick={canPreview ? () => setPreviewOpen(true) : undefined}
-          onKeyDown={
-            canPreview
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setPreviewOpen(true);
-                  }
-                }
-              : undefined
-          }
-          tabIndex={canPreview ? 0 : undefined}
-          role={canPreview ? 'button' : undefined}
-          aria-label={canPreview ? t('products.viewPhoto', { name: alt }) : undefined}
+          initialView={thumbView}
+          onClose={() => setPreview(false)}
+          onCloseWithView={persistView ? onCloseWithView : undefined}
         />
-        {lightbox}
       </>
     );
   }
@@ -136,4 +215,4 @@ export function ProductPhoto({
       <span>📦</span>
     </div>
   );
-}
+});

@@ -245,7 +245,7 @@ public static class WarehouseReportPdfRenderer
                 DataCell(table.Cell(), line.MovementTypeLabel, zebra, alignCenter: true, compact: true);
                 DataCell(table.Cell(), line.ProductName, zebra);
                 DataCell(table.Cell(), line.ArticleCode, zebra, alignCenter: true);
-                DataCell(table.Cell(), FormatDateTime(line.CreatedAt), zebra, alignCenter: true, compact: true);
+                DataCell(table.Cell(), FormatDate(line.MovementDate), zebra, alignCenter: true, compact: true);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true, compact: true);
                 rowIndex++;
             }

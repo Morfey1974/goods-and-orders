@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { catalogApi, PRODUCT_TYPES, type Product } from '../../api/catalog';
 import type { ProductGroup } from '../../api/productGroups';
 import { ProductEditModal } from '../products/ProductEditModal';
+import { BidiText } from '../BidiText';
 import {
   matchesProductKindFilter,
   type ProductKindFilter,
@@ -11,21 +12,21 @@ import {
 } from '../../lib/productKind';
 import { productTracksStock } from '../../lib/productInventory';
 import {
-  finalizePriceDraft,
   finalizeQuantityDraft,
   normalizeStockQuantity,
-  sanitizePriceDraft,
   sanitizeQuantityDraft,
 } from '../../lib/stockQuantity';
+import { PURCHASE_RECEIPT_PICKER_RESIZE } from '../../lib/resizablePanelKeys';
+import { useResizablePanel } from '../../hooks/useResizablePanel';
+import { ModalResizeHandles } from '../ui/ModalResizeHandles';
 import '../../styles/documents.css';
 
 export type PickedReceiptProduct = {
   product: Product;
   quantity: number;
-  unitPrice: number;
 };
 
-type RowDraft = { quantity: string; unitPrice: string };
+type RowDraft = { quantity: string };
 
 type Props = {
   open: boolean;
@@ -39,8 +40,8 @@ type Props = {
   onProductCreated: (product: Product) => void;
 };
 
-function draftForProduct(p: Product): RowDraft {
-  return { quantity: '1', unitPrice: String(p.unitPrice) };
+function draftForProduct(): RowDraft {
+  return { quantity: '1' };
 }
 
 export function PurchaseReceiptProductPickerModal({
@@ -55,6 +56,10 @@ export function PurchaseReceiptProductPickerModal({
   onProductCreated,
 }: Props) {
   const { t } = useTranslation();
+  const { panelRef, resizable, persistSize, onResizeHandleMouseDown } = useResizablePanel(
+    open,
+    PURCHASE_RECEIPT_PICKER_RESIZE
+  );
   const [search, setSearch] = useState('');
   const [filterKind, setFilterKind] = useState<ProductKindFilter>('');
   const [filterType, setFilterType] = useState('');
@@ -98,7 +103,7 @@ export function PurchaseReceiptProductPickerModal({
       const next = { ...prev };
       for (const p of catalogProducts) {
         if (!next[p.id]) {
-          next[p.id] = draftForProduct(p);
+          next[p.id] = draftForProduct();
         }
       }
       return next;
@@ -158,10 +163,15 @@ export function PurchaseReceiptProductPickerModal({
       picks.push({
         product: p,
         quantity: finalizeQuantityDraft(draft.quantity),
-        unitPrice: finalizePriceDraft(draft.unitPrice),
       });
     }
     if (picks.length) onSave(picks);
+    persistSize();
+    onClose();
+  };
+
+  const handleClose = () => {
+    persistSize();
     onClose();
   };
 
@@ -185,14 +195,15 @@ export function PurchaseReceiptProductPickerModal({
     <>
       <div className="doc-picker-overlay pr-picker-overlay" role="presentation">
         <div
-          className="doc-picker-modal doc-picker-modal--wide pr-picker-modal"
+          ref={panelRef}
+          className={`doc-picker-modal doc-picker-modal--wide pr-picker-modal${resizable ? ' doc-picker-modal--resizable' : ''}`}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="pr-picker-title"
         >
           <header className="doc-picker-header">
-            <button type="button" className="doc-picker-close" onClick={onClose} aria-label={t('products.close')}>
+            <button type="button" className="doc-picker-close" onClick={handleClose} aria-label={t('products.close')}>
               ×
             </button>
             <h2 id="pr-picker-title">{t('purchaseReceipts.pickerTitle')}</h2>
@@ -256,7 +267,6 @@ export function PurchaseReceiptProductPickerModal({
                   <th>{t('purchaseReceipts.product')}</th>
                   <th>{t('products.kindLabel')}</th>
                   <th>{t('products.typesLabel')}</th>
-                  <th>{t('products.price')}</th>
                   <th>{t('purchaseReceipts.pickerStock')}</th>
                   <th>{t('purchaseReceipts.pickerQty')}</th>
                   <th>{t('purchaseReceipts.pickerSelect')}</th>
@@ -265,20 +275,20 @@ export function PurchaseReceiptProductPickerModal({
               <tbody>
                 {loadingCatalog && (
                   <tr>
-                    <td colSpan={8} className="muted doc-picker-empty">
+                    <td colSpan={7} className="muted doc-picker-empty">
                       {t('products.loading')}
                     </td>
                   </tr>
                 )}
                 {!loadingCatalog && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="muted doc-picker-empty">
+                    <td colSpan={7} className="muted doc-picker-empty">
                       {t('products.empty')}
                     </td>
                   </tr>
                 )}
                 {filtered.map((p) => {
-                  const draft = rowDrafts[p.id] ?? draftForProduct(p);
+                  const draft = rowDrafts[p.id] ?? draftForProduct();
                   const isSelected = selectedIds.has(p.id);
                   const isService = isServiceProductType(p.productType);
                   const showStock = productTracksStock(p);
@@ -297,7 +307,7 @@ export function PurchaseReceiptProductPickerModal({
                         <code>{p.articleCode}</code>
                       </td>
                       <td className="doc-picker-name">
-                        {p.name}
+                        <BidiText as="span">{p.name}</BidiText>
                         {!p.isActive && (
                           <span className="pr-picker-inactive-tag muted">
                             {' '}
@@ -313,21 +323,6 @@ export function PurchaseReceiptProductPickerModal({
                         </span>
                       </td>
                       <td className="pr-picker-type-cell">{t(`products.types.${p.productType}`)}</td>
-                      <td>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          className="doc-picker-price-input"
-                          value={draft.unitPrice}
-                          onChange={(e) => updateDraft(p.id, { unitPrice: sanitizePriceDraft(e.target.value) })}
-                          onBlur={() =>
-                            updateDraft(p.id, {
-                              unitPrice: String(finalizePriceDraft(draft.unitPrice)),
-                            })
-                          }
-                        />
-                      </td>
                       <td className={showStock && stock <= 0 ? 'doc-picker-stock-zero' : ''}>
                         {showStock
                           ? stock > 0
@@ -348,11 +343,12 @@ export function PurchaseReceiptProductPickerModal({
                             onChange={(e) =>
                               updateDraft(p.id, { quantity: sanitizeQuantityDraft(e.target.value) })
                             }
-                            onBlur={() =>
+                            onBlur={() => {
+                              const q = draft.quantity.trim();
                               updateDraft(p.id, {
-                                quantity: String(finalizeQuantityDraft(draft.quantity)),
-                              })
-                            }
+                                quantity: q === '' ? '1' : String(finalizeQuantityDraft(q)),
+                              });
+                            }}
                           />
                           <button type="button" onClick={() => changeQty(p.id, 1)} aria-label="+">
                             +
@@ -376,7 +372,7 @@ export function PurchaseReceiptProductPickerModal({
           </div>
 
           <footer className="doc-picker-footer">
-            <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
+            <button type="button" className="btn btn-ghost-inline" onClick={handleClose}>
               {t('products.close')}
             </button>
             <button
@@ -389,6 +385,7 @@ export function PurchaseReceiptProductPickerModal({
               {selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
             </button>
           </footer>
+          {resizable && <ModalResizeHandles onMouseDown={onResizeHandleMouseDown} />}
         </div>
       </div>
 
@@ -414,7 +411,7 @@ export function PurchaseReceiptProductPickerModal({
           });
           setRowDrafts((prev) => ({
             ...prev,
-            [p.id]: draftForProduct(p),
+            [p.id]: draftForProduct(),
           }));
         }}
       />

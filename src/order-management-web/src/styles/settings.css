@@ -191,13 +191,20 @@
   align-items: start;
 }
 
+.settings-row--contact-email {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  align-items: start;
+}
+
 .settings-row--contact-address .field-flex-grow,
 .settings-row--contact-address .field-flex-rest,
 .settings-row--contact-address .field-flex-compact,
 .settings-row--contact-phones .field-flex-rest,
 .settings-row--contact-online .field-flex-grow,
 .settings-row--contact-online .field-flex-rest,
-.settings-row--contact-online .field-flex-compact {
+.settings-row--contact-online .field-flex-compact,
+.settings-row--contact-email .field-flex-grow {
   flex: unset;
   width: auto;
   min-width: 0;
@@ -713,6 +720,11 @@
   align-items: start;
 }
 
+/* Supplier card: beneficiary → bank name → branch → account */
+.settings-row--bank-codes--beneficiary-first {
+  grid-template-columns: minmax(14rem, 2.4fr) minmax(9rem, 1.15fr) minmax(6.5rem, 8rem) minmax(9rem, 1fr);
+}
+
 .settings-row--bank-codes .field-bank-code select {
   padding-inline-end: 1.75rem;
 }
@@ -808,7 +820,8 @@
   .settings-row--category,
   .settings-row--contact-address,
   .settings-row--contact-phones,
-  .settings-row--contact-online {
+  .settings-row--contact-online,
+  .settings-row--contact-email {
     display: flex;
     flex-wrap: wrap;
   }
@@ -823,7 +836,8 @@
   .settings-row--contact-phones .field-flex-rest,
   .settings-row--contact-online .field-flex-grow,
   .settings-row--contact-online .field-flex-rest,
-  .settings-row--contact-online .field-flex-compact {
+  .settings-row--contact-online .field-flex-compact,
+  .settings-row--contact-email .field-flex-grow {
     flex: 1 1 100%;
     width: 100%;
   }
@@ -852,6 +866,7 @@
   }
 
   .settings-row--bank-codes,
+  .settings-row--bank-codes--beneficiary-first,
   .settings-row--bank-name,
   .settings-row--bank-swift,
   .settings-row--bank-iban {

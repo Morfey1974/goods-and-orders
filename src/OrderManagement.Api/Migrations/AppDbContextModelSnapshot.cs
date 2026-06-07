@@ -725,6 +725,9 @@ namespace OrderManagement.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("ApplyLandedCosts")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -795,6 +798,87 @@ namespace OrderManagement.Api.Migrations
                     b.HasIndex("TenantId", "SupplierId");
 
                     b.ToTable("PurchaseReceipts");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("PurchaseReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseReceiptId");
+
+                    b.ToTable("PurchaseReceiptDocuments");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptLandedCostLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("AmountIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("PurchaseReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("PurchaseReceiptId", "SupplierId");
+
+                    b.ToTable("PurchaseReceiptLandedCostLines");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptLine", b =>
@@ -1591,6 +1675,36 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptDocument", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.PurchaseReceipt", "PurchaseReceipt")
+                        .WithMany("Documents")
+                        .HasForeignKey("PurchaseReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PurchaseReceipt");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptLandedCostLine", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.PurchaseReceipt", "PurchaseReceipt")
+                        .WithMany("LandedCostLines")
+                        .HasForeignKey("PurchaseReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OrderManagement.Api.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PurchaseReceipt");
+
+                    b.Navigation("Supplier");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceiptLine", b =>
                 {
                     b.HasOne("OrderManagement.Api.Entities.Product", "Product")
@@ -1713,6 +1827,10 @@ namespace OrderManagement.Api.Migrations
 
             modelBuilder.Entity("OrderManagement.Api.Entities.PurchaseReceipt", b =>
                 {
+                    b.Navigation("Documents");
+
+                    b.Navigation("LandedCostLines");
+
                     b.Navigation("Lines");
                 });
 

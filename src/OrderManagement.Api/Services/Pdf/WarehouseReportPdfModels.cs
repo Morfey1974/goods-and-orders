@@ -36,7 +36,7 @@ public sealed record WarehouseBalanceLineModel(
 
 public sealed record WarehouseMovementLineModel(
     int RowNumber,
-    DateTime CreatedAt,
+    DateTime MovementDate,
     string ArticleCode,
     string ProductName,
     string MovementTypeLabel,

@@ -6,6 +6,7 @@ import { documentsApi, type Document } from '../../api/documents';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
 import { mergeRefs } from '../../lib/mergeRefs';
+import { BidiText, bidiAutoInput } from '../BidiText';
 import { normalizeStockQuantity } from '../../lib/stockQuantity';
 import {
   DocumentProductPickerModal,
@@ -478,7 +479,7 @@ export function DocumentCreateWizard({
               <div className="doc-panel-grid">
                 <div className="doc-customer-selected">
                   <span className="doc-panel-label">{t('documents.customerDetails')}</span>
-                  <strong>{selectedCustomer.name}</strong>
+                  <strong><BidiText as="span">{selectedCustomer.name}</BidiText></strong>
                   {!isEdit && !isDuplicateDraft && (
                     <button type="button" className="doc-link-btn" onClick={() => setStep('customer')}>
                       {t('documents.changeCustomer')}
@@ -564,7 +565,7 @@ export function DocumentCreateWizard({
                           <td className="col-name">
                             <input
                               type="text"
-                              className="doc-line-desc"
+                              {...bidiAutoInput('doc-line-desc')}
                               value={line.description}
                               onChange={(e) => updateLine(line.key, { description: e.target.value })}
                               placeholder={t('products.name')}

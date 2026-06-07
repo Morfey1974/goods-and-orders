@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +9,8 @@ import { inventoryApi, type InventoryValuationReport } from '../api/inventory';
 import { useAuth } from '../context/AuthContext';
 
 import { ProductCodeCell } from '../components/products/ProductCodeCell';
+
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 
 import { formatInventoryLotSource } from '../lib/inventoryLotLabel';
 
@@ -33,6 +35,106 @@ export function InventoryValuationPage() {
   const [error, setError] = useState('');
 
   const [loading, setLoading] = useState(false);
+
+  const [pdfOpen, setPdfOpen] = useState(false);
+
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const pdfParamsRef = useRef<{ asOfDate: string; detailed: boolean } | undefined>(undefined);
+
+
+
+  const revokePdfUrl = useCallback(() => {
+
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+
+    setPdfUrl(null);
+
+  }, [pdfUrl]);
+
+
+
+  const buildPdfParams = useCallback(
+
+    () => ({ asOfDate, detailed }),
+
+    [asOfDate, detailed]
+
+  );
+
+
+
+  const closePdf = () => {
+
+    setPdfOpen(false);
+
+    revokePdfUrl();
+
+    setPdfError(null);
+
+    setPdfLoading(false);
+
+  };
+
+
+
+  const openPdfPreview = async () => {
+
+    if (!token) return;
+
+    const params = buildPdfParams();
+
+    pdfParamsRef.current = params;
+
+    setPdfOpen(true);
+
+    setPdfLoading(true);
+
+    setPdfError(null);
+
+    revokePdfUrl();
+
+    try {
+
+      const blob = await inventoryApi.fetchValuationPdfBlob(token, params.asOfDate, params.detailed);
+
+      setPdfUrl(URL.createObjectURL(blob));
+
+    } catch (err) {
+
+      setPdfError(err instanceof Error ? err.message : 'Error');
+
+    } finally {
+
+      setPdfLoading(false);
+
+    }
+
+  };
+
+
+
+  const onDownloadPdf = async () => {
+
+    if (!token) return;
+
+    const params = pdfParamsRef.current ?? buildPdfParams();
+
+    try {
+
+      await inventoryApi.downloadValuationPdf(token, params.asOfDate, params.detailed);
+
+    } catch (err) {
+
+      setPdfError(err instanceof Error ? err.message : 'Error');
+
+    }
+
+  };
 
 
 
@@ -127,6 +229,38 @@ export function InventoryValuationPage() {
         <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
 
           {loading ? t('settings.saving') : t('inventory.runValuation')}
+
+        </button>
+
+        <button
+
+          type="button"
+
+          className="btn btn-secondary"
+
+          disabled={loading || !report}
+
+          onClick={() => void openPdfPreview()}
+
+        >
+
+          {t('reports.preview')}
+
+        </button>
+
+        <button
+
+          type="button"
+
+          className="btn btn-secondary"
+
+          disabled={loading || !report}
+
+          onClick={() => void onDownloadPdf()}
+
+        >
+
+          {t('reports.download')}
 
         </button>
 
@@ -309,6 +443,24 @@ export function InventoryValuationPage() {
         </div>
 
       )}
+
+      <DocumentPdfPreviewModal
+
+        open={pdfOpen}
+
+        title={t('inventory.valuationPdfTitle')}
+
+        pdfUrl={pdfUrl}
+
+        loading={pdfLoading}
+
+        error={pdfError}
+
+        onClose={closePdf}
+
+        onDownload={() => void onDownloadPdf()}
+
+      />
 
     </div>
 

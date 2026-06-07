@@ -153,9 +153,9 @@ export function WarehousePage() {
           <tbody>
             {balances.map((b) => (
               <tr key={`${b.warehouseId}-${b.productId}`}>
-                {showWarehouseColumn && <td>{b.warehouseName}</td>}
+                {showWarehouseColumn && <td className="bidi-auto">{b.warehouseName}</td>}
                 <td><ProductCodeCell articleCode={b.articleCode} legacySku={b.legacySku} /></td>
-                <td>{b.productName}</td>
+                <td className="bidi-auto">{b.productName}</td>
                 <td>{formatStockQuantity(b.quantity)}</td>
               </tr>
             ))}

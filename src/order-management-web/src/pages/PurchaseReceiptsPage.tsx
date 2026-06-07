@@ -100,7 +100,7 @@ export function PurchaseReceiptsPage() {
             {list.map((r) => (
               <tr key={r.id} onClick={() => navigate(`/purchase-receipts/${r.id}`)}>
                 <td>{r.receiptNumber}</td>
-                <td>{r.supplierName}</td>
+                <td className="bidi-auto">{r.supplierName}</td>
                 <td>{formatDate(r.documentDate)}</td>
                 <td>
                   {r.totalAmount != null ? `${r.totalAmount.toFixed(2)} ${r.currency}` : '—'}
@@ -112,7 +112,13 @@ export function PurchaseReceiptsPage() {
                       : t('purchaseReceipts.statusDraft')}
                   </span>
                 </td>
-                <td>{r.hasDocument ? '📎' : '—'}</td>
+                <td>
+                  {r.documentCount > 0
+                    ? Array.from({ length: r.documentCount }, (_, i) => (
+                        <span key={i} className="pr-doc-clip" aria-hidden="true">📎</span>
+                      ))
+                    : '—'}
+                </td>
               </tr>
             ))}
           </tbody>

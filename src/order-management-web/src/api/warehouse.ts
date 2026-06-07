@@ -74,6 +74,7 @@ export type StockMovement = {
   unitCostIls?: number | null;
   totalCostIls?: number | null;
   notes?: string;
+  movementDate: string;
   createdAt: string;
   warehouseId: string;
   warehouseName: string;
@@ -167,6 +168,7 @@ export const warehouseApi = {
           ? Number(m.totalCostIls ?? m.TotalCostIls)
           : null,
       notes: (m.notes ?? m.Notes) as string | undefined,
+      movementDate: String(m.movementDate ?? m.MovementDate ?? m.createdAt ?? m.CreatedAt ?? ''),
       createdAt: String(m.createdAt ?? m.CreatedAt ?? ''),
       warehouseId: String(m.warehouseId ?? m.WarehouseId ?? ''),
       warehouseName: String(m.warehouseName ?? m.WarehouseName ?? ''),
