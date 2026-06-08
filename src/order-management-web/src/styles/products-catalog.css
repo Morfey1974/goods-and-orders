@@ -1355,6 +1355,65 @@
   background: var(--surface-muted, #f4f4f5);
 }
 
+.product-groups-select-menu-empty {
+  margin: 0.15rem 0.45rem 0.35rem;
+  font-size: 0.82rem;
+}
+
+.product-groups-select-add {
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+
+.product-groups-select-add-btn {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary, #0d9488);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.product-groups-select-add-btn:hover {
+  background: var(--surface-muted, #f4f4f5);
+}
+
+.product-groups-select-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.15rem 0.25rem 0.25rem;
+}
+
+.product-groups-select-add-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.product-groups-select-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.product-groups-select-add-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger, #b91c1c);
+}
+
 .product-card-modal .bom-checkboxes .checkbox-row {
   margin-bottom: 0 !important;
   font-size: 0.82rem;

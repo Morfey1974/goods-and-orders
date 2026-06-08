@@ -78,6 +78,7 @@ export type PurchaseReceipt = {
   documentDate: string;
   currency: string;
   totalAmount?: number;
+  usdIlsRate?: number;
   notes?: string;
   status: string;
   postedAt?: string;
@@ -162,6 +163,9 @@ function mapReceipt(raw: Record<string, unknown>): PurchaseReceipt {
     totalAmount: raw.totalAmount != null || raw.TotalAmount != null
       ? Number(raw.totalAmount ?? raw.TotalAmount)
       : undefined,
+    usdIlsRate: raw.usdIlsRate != null || raw.UsdIlsRate != null
+      ? Number(raw.usdIlsRate ?? raw.UsdIlsRate)
+      : undefined,
     notes: (raw.notes ?? raw.Notes) as string | undefined,
     status: String(raw.status ?? raw.Status ?? 'Draft'),
     postedAt: (raw.postedAt ?? raw.PostedAt) as string | undefined,
@@ -200,6 +204,7 @@ export type PurchaseReceiptPayload = {
   documentDate: string;
   currency?: string | null;
   totalAmount?: number | null;
+  usdIlsRate?: number | null;
   notes?: string | null;
   version?: number;
   applyLandedCosts?: boolean;

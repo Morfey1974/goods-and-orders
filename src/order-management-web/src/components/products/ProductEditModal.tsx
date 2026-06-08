@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppModal } from '../ui/AppModal';
 import { UnsavedLeaveDialog } from '../UnsavedLeaveDialog';
@@ -176,6 +176,8 @@ type Props = {
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
   onProductUpdated?: (product: Product) => void;
+  /** Called when product groups are created from the card (refresh catalog filters, etc.). */
+  onGroupsChanged?: () => void;
   /** Raise above nested pickers (e.g. purchase receipt product picker at z-index 2600). */
   zIndex?: number;
 };
@@ -192,6 +194,7 @@ export function ProductEditModal({
   onSaved,
   onError,
   onProductUpdated,
+  onGroupsChanged,
   zIndex,
 }: Props) {
   const { t } = useTranslation();
@@ -301,6 +304,23 @@ export function ProductEditModal({
     productGroupsApi.list(token).then(setProductGroups).catch(() => setProductGroups([]));
     warehouseApi.list(token).then(setWarehouses).catch(() => setWarehouses([]));
   }, [open, token]);
+
+  const handleCreateProductGroup = useCallback(
+    async (name: string): Promise<ProductGroup | null> => {
+      if (!token) return null;
+      const created = await productGroupsApi.create(token, name);
+      setProductGroups((prev) =>
+        [...prev, created].sort((a, b) =>
+          a.sortOrder !== b.sortOrder
+            ? a.sortOrder - b.sortOrder
+            : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        )
+      );
+      onGroupsChanged?.();
+      return created;
+    },
+    [token, onGroupsChanged]
+  );
 
   useEffect(() => {
     if (!open || warehouses.length === 0) return;
@@ -490,7 +510,8 @@ export function ProductEditModal({
       zIndex={zIndex}
       noCard
       resize={PRODUCT_CARD_RESIZE}
-      preventClose={saving}
+      preventClose={saving || unsavedOpen}
+      closeOnEscape={!unsavedOpen}
     >
         <div className="product-card-header">
           <h2>{t('products.cardTitle')}</h2>
@@ -669,6 +690,7 @@ export function ProductEditModal({
                 groups={productGroups}
                 selectedGroupIds={selectedGroupIds}
                 onChange={setSelectedGroupIds}
+                onCreateGroup={handleCreateProductGroup}
               />
             </div>
 
@@ -877,6 +899,7 @@ export function ProductEditModal({
         discardLabel={t('products.unsavedDiscard')}
         cancelLabel={t('settings.cancel')}
         busy={saving}
+        zIndex={zIndex !== undefined ? zIndex + 100 : undefined}
         onSave={() => {
           setUnsavedOpen(false);
           setTab('general');

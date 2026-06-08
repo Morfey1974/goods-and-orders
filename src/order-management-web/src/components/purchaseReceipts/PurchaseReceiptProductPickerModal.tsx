@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, PRODUCT_TYPES, type Product } from '../../api/catalog';
@@ -72,6 +72,8 @@ export function PurchaseReceiptProductPickerModal({
   const [nextArticle, setNextArticle] = useState('');
   const [components, setComponents] = useState<Product[]>([]);
   const [productModalMsg, setProductModalMsg] = useState('');
+  const productsRef = useRef(products);
+  productsRef.current = products;
 
   useEffect(() => {
     if (!open || !token) return;
@@ -81,6 +83,10 @@ export function PurchaseReceiptProductPickerModal({
     setFilterGroupId('');
     setProductModalMsg('');
     setSelectedIds(initialSelectedProductId ? new Set([initialSelectedProductId]) : new Set());
+  }, [open, token, initialSelectedProductId]);
+
+  useEffect(() => {
+    if (!open || !token) return;
     setLoadingCatalog(true);
     catalogApi.products
       .list(token, undefined, true)
@@ -91,11 +97,13 @@ export function PurchaseReceiptProductPickerModal({
       })
       .catch(() => {
         setCatalogProducts(
-          [...products].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+          [...productsRef.current].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+          )
         );
       })
       .finally(() => setLoadingCatalog(false));
-  }, [open, token, initialSelectedProductId, products]);
+  }, [open, token]);
 
   useEffect(() => {
     if (!open) return;

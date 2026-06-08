@@ -859,6 +859,9 @@ export function ProductsPage() {
         }}
         onError={setError}
         onProductUpdated={onProductUpdated}
+        onGroupsChanged={() => {
+          if (token) productGroupsApi.list(token).then(setGroups).catch(() => {});
+        }}
       />
     </div>
   );

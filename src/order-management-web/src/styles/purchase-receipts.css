@@ -411,8 +411,13 @@
   text-align: start;
 }
 
+.pr-lines-summary td.pr-col-usd-total,
+.pr-lines-summary td.pr-col-ils-total {
+  text-align: center;
+}
+
 .pr-lines-grand-total {
-  text-align: end;
+  text-align: center;
 }
 
 .pr-grand-total-inline {
@@ -424,6 +429,13 @@
   white-space: nowrap;
 }
 
+.pr-grand-total-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .pr-grand-total-label {
   font-size: 0.8rem;
   font-weight: 600;
@@ -431,10 +443,13 @@
 }
 
 .pr-grand-total-value {
+  display: block;
   font-size: 0.95rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--primary);
+  text-align: center;
+  white-space: nowrap;
 }
 
 .pr-lines-table th.pr-col-actions,
@@ -960,6 +975,50 @@
 .pr-usd-rate-notes {
   margin-top: 0.65rem;
   padding-top: 0.35rem;
+}
+
+.pr-usd-rate-manual {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+
+.pr-usd-rate-manual-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.pr-usd-rate-manual-toggle {
+  margin-bottom: 0 !important;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pr-usd-rate-manual-field {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0 !important;
+  font-size: 0.84rem;
+}
+
+.pr-usd-rate-manual-field input {
+  width: 7rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-usd-rate-manual-hint {
+  margin: 0 !important;
 }
 
 .pr-usd-rate-note {

@@ -9,6 +9,8 @@ type Props = {
   cancelLabel: string;
   busy?: boolean;
   saveDisabled?: boolean;
+  /** Stack above a parent modal (e.g. product card opened from picker at z-index 2700). */
+  zIndex?: number;
   onSave: () => void;
   onDiscard: () => void;
   onCancel: () => void;
@@ -23,6 +25,7 @@ export function UnsavedLeaveDialog({
   cancelLabel,
   busy = false,
   saveDisabled = false,
+  zIndex = 2600,
   onSave,
   onDiscard,
   onCancel,
@@ -33,7 +36,7 @@ export function UnsavedLeaveDialog({
       onClose={onCancel}
       preventClose={busy}
       size="sm"
-      zIndex={2600}
+      zIndex={zIndex}
       overlayClassName="confirm-dialog-overlay"
       className="confirm-dialog unsaved-leave-dialog"
       labelledBy="unsaved-leave-title"

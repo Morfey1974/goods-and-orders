@@ -34,6 +34,7 @@ public class PurchaseReceiptService(
             DocumentDate = UtcDate(request.DocumentDate),
             Currency = NormalizeCurrency(request.Currency),
             TotalAmount = request.TotalAmount,
+            UsdIlsRate = NormalizeUsdIlsRate(request.UsdIlsRate),
             Notes = TrimOrNull(request.Notes),
             Status = PurchaseReceiptStatus.Draft,
             ApplyLandedCosts = request.ApplyLandedCosts,
@@ -70,6 +71,7 @@ public class PurchaseReceiptService(
         receipt.DocumentDate = UtcDate(request.DocumentDate);
         receipt.Currency = NormalizeCurrency(request.Currency);
         receipt.TotalAmount = request.TotalAmount;
+        receipt.UsdIlsRate = NormalizeUsdIlsRate(request.UsdIlsRate);
         receipt.Notes = TrimOrNull(request.Notes);
         receipt.ApplyLandedCosts = request.ApplyLandedCosts;
         receipt.Version++;
@@ -138,8 +140,7 @@ public class PurchaseReceiptService(
             decimal usdIlsRate = 1m;
             if (needsUsdRate)
             {
-                var rate = await exchangeRates.GetUsdIlsAsync(receipt.DocumentDate, ct);
-                usdIlsRate = rate.Rate;
+                usdIlsRate = await ResolveUsdIlsRateAsync(receipt, ct);
             }
 
             decimal totalLandedIls = 0;
@@ -641,6 +642,18 @@ public class PurchaseReceiptService(
         parts.Add(receipt.Supplier.Name);
         return string.Join(" · ", parts);
     }
+
+    private async Task<decimal> ResolveUsdIlsRateAsync(PurchaseReceipt receipt, CancellationToken ct)
+    {
+        if (receipt.UsdIlsRate is > 0)
+            return receipt.UsdIlsRate.Value;
+
+        var rate = await exchangeRates.GetUsdIlsAsync(receipt.DocumentDate, ct);
+        return rate.Rate;
+    }
+
+    private static decimal? NormalizeUsdIlsRate(decimal? rate) =>
+        rate is > 0 ? rate : null;
 
     private static string? TrimOrNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

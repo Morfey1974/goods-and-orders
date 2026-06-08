@@ -149,6 +149,79 @@ function parsePositiveNumber(raw: string): number | null {
   return n;
 }
 
+function parseUsdIlsRateInput(raw: string): number | null {
+  const trimmed = raw.trim().replace(/\s/g, '');
+  if (!trimmed) return null;
+  const normalized = trimmed.includes(',') && !trimmed.includes('.')
+    ? trimmed.replace(',', '.')
+    : trimmed.replace(/,/g, '');
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function formatUsdIlsRateValue(rate: number): string {
+  return rate.toFixed(4);
+}
+
+function normalizeUsdIlsRateDraft(raw: string): string {
+  const parsed = parseUsdIlsRateInput(raw);
+  return parsed !== null ? formatUsdIlsRateValue(parsed) : raw.trim();
+}
+
+function resolveManualUsdRateForPayload(
+  useManualUsdRate: boolean,
+  usdIlsRateManual: string
+): number | null {
+  if (!useManualUsdRate) return null;
+  return parseUsdIlsRateInput(normalizeUsdIlsRateDraft(usdIlsRateManual));
+}
+
+function manualUsdRateFromReceipt(receipt: PurchaseReceipt): {
+  useManualUsdRate: boolean;
+  usdIlsRateManual: string;
+} {
+  const hasManualRate = receipt.usdIlsRate != null && receipt.usdIlsRate > 0;
+  return {
+    useManualUsdRate: hasManualRate,
+    usdIlsRateManual: hasManualRate ? formatUsdIlsRateValue(receipt.usdIlsRate!) : '',
+  };
+}
+
+type ManualUsdRateEditorState = {
+  useManualUsdRate: boolean;
+  usdIlsRateManual: string;
+};
+
+type PersistDraftResult = {
+  saved: PurchaseReceipt;
+  manualRateAtSave: ManualUsdRateEditorState;
+};
+
+function resolveManualUsdRateEditorState(
+  receipt: PurchaseReceipt | null | undefined,
+  fallback: ManualUsdRateEditorState
+): ManualUsdRateEditorState {
+  const fromSaved = receipt
+    ? manualUsdRateFromReceipt(receipt)
+    : { useManualUsdRate: false, usdIlsRateManual: '' };
+  if (fromSaved.useManualUsdRate) return fromSaved;
+  if (fallback.useManualUsdRate) {
+    const rate = resolveManualUsdRateForPayload(true, fallback.usdIlsRateManual);
+    if (rate !== null) {
+      return {
+        useManualUsdRate: true,
+        usdIlsRateManual: formatUsdIlsRateValue(rate),
+      };
+    }
+  }
+  return fromSaved;
+}
+
+function preventFormSubmitOnEnter(e: React.KeyboardEvent) {
+  if (e.key === 'Enter') e.preventDefault();
+}
+
 function lineTotalUsdValue(row: LineRow): number {
   const direct = parsePositiveNumber(row.lineTotalUsd);
   return direct ?? 0;
@@ -181,20 +254,24 @@ function lineUnitCostIlsValue(
 ): number {
   const qty = normalizeStockQuantity(row.quantity);
   if (qty <= 0) return 0;
+  if (currencyMode === 'USD') {
+    const totalUsd = lineTotalUsdValue(row);
+    if (totalUsd > 0 && rate !== null && rate > 0) {
+      return roundMoney((totalUsd * rate) / qty);
+    }
+    if (row.unitCostManual) {
+      const unit = parsePositiveNumber(row.unitCostIls);
+      if (unit !== null) return unit;
+    }
+    const unit = parsePositiveNumber(row.unitCostIls);
+    return unit ?? 0;
+  }
   if (row.unitCostManual) {
     const unit = parsePositiveNumber(row.unitCostIls);
     if (unit !== null) return unit;
   }
-  if (currencyMode === 'ILS') {
-    const totalIls = parsePositiveNumber(row.lineTotalIlsInput);
-    if (totalIls !== null && totalIls > 0) return roundMoney(totalIls / qty);
-    const unit = parsePositiveNumber(row.unitCostIls);
-    return unit ?? 0;
-  }
-  if (rate !== null && rate > 0) {
-    const totalUsd = lineTotalUsdValue(row);
-    if (totalUsd > 0) return roundMoney((totalUsd * rate) / qty);
-  }
+  const totalIls = parsePositiveNumber(row.lineTotalIlsInput);
+  if (totalIls !== null && totalIls > 0) return roundMoney(totalIls / qty);
   const unit = parsePositiveNumber(row.unitCostIls);
   return unit ?? 0;
 }
@@ -224,8 +301,8 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
   return receipt.lines.map((l) => {
     const qty = l.quantity;
     const unitPrice = l.unitPrice != null ? String(l.unitPrice) : '';
-    const lineTotalUsd =
-      usd && l.unitPrice != null ? String(roundMoney(l.unitPrice * qty)) : '';
+    const hasUsdLineAmount = usd && l.unitPrice != null && l.unitPrice > 0;
+    const lineTotalUsd = hasUsdLineAmount ? String(roundMoney(l.unitPrice! * qty)) : '';
     const lineTotalIlsInput =
       ils && l.unitPrice != null
         ? String(roundMoney(l.unitPrice * qty))
@@ -233,11 +310,13 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
           ? String(roundMoney(l.unitCostIls * qty))
           : '';
     const unitCostIls =
-      l.unitCostIls != null
-        ? String(l.unitCostIls)
-        : ils && l.unitPrice != null
-          ? unitPrice
-          : '';
+      hasUsdLineAmount
+        ? ''
+        : l.unitCostIls != null
+          ? String(l.unitCostIls)
+          : ils && l.unitPrice != null
+            ? unitPrice
+            : '';
     return {
       key: l.id,
       productId: l.productId,
@@ -246,9 +325,22 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
       lineTotalUsd,
       lineTotalIlsInput,
       unitCostIls,
-      unitCostManual: l.unitCostIls != null || (ils && l.unitPrice != null),
+      unitCostManual: hasUsdLineAmount
+        ? false
+        : l.unitCostIls != null || (ils && l.unitPrice != null),
     };
   });
+}
+
+function lineHasValidPostAmount(
+  line: LineRow,
+  currencyMode: PurchaseReceiptCurrencyMode,
+  usdRate: number | null
+): boolean {
+  if (currencyMode === 'USD') {
+    return lineTotalUsdValue(line) > 0 || lineTotalIlsValue(line, usdRate, currencyMode) > 0;
+  }
+  return lineTotalIlsValue(line, null, currencyMode) > 0;
 }
 
 function rowsToPayload(
@@ -273,11 +365,19 @@ function rowsToPayload(
         };
       }
       const totalUsd = lineTotalUsdValue(r);
+      let unitPrice: number | undefined;
+      if (qty > 0) {
+        if (totalUsd > 0) {
+          unitPrice = roundMoney(totalUsd / qty);
+        } else if (unitCostIls > 0 && usdRate !== null && usdRate > 0) {
+          unitPrice = roundMoney(unitCostIls / usdRate);
+        }
+      }
       return {
         productId: r.productId,
         warehouseId: r.warehouseId || undefined,
         quantity: qty,
-        unitPrice: qty > 0 && totalUsd > 0 ? roundMoney(totalUsd / qty) : undefined,
+        unitPrice,
         unitCostIls: unitCostIls > 0 ? unitCostIls : undefined,
       };
     });
@@ -303,6 +403,7 @@ function validatePostReceipt(
   lines: LineRow[],
   productById: Map<string, Product>,
   usdRate: number | null,
+  useManualUsdRate: boolean,
   applyLandedCosts: boolean,
   landedCostRows: LandedCostRow[]
 ): Pick<ReceiptFormValidation, 'canPost' | 'postErrorKey'> {
@@ -316,6 +417,13 @@ function validatePostReceipt(
   }
 
   const currencyMode = purchaseReceiptCurrencyMode(currency);
+  const needsUsdRate =
+    currencyMode === 'USD' ||
+    (applyLandedCosts && landedCostRows.some((r) => r.currency === 'USD'));
+
+  if (needsUsdRate && useManualUsdRate && (usdRate === null || usdRate <= 0)) {
+    return { canPost: false, postErrorKey: 'purchaseReceipts.usdRateManualRequired' };
+  }
 
   for (const line of filled) {
     const product = productById.get(line.productId);
@@ -323,10 +431,17 @@ function validatePostReceipt(
       return { canPost: false, postErrorKey: 'purchaseReceipts.warehouseRequired' };
     }
     if (currencyMode === 'USD') {
-      if (lineTotalUsdValue(line) <= 0) {
-        return { canPost: false, postErrorKey: 'purchaseReceipts.lineTotalUsdRequired' };
+      if (!lineHasValidPostAmount(line, currencyMode, usdRate)) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.lineAmountRequired' };
       }
-    } else if (lineTotalIlsValue(line, null, currencyMode) <= 0) {
+      if (
+        lineTotalUsdValue(line) <= 0 &&
+        lineUnitCostIlsValue(line, usdRate, currencyMode) > 0 &&
+        (usdRate === null || usdRate <= 0)
+      ) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.landedCostUsdRateRequired' };
+      }
+    } else if (!lineHasValidPostAmount(line, currencyMode, usdRate)) {
       return { canPost: false, postErrorKey: 'purchaseReceipts.lineTotalIlsRequired' };
     }
     if (lineUnitCostIlsValue(line, usdRate, currencyMode) <= 0) {
@@ -361,6 +476,7 @@ function validateReceiptForm(
   lines: LineRow[],
   productById: Map<string, Product>,
   usdRate: number | null,
+  useManualUsdRate: boolean,
   applyLandedCosts: boolean,
   landedCostRows: LandedCostRow[]
 ): ReceiptFormValidation {
@@ -372,6 +488,7 @@ function validateReceiptForm(
       lines,
       productById,
       usdRate,
+      useManualUsdRate,
       applyLandedCosts,
       landedCostRows
     ),
@@ -477,6 +594,7 @@ export function PurchaseReceiptDetailPage() {
   const docFileInputRef = useRef<HTMLInputElement>(null);
   const docBlobUrlsRef = useRef<Record<string, string>>({});
   const receiptVersionRef = useRef(1);
+  const pendingManualRateRef = useRef<ManualUsdRateEditorState | null>(null);
   const [docBaseWidth, setDocBaseWidth] = useState(560);
 
   const [receipt, setReceipt] = useState<PurchaseReceipt | null>(null);
@@ -514,7 +632,9 @@ export function PurchaseReceiptDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [docDeleting, setDocDeleting] = useState(false);
   const [baseline, setBaseline] = useState('');
-  const [usdRate, setUsdRate] = useState<UsdIlsRate | null>(null);
+  const [bankUsdRate, setBankUsdRate] = useState<UsdIlsRate | null>(null);
+  const [useManualUsdRate, setUseManualUsdRate] = useState(false);
+  const [usdIlsRateManual, setUsdIlsRateManual] = useState('');
   const [rateLoading, setRateLoading] = useState(false);
   const [rateError, setRateError] = useState('');
 
@@ -539,7 +659,10 @@ export function PurchaseReceiptDetailPage() {
   );
 
   const currencyMode = purchaseReceiptCurrencyMode(currency);
-  const usdRateValue = usdRate?.rate ?? null;
+  const manualUsdRateValue = useManualUsdRate
+    ? resolveManualUsdRateForPayload(true, usdIlsRateManual)
+    : null;
+  const usdRateValue = useManualUsdRate ? manualUsdRateValue : bankUsdRate?.rate ?? null;
 
   const selectedSavedDoc = selectedDocKey
     ? savedDocuments.find((d) => d.id === selectedDocKey)
@@ -573,6 +696,11 @@ export function PurchaseReceiptDetailPage() {
     [filledLines, usdRateValue, currencyMode]
   );
 
+  const linesGrandTotalUsd = useMemo(
+    () => filledLines.reduce((sum, l) => sum + lineTotalUsdValue(l), 0),
+    [filledLines]
+  );
+
   const landedCostsGrandTotalIls = useMemo(
     () =>
       landedCostRows.reduce(
@@ -590,6 +718,8 @@ export function PurchaseReceiptDetailPage() {
         documentDate,
         currency,
         notes,
+        useManualUsdRate,
+        usdIlsRateManual: usdIlsRateManual.trim(),
         applyLandedCosts,
         landedCosts: landedCostsForCompare(landedCostRows),
         lines: linesForCompare(lines),
@@ -601,6 +731,8 @@ export function PurchaseReceiptDetailPage() {
       documentDate,
       currency,
       notes,
+      useManualUsdRate,
+      usdIlsRateManual,
       applyLandedCosts,
       landedCostRows,
       lines,
@@ -653,7 +785,7 @@ export function PurchaseReceiptDetailPage() {
     );
   };
 
-  const summaryColSpan = lineColumns.length - (isDraft ? 2 : 1);
+  const summaryLabelColSpan = 3;
 
   const clearPendingDocs = useCallback(() => {
     setPendingDocs((prev) => {
@@ -700,6 +832,15 @@ export function PurchaseReceiptDetailPage() {
       setDocumentDate(r.documentDate);
       setCurrency(nextCurrency);
       setNotes(r.notes ?? '');
+      const manualRate = resolveManualUsdRateEditorState(
+        r,
+        pendingManualRateRef.current ?? { useManualUsdRate: false, usdIlsRateManual: '' }
+      );
+      if (manualRate.useManualUsdRate) {
+        pendingManualRateRef.current = null;
+      }
+      setUseManualUsdRate(manualRate.useManualUsdRate);
+      setUsdIlsRateManual(manualRate.usdIlsRateManual);
       setLines(nextLines);
       setApplyLandedCosts(r.applyLandedCosts);
       setLandedCostRows(nextLanded);
@@ -710,6 +851,8 @@ export function PurchaseReceiptDetailPage() {
           documentDate: r.documentDate,
           currency: nextCurrency,
           notes: r.notes ?? '',
+          useManualUsdRate: manualRate.useManualUsdRate,
+          usdIlsRateManual: manualRate.usdIlsRateManual,
           applyLandedCosts: r.applyLandedCosts,
           landedCosts: landedCostsForCompare(nextLanded),
           lines: linesForCompare(nextLines),
@@ -807,10 +950,11 @@ export function PurchaseReceiptDetailPage() {
         lines,
         productById,
         usdRateValue,
+        useManualUsdRate,
         applyLandedCosts,
         landedCostRows
       ),
-    [supplierId, currency, lines, productById, usdRateValue, applyLandedCosts, landedCostRows]
+    [supplierId, currency, lines, productById, usdRateValue, useManualUsdRate, applyLandedCosts, landedCostRows]
   );
 
   useEffect(() => {
@@ -819,7 +963,7 @@ export function PurchaseReceiptDetailPage() {
       currencyMode === 'USD' ||
       (applyLandedCosts && landedCostRows.some((r) => r.currency === 'USD'));
     if (!needsUsdRate) {
-      setUsdRate(null);
+      setBankUsdRate(null);
       setRateError('');
       return;
     }
@@ -829,11 +973,11 @@ export function PurchaseReceiptDetailPage() {
     exchangeRatesApi
       .usdIls(token, documentDate)
       .then((rate) => {
-        if (!cancelled) setUsdRate(rate);
+        if (!cancelled) setBankUsdRate(rate);
       })
       .catch((e) => {
         if (!cancelled) {
-          setUsdRate(null);
+          setBankUsdRate(null);
           setRateError(e instanceof Error ? e.message : 'Error');
         }
       })
@@ -987,6 +1131,7 @@ export function PurchaseReceiptDetailPage() {
         documentDate,
         currency,
         totalAmount: positionsCount > 0 ? linesGrandTotalIls : null,
+        usdIlsRate: resolveManualUsdRateForPayload(useManualUsdRate, usdIlsRateManual),
         notes: notes.trim() || null,
         version: receiptVersionRef.current,
         applyLandedCosts,
@@ -1002,6 +1147,8 @@ export function PurchaseReceiptDetailPage() {
       currency,
       positionsCount,
       linesGrandTotalIls,
+      useManualUsdRate,
+      usdIlsRateManual,
       notes,
       applyLandedCosts,
       lines,
@@ -1029,30 +1176,55 @@ export function PurchaseReceiptDetailPage() {
     [token]
   );
 
-  const persistDraftReceipt = useCallback(async (): Promise<PurchaseReceipt | null> => {
+  const persistDraftReceipt = useCallback(async (): Promise<PersistDraftResult | null> => {
     if (!token) return null;
     if (!formValidation.canSaveDraft) {
       setError(t(formValidation.draftErrorKey ?? 'purchaseReceipts.saveDisabledHint'));
       return null;
     }
+    const resolvedManualRate = resolveManualUsdRateForPayload(useManualUsdRate, usdIlsRateManual);
+    if (useManualUsdRate && usdIlsRateManual.trim() && resolvedManualRate === null) {
+      setError(t('purchaseReceipts.usdRateManualRequired'));
+      return null;
+    }
+    const manualRateAtSave: ManualUsdRateEditorState = {
+      useManualUsdRate: useManualUsdRate && resolvedManualRate !== null,
+      usdIlsRateManual:
+        useManualUsdRate && resolvedManualRate !== null
+          ? formatUsdIlsRateValue(resolvedManualRate)
+          : '',
+    };
+    if (manualRateAtSave.useManualUsdRate) {
+      setUsdIlsRateManual(manualRateAtSave.usdIlsRateManual);
+    }
     setError('');
     setSaveSuccess('');
+    const payload: PurchaseReceiptPayload = {
+      ...buildPayload(),
+      usdIlsRate: useManualUsdRate ? resolvedManualRate : null,
+    };
     let saved: PurchaseReceipt;
     if (isNew) {
-      saved = await purchaseReceiptsApi.create(token, buildPayload());
+      saved = await purchaseReceiptsApi.create(token, payload);
     } else {
-      saved = await updateDraftWithRetry(id!, buildPayload());
+      saved = await updateDraftWithRetry(id!, payload);
     }
     for (const pending of pendingDocs) {
       saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, pending.file);
     }
     clearPendingDocs();
-    receiptVersionRef.current = saved.version;
-    applyReceiptWithDocuments(saved);
-    return saved;
+    const patchedSaved: PurchaseReceipt = {
+      ...saved,
+      usdIlsRate: saved.usdIlsRate ?? resolvedManualRate ?? undefined,
+    };
+    receiptVersionRef.current = patchedSaved.version;
+    applyReceiptWithDocuments(patchedSaved);
+    return { saved: patchedSaved, manualRateAtSave };
   }, [
     token,
     formValidation,
+    useManualUsdRate,
+    usdIlsRateManual,
     isNew,
     pendingDocs,
     id,
@@ -1067,15 +1239,37 @@ export function PurchaseReceiptDetailPage() {
     if (!token) return false;
     setSaving(true);
     try {
-      const saved = await persistDraftReceipt();
-      if (!saved) return false;
+      const result = await persistDraftReceipt();
+      if (!result) return false;
+      const { saved, manualRateAtSave } = result;
+
+      if (manualRateAtSave.useManualUsdRate) {
+        pendingManualRateRef.current = manualRateAtSave;
+      }
+
+      const manualRate = resolveManualUsdRateEditorState(saved, manualRateAtSave);
+      setUseManualUsdRate(manualRate.useManualUsdRate);
+      setUsdIlsRateManual(manualRate.usdIlsRateManual);
 
       if (isNew) {
         navigate(`/purchase-receipts/${saved.id}`, { replace: true });
       } else {
-        const fresh = await purchaseReceiptsApi.get(token, saved.id);
-        applySavedReceiptToEditor(fresh);
-        void ensureReceiptProductsInCatalog(fresh);
+        setBaseline(
+          JSON.stringify({
+            supplierId,
+            supplierInvoiceNumber,
+            documentDate,
+            currency,
+            notes,
+            useManualUsdRate: manualRate.useManualUsdRate,
+            usdIlsRateManual: manualRate.usdIlsRateManual.trim(),
+            applyLandedCosts,
+            landedCosts: landedCostsForCompare(landedCostRows),
+            lines: linesForCompare(lines),
+            pendingDocNames: [] as string[],
+          })
+        );
+        void ensureReceiptProductsInCatalog(saved);
       }
 
       setSaveSuccess(t('purchaseReceipts.draftSaved'));
@@ -1088,16 +1282,32 @@ export function PurchaseReceiptDetailPage() {
     } finally {
       setSaving(false);
     }
-  }, [token, persistDraftReceipt, isNew, navigate, t, applySavedReceiptToEditor, ensureReceiptProductsInCatalog]);
+  }, [
+    token,
+    persistDraftReceipt,
+    isNew,
+    navigate,
+    t,
+    supplierId,
+    supplierInvoiceNumber,
+    documentDate,
+    currency,
+    notes,
+    applyLandedCosts,
+    landedCostRows,
+    lines,
+    ensureReceiptProductsInCatalog,
+  ]);
 
   const performPost = useCallback(async (): Promise<boolean> => {
     if (!token) return false;
     setSaving(true);
     setPostConfirmOpen(false);
     try {
-      const saved = await persistDraftReceipt();
-      if (!saved) return false;
+      const result = await persistDraftReceipt();
+      if (!result) return false;
 
+      const { saved } = result;
       const postVersion = saved.version;
       try {
         await purchaseReceiptsApi.post(token, saved.id, postVersion);
@@ -1395,9 +1605,8 @@ export function PurchaseReceiptDetailPage() {
     : undefined;
 
   const showUsdRateNotes =
-    !isPosted &&
-    (currencyMode === 'USD' ||
-      (applyLandedCosts && landedCostRows.some((r) => r.currency === 'USD')));
+    currencyMode === 'USD' ||
+    (applyLandedCosts && landedCostRows.some((r) => r.currency === 'USD'));
 
   const docScale = docZoom / 100;
 
@@ -1587,11 +1796,13 @@ export function PurchaseReceiptDetailPage() {
                         isPosted || (lineProduct != null && !productTracksStock(lineProduct));
                       const displayLineIls = lineTotalIlsValue(line, usdRateValue, currencyMode);
                       const computedUnitCost = lineUnitCostIlsValue(line, usdRateValue, currencyMode);
-                      const displayUnitCost = line.unitCostManual
-                        ? line.unitCostIls
-                        : computedUnitCost > 0
-                          ? computedUnitCost.toFixed(2)
-                          : '';
+                      const displayUnitCost =
+                        line.unitCostManual &&
+                        !(currencyMode === 'USD' && lineTotalUsdValue(line) > 0)
+                          ? line.unitCostIls
+                          : computedUnitCost > 0
+                            ? computedUnitCost.toFixed(2)
+                            : '';
                       const qtyDisplay =
                         line.quantity <= 0 ? '' : String(line.quantity);
                       return (
@@ -1737,54 +1948,109 @@ export function PurchaseReceiptDetailPage() {
                   </tbody>
                   <tfoot>
                     <tr className="pr-lines-summary">
-                      <td colSpan={summaryColSpan}>
+                      <td colSpan={summaryLabelColSpan}>
                         {t('purchaseReceipts.positionsCount', { count: positionsCount })}
                       </td>
-                      <td className="pr-line-total-cell pr-lines-grand-total">
-                        <span className="pr-grand-total-inline">
+                      {currencyMode === 'USD' && (
+                        <td className="pr-col-usd-total pr-lines-grand-total">
+                          <span className="pr-grand-total-stack">
+                            <span className="pr-grand-total-label">
+                              {t('purchaseReceipts.grandTotalUsd')}
+                            </span>
+                            <span className="pr-grand-total-value">
+                              {positionsCount > 0 ? linesGrandTotalUsd.toFixed(2) : '—'}
+                            </span>
+                          </span>
+                        </td>
+                      )}
+                      <td className="pr-col-ils-total pr-lines-grand-total">
+                        <span className="pr-grand-total-stack">
                           <span className="pr-grand-total-label">
                             {t('purchaseReceipts.grandTotalIls')}
                           </span>
                           <span className="pr-grand-total-value">
-                            {positionsCount > 0
-                              ? `${linesGrandTotalIls.toFixed(2)} ₪`
-                              : '—'}
+                            {positionsCount > 0 ? linesGrandTotalIls.toFixed(2) : '—'}
                           </span>
                         </span>
                       </td>
-                      {isDraft && <td />}
+                      <td className="pr-col-unit-cost" />
+                      {isDraft && <td className="pr-col-actions" />}
                     </tr>
                   </tfoot>
                 </table>
                 {showUsdRateNotes && (
                   <div className="pr-usd-rate-notes">
-                    {rateLoading && (
-                      <p className="muted pr-usd-rate-note">{t('purchaseReceipts.usdRateLoading')}</p>
-                    )}
-                    {rateError && !rateLoading && (
-                      <p className="pr-usd-rate-note pr-usd-rate-note--error">
-                        {t('purchaseReceipts.usdRateError')}: {rateError}
-                      </p>
-                    )}
-                    {usdRate && !rateLoading && (
-                      <>
-                        <p className="pr-usd-rate-note pr-usd-rate-note--disclaimer">
-                          {usdRate.usedNearestAvailableDate
-                            ? t('purchaseReceipts.usdRateNearestDisclaimer', {
-                                date: formatDisplayDate(documentDate),
-                                rateDate: formatDisplayDate(usdRate.rateDate),
-                                rate: usdRate.rate.toFixed(4),
-                              })
-                            : t('purchaseReceipts.usdRateDisclaimer', {
-                                date: formatDisplayDate(documentDate),
-                                rate: usdRate.rate.toFixed(4),
-                              })}
+                    <div className="pr-usd-rate-manual">
+                      <div className="pr-usd-rate-manual-row">
+                        <label className="checkbox-row pr-usd-rate-manual-toggle">
+                          <input
+                            type="checkbox"
+                            checked={useManualUsdRate}
+                            disabled={isPosted}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setUseManualUsdRate(checked);
+                              if (
+                                checked &&
+                                !usdIlsRateManual.trim() &&
+                                bankUsdRate &&
+                                !rateLoading
+                              ) {
+                                setUsdIlsRateManual(formatUsdIlsRateValue(bankUsdRate.rate));
+                              }
+                            }}
+                          />
+                          {t('purchaseReceipts.usdRateManualToggle')}
+                        </label>
+                        {useManualUsdRate && (
+                          <label className="pr-usd-rate-manual-field">
+                            <span>{t('purchaseReceipts.usdRateManualLabel')}</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              disabled={isPosted}
+                              value={usdIlsRateManual}
+                              onChange={(e) => setUsdIlsRateManual(e.target.value)}
+                              onBlur={() =>
+                                setUsdIlsRateManual((prev) => normalizeUsdIlsRateDraft(prev))
+                              }
+                              onKeyDown={preventFormSubmitOnEnter}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      {useManualUsdRate ? (
+                        <p className="muted pr-usd-rate-note pr-usd-rate-manual-hint">
+                          {t('purchaseReceipts.usdRateManualHint')}
                         </p>
-                        <p className="pr-usd-rate-note pr-usd-rate-note--hint">
-                          {t('purchaseReceipts.usdRateBankHint')}
-                        </p>
-                      </>
-                    )}
+                      ) : (
+                        <>
+                          {rateLoading && (
+                            <p className="muted pr-usd-rate-note">{t('purchaseReceipts.usdRateLoading')}</p>
+                          )}
+                          {rateError && !rateLoading && (
+                            <p className="pr-usd-rate-note pr-usd-rate-note--error">
+                              {t('purchaseReceipts.usdRateError')}: {rateError}
+                            </p>
+                          )}
+                          {bankUsdRate && !rateLoading && (
+                            <p className="pr-usd-rate-note pr-usd-rate-note--disclaimer">
+                              {bankUsdRate.usedNearestAvailableDate
+                                ? t('purchaseReceipts.usdRateNearestDisclaimer', {
+                                    date: formatDisplayDate(documentDate),
+                                    rateDate: formatDisplayDate(bankUsdRate.rateDate),
+                                    rate: bankUsdRate.rate.toFixed(4),
+                                  })
+                                : t('purchaseReceipts.usdRateDisclaimer', {
+                                    date: formatDisplayDate(documentDate),
+                                    rate: bankUsdRate.rate.toFixed(4),
+                                  })}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

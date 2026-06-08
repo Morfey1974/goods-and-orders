@@ -12,6 +12,8 @@ public class PurchaseReceipt
     public string Currency { get; set; } = "ILS";
     public decimal? TotalAmount { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Manual USD→ILS rate (₪ per $1). When null, Bank of Israel rate on document date is used.</summary>
+    public decimal? UsdIlsRate { get; set; }
 
     public PurchaseReceiptStatus Status { get; set; } = PurchaseReceiptStatus.Draft;
     public DateTime? PostedAt { get; set; }

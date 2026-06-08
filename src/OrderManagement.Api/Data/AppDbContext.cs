@@ -200,6 +200,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.SupplierInvoiceNumber).HasMaxLength(64);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            e.Property(x => x.UsdIlsRate).HasPrecision(18, 6);
             e.Property(x => x.Notes).HasMaxLength(2048);
             e.Property(x => x.DocumentPath).HasMaxLength(512);
             e.Property(x => x.DocumentFileName).HasMaxLength(256);
