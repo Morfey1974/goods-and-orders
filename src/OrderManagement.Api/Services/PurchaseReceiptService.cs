@@ -19,8 +19,7 @@ public class PurchaseReceiptService(
         CancellationToken ct)
     {
         await ValidateSupplierAsync(tenantId, request.SupplierId, ct);
-        await ValidateLinesAsync(tenantId, NormalizeCurrency(request.Currency), request.Lines, ct);
-        await ValidateLandedCostLinesAsync(tenantId, request.ApplyLandedCosts, request.LandedCostLines, ct);
+        await ValidateDraftLinesAsync(tenantId, request.Lines, ct);
 
         var number = await sequences.AllocateNextAsync(tenantId, "GR", ct);
         var now = DateTime.UtcNow;
@@ -57,20 +56,14 @@ public class PurchaseReceiptService(
         CancellationToken ct)
     {
         var receipt = await db.PurchaseReceipts
-            .Include(r => r.Lines)
-            .Include(r => r.LandedCostLines)
             .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct)
             ?? throw new InvalidOperationException("Purchase receipt not found.");
 
         if (receipt.Status != PurchaseReceiptStatus.Draft)
             throw new InvalidOperationException("Only draft receipts can be edited.");
 
-        if (receipt.Version != request.Version)
-            throw new InvalidOperationException("Data was modified. Refresh and try again.");
-
         await ValidateSupplierAsync(tenantId, request.SupplierId, ct);
-        await ValidateLinesAsync(tenantId, NormalizeCurrency(request.Currency), request.Lines, ct);
-        await ValidateLandedCostLinesAsync(tenantId, request.ApplyLandedCosts, request.LandedCostLines, ct);
+        await ValidateDraftLinesAsync(tenantId, request.Lines, ct);
 
         receipt.SupplierId = request.SupplierId;
         receipt.SupplierInvoiceNumber = TrimOrNull(request.SupplierInvoiceNumber);
@@ -82,23 +75,21 @@ public class PurchaseReceiptService(
         receipt.Version++;
         receipt.UpdatedAt = DateTime.UtcNow;
 
-        foreach (var line in receipt.Lines.ToList())
-            db.Entry(line).State = EntityState.Detached;
-
         await db.PurchaseReceiptLines
             .Where(l => l.PurchaseReceiptId == receipt.Id)
             .ExecuteDeleteAsync(ct);
-        receipt.Lines.Clear();
-        ApplyLines(receipt, request.Lines);
-
-        foreach (var line in receipt.LandedCostLines.ToList())
-            db.Entry(line).State = EntityState.Detached;
-
         await db.PurchaseReceiptLandedCostLines
             .Where(l => l.PurchaseReceiptId == receipt.Id)
             .ExecuteDeleteAsync(ct);
-        receipt.LandedCostLines.Clear();
-        ApplyLandedCostLines(receipt, request.LandedCostLines);
+
+        if (request.Lines is { Count: > 0 })
+            db.PurchaseReceiptLines.AddRange(BuildLineEntities(receipt.Id, request.Lines));
+
+        if (request.LandedCostLines is { Count: > 0 })
+        {
+            db.PurchaseReceiptLandedCostLines.AddRange(
+                BuildLandedCostEntities(receipt.Id, request.LandedCostLines));
+        }
 
         await db.SaveChangesAsync(ct);
         return await LoadAsync(tenantId, receipt.Id, ct)
@@ -121,8 +112,7 @@ public class PurchaseReceiptService(
         if (receipt.Version != version)
             throw new InvalidOperationException("Data was modified. Refresh and try again.");
 
-        if (receipt.Lines.Count == 0)
-            throw new InvalidOperationException("Add at least one line before posting.");
+        await ValidateReceiptForPostAsync(tenantId, receipt, ct);
 
         var stockLines = receipt.Lines
             .Where(l => ProductInventoryHelper.TracksStock(l.Product))
@@ -447,21 +437,8 @@ public class PurchaseReceiptService(
     {
         if (lines is null || lines.Count == 0) return;
 
-        var order = 0;
-        foreach (var input in lines)
-        {
-            receipt.LandedCostLines.Add(new PurchaseReceiptLandedCostLine
-            {
-                Id = Guid.NewGuid(),
-                PurchaseReceiptId = receipt.Id,
-                SupplierId = input.SupplierId,
-                Category = ParseLandedCostCategory(input.Category),
-                Currency = NormalizeCurrency(input.Currency),
-                Amount = input.Amount,
-                Notes = TrimOrNull(input.Notes),
-                SortOrder = order++
-            });
-        }
+        foreach (var entity in BuildLandedCostEntities(receipt.Id, lines))
+            receipt.LandedCostLines.Add(entity);
     }
 
     private static PurchaseReceiptLandedCostCategory ParseLandedCostCategory(string? value)
@@ -472,6 +449,58 @@ public class PurchaseReceiptService(
         return Enum.TryParse<PurchaseReceiptLandedCostCategory>(value, true, out var cat)
             ? cat
             : PurchaseReceiptLandedCostCategory.Other;
+    }
+
+    private async Task ValidateDraftLinesAsync(
+        Guid tenantId,
+        IReadOnlyList<PurchaseReceiptLineInput>? lines,
+        CancellationToken ct)
+    {
+        if (lines is null || lines.Count == 0) return;
+
+        foreach (var line in lines)
+        {
+            var product = await db.Products.FirstOrDefaultAsync(
+                p => p.Id == line.ProductId && p.TenantId == tenantId, ct);
+            if (product is null)
+                throw new InvalidOperationException("Product not found.");
+        }
+    }
+
+    private async Task ValidateReceiptForPostAsync(
+        Guid tenantId,
+        PurchaseReceipt receipt,
+        CancellationToken ct)
+    {
+        if (receipt.Lines.Count == 0)
+            throw new InvalidOperationException("Add at least one line before posting.");
+
+        await ValidateLinesAsync(tenantId, NormalizeCurrency(receipt.Currency), receipt.Lines
+            .Select(l => new PurchaseReceiptLineInput(
+                l.ProductId,
+                l.WarehouseId,
+                l.Quantity,
+                l.UnitPrice,
+                l.UnitCostIls,
+                l.SupplierSku,
+                l.Notes))
+            .ToList(), ct);
+
+        if (receipt.ApplyLandedCosts)
+        {
+            await ValidateLandedCostLinesAsync(
+                tenantId,
+                true,
+                receipt.LandedCostLines
+                    .Select(l => new PurchaseReceiptLandedCostLineInput(
+                        l.SupplierId,
+                        l.Category.ToString(),
+                        l.Currency,
+                        l.Amount,
+                        l.Notes))
+                    .ToList(),
+                ct);
+        }
     }
 
     private async Task ValidateLandedCostLinesAsync(
@@ -503,17 +532,18 @@ public class PurchaseReceiptService(
         return c is "ILS" or "NIS";
     }
 
-    private static void ApplyLines(PurchaseReceipt receipt, IReadOnlyList<PurchaseReceiptLineInput>? lines)
+    private static List<PurchaseReceiptLine> BuildLineEntities(
+        Guid receiptId,
+        IReadOnlyList<PurchaseReceiptLineInput> lines)
     {
-        if (lines is null || lines.Count == 0) return;
-
+        var result = new List<PurchaseReceiptLine>(lines.Count);
         var order = 0;
         foreach (var input in lines)
         {
-            receipt.Lines.Add(new PurchaseReceiptLine
+            result.Add(new PurchaseReceiptLine
             {
                 Id = Guid.NewGuid(),
-                PurchaseReceiptId = receipt.Id,
+                PurchaseReceiptId = receiptId,
                 ProductId = input.ProductId,
                 WarehouseId = input.WarehouseId,
                 Quantity = input.Quantity,
@@ -524,6 +554,38 @@ public class PurchaseReceiptService(
                 SortOrder = order++
             });
         }
+        return result;
+    }
+
+    private static List<PurchaseReceiptLandedCostLine> BuildLandedCostEntities(
+        Guid receiptId,
+        IReadOnlyList<PurchaseReceiptLandedCostLineInput> lines)
+    {
+        var result = new List<PurchaseReceiptLandedCostLine>(lines.Count);
+        var order = 0;
+        foreach (var input in lines)
+        {
+            result.Add(new PurchaseReceiptLandedCostLine
+            {
+                Id = Guid.NewGuid(),
+                PurchaseReceiptId = receiptId,
+                SupplierId = input.SupplierId,
+                Category = ParseLandedCostCategory(input.Category),
+                Currency = NormalizeCurrency(input.Currency),
+                Amount = input.Amount,
+                Notes = TrimOrNull(input.Notes),
+                SortOrder = order++
+            });
+        }
+        return result;
+    }
+
+    private static void ApplyLines(PurchaseReceipt receipt, IReadOnlyList<PurchaseReceiptLineInput>? lines)
+    {
+        if (lines is null || lines.Count == 0) return;
+
+        foreach (var entity in BuildLineEntities(receipt.Id, lines))
+            receipt.Lines.Add(entity);
     }
 
     private async Task ValidateSupplierAsync(Guid tenantId, Guid supplierId, CancellationToken ct)

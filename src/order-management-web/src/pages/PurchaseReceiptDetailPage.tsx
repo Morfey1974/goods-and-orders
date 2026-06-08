@@ -20,6 +20,7 @@ import {
   type PurchaseReceiptDocument,
   type PurchaseReceiptLineInput,
   type PurchaseReceiptLandedCostLineInput,
+  type PurchaseReceiptPayload,
 } from '../api/purchaseReceipts';
 import { exchangeRatesApi, type UsdIlsRate } from '../api/exchangeRates';
 import { suppliersApi, type Supplier } from '../api/suppliers';
@@ -267,8 +268,8 @@ function rowsToPayload(
           productId: r.productId,
           warehouseId: r.warehouseId || undefined,
           quantity: qty,
-          unitPrice: qty > 0 ? roundMoney(totalIls / qty) : undefined,
-          unitCostIls,
+          unitPrice: qty > 0 && totalIls > 0 ? roundMoney(totalIls / qty) : undefined,
+          unitCostIls: unitCostIls > 0 ? unitCostIls : undefined,
         };
       }
       const totalUsd = lineTotalUsdValue(r);
@@ -276,16 +277,83 @@ function rowsToPayload(
         productId: r.productId,
         warehouseId: r.warehouseId || undefined,
         quantity: qty,
-        unitPrice: qty > 0 ? roundMoney(totalUsd / qty) : undefined,
-        unitCostIls,
+        unitPrice: qty > 0 && totalUsd > 0 ? roundMoney(totalUsd / qty) : undefined,
+        unitCostIls: unitCostIls > 0 ? unitCostIls : undefined,
       };
     });
 }
 
 type ReceiptFormValidation = {
-  canSave: boolean;
-  errorKey?: string;
+  canSaveDraft: boolean;
+  canPost: boolean;
+  draftErrorKey?: string;
+  postErrorKey?: string;
 };
+
+function validateDraftSave(supplierId: string): Pick<ReceiptFormValidation, 'canSaveDraft' | 'draftErrorKey'> {
+  if (!supplierId) {
+    return { canSaveDraft: false, draftErrorKey: 'purchaseReceipts.supplierRequired' };
+  }
+  return { canSaveDraft: true };
+}
+
+function validatePostReceipt(
+  supplierId: string,
+  currency: string,
+  lines: LineRow[],
+  productById: Map<string, Product>,
+  usdRate: number | null,
+  applyLandedCosts: boolean,
+  landedCostRows: LandedCostRow[]
+): Pick<ReceiptFormValidation, 'canPost' | 'postErrorKey'> {
+  if (!supplierId) {
+    return { canPost: false, postErrorKey: 'purchaseReceipts.supplierRequired' };
+  }
+
+  const filled = lines.filter((l) => l.productId);
+  if (filled.length === 0) {
+    return { canPost: false, postErrorKey: 'purchaseReceipts.linesRequired' };
+  }
+
+  const currencyMode = purchaseReceiptCurrencyMode(currency);
+
+  for (const line of filled) {
+    const product = productById.get(line.productId);
+    if (product && productTracksStock(product) && !line.warehouseId) {
+      return { canPost: false, postErrorKey: 'purchaseReceipts.warehouseRequired' };
+    }
+    if (currencyMode === 'USD') {
+      if (lineTotalUsdValue(line) <= 0) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.lineTotalUsdRequired' };
+      }
+    } else if (lineTotalIlsValue(line, null, currencyMode) <= 0) {
+      return { canPost: false, postErrorKey: 'purchaseReceipts.lineTotalIlsRequired' };
+    }
+    if (lineUnitCostIlsValue(line, usdRate, currencyMode) <= 0) {
+      return { canPost: false, postErrorKey: 'purchaseReceipts.unitCostIlsRequired' };
+    }
+  }
+
+  if (applyLandedCosts) {
+    const filledLanded = landedCostRows.filter((r) => r.supplierId || r.amount.trim());
+    if (filledLanded.length === 0) {
+      return { canPost: false, postErrorKey: 'purchaseReceipts.landedCostsRequired' };
+    }
+    for (const row of filledLanded) {
+      if (!row.supplierId) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.landedCostSupplierRequired' };
+      }
+      if (parsePositiveNumber(row.amount) === null) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.landedCostAmountRequired' };
+      }
+      if (row.currency === 'USD' && (usdRate === null || usdRate <= 0)) {
+        return { canPost: false, postErrorKey: 'purchaseReceipts.landedCostUsdRateRequired' };
+      }
+    }
+  }
+
+  return { canPost: true };
+}
 
 function validateReceiptForm(
   supplierId: string,
@@ -296,53 +364,18 @@ function validateReceiptForm(
   applyLandedCosts: boolean,
   landedCostRows: LandedCostRow[]
 ): ReceiptFormValidation {
-  if (!supplierId) {
-    return { canSave: false, errorKey: 'purchaseReceipts.supplierRequired' };
-  }
-
-  const filled = lines.filter((l) => l.productId);
-  if (filled.length === 0) {
-    return { canSave: false, errorKey: 'purchaseReceipts.linesRequired' };
-  }
-
-  const currencyMode = purchaseReceiptCurrencyMode(currency);
-
-  for (const line of filled) {
-    const product = productById.get(line.productId);
-    if (product && productTracksStock(product) && !line.warehouseId) {
-      return { canSave: false, errorKey: 'purchaseReceipts.warehouseRequired' };
-    }
-    if (currencyMode === 'USD') {
-      if (lineTotalUsdValue(line) <= 0) {
-        return { canSave: false, errorKey: 'purchaseReceipts.lineTotalUsdRequired' };
-      }
-    } else if (lineTotalIlsValue(line, null, currencyMode) <= 0) {
-      return { canSave: false, errorKey: 'purchaseReceipts.lineTotalIlsRequired' };
-    }
-    if (lineUnitCostIlsValue(line, usdRate, currencyMode) <= 0) {
-      return { canSave: false, errorKey: 'purchaseReceipts.unitCostIlsRequired' };
-    }
-  }
-
-  if (applyLandedCosts) {
-    const filledLanded = landedCostRows.filter((r) => r.supplierId || r.amount.trim());
-    if (filledLanded.length === 0) {
-      return { canSave: false, errorKey: 'purchaseReceipts.landedCostsRequired' };
-    }
-    for (const row of filledLanded) {
-      if (!row.supplierId) {
-        return { canSave: false, errorKey: 'purchaseReceipts.landedCostSupplierRequired' };
-      }
-      if (parsePositiveNumber(row.amount) === null) {
-        return { canSave: false, errorKey: 'purchaseReceipts.landedCostAmountRequired' };
-      }
-      if (row.currency === 'USD' && (usdRate === null || usdRate <= 0)) {
-        return { canSave: false, errorKey: 'purchaseReceipts.landedCostUsdRateRequired' };
-      }
-    }
-  }
-
-  return { canSave: true };
+  return {
+    ...validateDraftSave(supplierId),
+    ...validatePostReceipt(
+      supplierId,
+      currency,
+      lines,
+      productById,
+      usdRate,
+      applyLandedCosts,
+      landedCostRows
+    ),
+  };
 }
 
 /** Compare lines by business fields only (row keys differ between UI and API). */
@@ -368,6 +401,34 @@ function isImageFile(name: string, mime?: string) {
 function isPdfFile(name: string, mime?: string) {
   if (mime === 'application/pdf' || mime?.includes('pdf')) return true;
   return /\.pdf$/i.test(name);
+}
+
+function isVersionConflictError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes('data was modified') || lower.includes('изменились');
+}
+
+function mapPurchaseReceiptApiError(message: string, t: (key: string) => string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes('landed cost line') || lower.includes('landed cost amount')) {
+    return t('purchaseReceipts.landedCostsRequired');
+  }
+  if (lower.includes('warehouse is required')) {
+    return t('purchaseReceipts.warehouseRequired');
+  }
+  if (lower.includes('purchase price is required')) {
+    return t('purchaseReceipts.unitPriceRequired');
+  }
+  if (lower.includes('at least one line before posting')) {
+    return t('purchaseReceipts.linesRequired');
+  }
+  if (lower.includes('unit cost in ils is required')) {
+    return t('purchaseReceipts.unitCostIlsRequired');
+  }
+  if (lower.includes('data was modified') || lower.includes('изменились')) {
+    return t('purchaseReceipts.versionConflict');
+  }
+  return message;
 }
 
 function dedupeDocuments(docs: PurchaseReceiptDocument[]): PurchaseReceiptDocument[] {
@@ -415,6 +476,7 @@ export function PurchaseReceiptDetailPage() {
   const docViewportRef = useRef<HTMLDivElement>(null);
   const docFileInputRef = useRef<HTMLInputElement>(null);
   const docBlobUrlsRef = useRef<Record<string, string>>({});
+  const receiptVersionRef = useRef(1);
   const [docBaseWidth, setDocBaseWidth] = useState(560);
 
   const [receipt, setReceipt] = useState<PurchaseReceipt | null>(null);
@@ -458,6 +520,7 @@ export function PurchaseReceiptDetailPage() {
 
   const isPosted = receipt?.status === 'Posted';
   const isDraft = !receipt || receipt.status === 'Draft';
+  const editorReady = isNew || (!receiptLoading && Boolean(receipt));
   const canManageDocument = isNew || Boolean(id && id !== 'new');
   const docTargetId = receipt?.id ?? routeReceiptId;
   const canUploadDocument =
@@ -612,6 +675,7 @@ export function PurchaseReceiptDetailPage() {
   }, []);
 
   const applyReceiptWithDocuments = useCallback((fresh: PurchaseReceipt) => {
+    receiptVersionRef.current = fresh.version;
     flushSync(() => {
       setReceipt({
         ...fresh,
@@ -619,6 +683,62 @@ export function PurchaseReceiptDetailPage() {
       });
     });
   }, []);
+
+  const applySavedReceiptToEditor = useCallback((r: PurchaseReceipt) => {
+    const nextLines = linesToRows(r);
+    const nextLanded = r.landedCostLines.length > 0 ? landedCostsToRows(r) : [];
+    const nextCurrency = purchaseReceiptCurrencyMode(r.currency);
+
+    flushSync(() => {
+      receiptVersionRef.current = r.version;
+      setReceipt({
+        ...r,
+        documents: dedupeDocuments(r.documents),
+      });
+      setSupplierId(r.supplierId);
+      setSupplierInvoiceNumber(r.supplierInvoiceNumber ?? '');
+      setDocumentDate(r.documentDate);
+      setCurrency(nextCurrency);
+      setNotes(r.notes ?? '');
+      setLines(nextLines);
+      setApplyLandedCosts(r.applyLandedCosts);
+      setLandedCostRows(nextLanded);
+      setBaseline(
+        JSON.stringify({
+          supplierId: r.supplierId,
+          supplierInvoiceNumber: r.supplierInvoiceNumber ?? '',
+          documentDate: r.documentDate,
+          currency: nextCurrency,
+          notes: r.notes ?? '',
+          applyLandedCosts: r.applyLandedCosts,
+          landedCosts: landedCostsForCompare(nextLanded),
+          lines: linesForCompare(nextLines),
+          pendingDocNames: [] as string[],
+        })
+      );
+    });
+  }, []);
+
+  const mergeProductsIntoCatalog = useCallback((incoming: Product[]) => {
+    setProducts((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const p of incoming) {
+        byId.set(p.id, p);
+      }
+      return [...byId.values()].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+    });
+  }, []);
+
+  const ensureReceiptProductsInCatalog = useCallback(
+    async (r: PurchaseReceipt) => {
+      if (!token || r.lines.length === 0) return;
+      const list = await catalogApi.products.list(token, undefined, true);
+      mergeProductsIntoCatalog(list);
+    },
+    [token, mergeProductsIntoCatalog]
+  );
 
   const selectDocument = useCallback((docId: string) => {
     setSelectedDocKey(docId);
@@ -642,23 +762,20 @@ export function PurchaseReceiptDetailPage() {
     setError('');
     try {
       const r = await purchaseReceiptsApi.get(token, id);
-      setReceipt(r);
-      setSupplierId(r.supplierId);
-      setSupplierInvoiceNumber(r.supplierInvoiceNumber ?? '');
-      setDocumentDate(r.documentDate);
-      setCurrency(purchaseReceiptCurrencyMode(r.currency));
-      setNotes(r.notes ?? '');
-      setLines(linesToRows(r));
-      setApplyLandedCosts(r.applyLandedCosts);
-      setLandedCostRows(
-        r.landedCostLines.length > 0 ? landedCostsToRows(r) : []
-      );
+      applySavedReceiptToEditor(r);
+      void ensureReceiptProductsInCatalog(r);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setReceiptLoading(false);
     }
-  }, [token, id, isNew]);
+  }, [token, id, isNew, applySavedReceiptToEditor, ensureReceiptProductsInCatalog]);
+
+  useEffect(() => {
+    if (receipt?.version != null) {
+      receiptVersionRef.current = receipt.version;
+    }
+  }, [receipt?.version]);
 
   useEffect(() => {
     if (!token) return;
@@ -855,29 +972,67 @@ export function PurchaseReceiptDetailPage() {
     }
   }, [isNew, baseline, serializeForm]);
 
-  useEffect(() => {
-    if (!isNew && receipt && baseline === '') {
-      setBaseline(serializeForm());
+  const syncVersionForSave = useCallback(() => {
+    if (receipt?.version != null && receipt.version > receiptVersionRef.current) {
+      receiptVersionRef.current = receipt.version;
     }
-  }, [isNew, receipt, baseline, serializeForm]);
+  }, [receipt?.version]);
 
-  const buildPayload = () => ({
-    supplierId,
-    supplierInvoiceNumber: supplierInvoiceNumber.trim() || null,
-    documentDate,
-    currency,
-    totalAmount: positionsCount > 0 ? linesGrandTotalIls : null,
-    notes: notes.trim() || null,
-    version: receipt?.version,
-    applyLandedCosts,
-    lines: rowsToPayload(lines, currency, usdRateValue),
-    landedCostLines: applyLandedCosts ? rowsToLandedCostPayload(landedCostRows) : [],
-  });
+  const buildPayload = useCallback(
+    (): PurchaseReceiptPayload => {
+      syncVersionForSave();
+      return {
+        supplierId,
+        supplierInvoiceNumber: supplierInvoiceNumber.trim() || null,
+        documentDate,
+        currency,
+        totalAmount: positionsCount > 0 ? linesGrandTotalIls : null,
+        notes: notes.trim() || null,
+        version: receiptVersionRef.current,
+        applyLandedCosts,
+        lines: rowsToPayload(lines, currency, usdRateValue),
+        landedCostLines: applyLandedCosts ? rowsToLandedCostPayload(landedCostRows) : [],
+      };
+    },
+    [
+      syncVersionForSave,
+      supplierId,
+      supplierInvoiceNumber,
+      documentDate,
+      currency,
+      positionsCount,
+      linesGrandTotalIls,
+      notes,
+      applyLandedCosts,
+      lines,
+      usdRateValue,
+      landedCostRows,
+    ]
+  );
+
+  const updateDraftWithRetry = useCallback(
+    async (receiptId: string, payload: PurchaseReceiptPayload): Promise<PurchaseReceipt> => {
+      if (!token) throw new Error('Not authenticated');
+      try {
+        return await purchaseReceiptsApi.update(token, receiptId, payload);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        if (!isVersionConflictError(message)) throw err;
+        const fresh = await purchaseReceiptsApi.get(token, receiptId);
+        receiptVersionRef.current = fresh.version;
+        return await purchaseReceiptsApi.update(token, receiptId, {
+          ...payload,
+          version: fresh.version,
+        });
+      }
+    },
+    [token]
+  );
 
   const persistDraftReceipt = useCallback(async (): Promise<PurchaseReceipt | null> => {
     if (!token) return null;
-    if (!formValidation.canSave) {
-      setError(t(formValidation.errorKey ?? 'purchaseReceipts.saveDisabledHint'));
+    if (!formValidation.canSaveDraft) {
+      setError(t(formValidation.draftErrorKey ?? 'purchaseReceipts.saveDisabledHint'));
       return null;
     }
     setError('');
@@ -886,12 +1041,13 @@ export function PurchaseReceiptDetailPage() {
     if (isNew) {
       saved = await purchaseReceiptsApi.create(token, buildPayload());
     } else {
-      saved = await purchaseReceiptsApi.update(token, id!, buildPayload());
+      saved = await updateDraftWithRetry(id!, buildPayload());
     }
     for (const pending of pendingDocs) {
       saved = await purchaseReceiptsApi.uploadDocument(token, saved.id, pending.file);
     }
     clearPendingDocs();
+    receiptVersionRef.current = saved.version;
     applyReceiptWithDocuments(saved);
     return saved;
   }, [
@@ -904,6 +1060,7 @@ export function PurchaseReceiptDetailPage() {
     applyReceiptWithDocuments,
     t,
     buildPayload,
+    updateDraftWithRetry,
   ]);
 
   const performSaveDraft = useCallback(async (): Promise<boolean> => {
@@ -913,20 +1070,25 @@ export function PurchaseReceiptDetailPage() {
       const saved = await persistDraftReceipt();
       if (!saved) return false;
 
-      flushSync(() => setBaseline(serializeForm()));
-      setSaveSuccess(t('purchaseReceipts.draftSaved'));
-
       if (isNew) {
         navigate(`/purchase-receipts/${saved.id}`, { replace: true });
+      } else {
+        const fresh = await purchaseReceiptsApi.get(token, saved.id);
+        applySavedReceiptToEditor(fresh);
+        void ensureReceiptProductsInCatalog(fresh);
       }
+
+      setSaveSuccess(t('purchaseReceipts.draftSaved'));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
+      setError(
+        mapPurchaseReceiptApiError(err instanceof Error ? err.message : 'Error', t)
+      );
       return false;
     } finally {
       setSaving(false);
     }
-  }, [token, persistDraftReceipt, serializeForm, isNew, navigate, t]);
+  }, [token, persistDraftReceipt, isNew, navigate, t, applySavedReceiptToEditor, ensureReceiptProductsInCatalog]);
 
   const performPost = useCallback(async (): Promise<boolean> => {
     if (!token) return false;
@@ -936,17 +1098,26 @@ export function PurchaseReceiptDetailPage() {
       const saved = await persistDraftReceipt();
       if (!saved) return false;
 
-      await purchaseReceiptsApi.post(token, saved.id, saved.version);
-      flushSync(() => setBaseline(serializeForm()));
+      const postVersion = saved.version;
+      try {
+        await purchaseReceiptsApi.post(token, saved.id, postVersion);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        if (!isVersionConflictError(message)) throw err;
+        const fresh = await purchaseReceiptsApi.get(token, saved.id);
+        await purchaseReceiptsApi.post(token, saved.id, fresh.version);
+      }
       navigate('/purchase-receipts');
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
+      setError(
+        mapPurchaseReceiptApiError(err instanceof Error ? err.message : 'Error', t)
+      );
       return false;
     } finally {
       setSaving(false);
     }
-  }, [token, persistDraftReceipt, serializeForm, navigate]);
+  }, [token, persistDraftReceipt, navigate, t]);
 
   const {
     leaveOpen,
@@ -966,8 +1137,8 @@ export function PurchaseReceiptDetailPage() {
   };
 
   const onPostClick = () => {
-    if (!formValidation.canSave) {
-      setError(t(formValidation.errorKey ?? 'purchaseReceipts.saveDisabledHint'));
+    if (!formValidation.canPost) {
+      setError(t(formValidation.postErrorKey ?? 'purchaseReceipts.postDisabledHint'));
       return;
     }
     setPostConfirmOpen(true);
@@ -1050,8 +1221,8 @@ export function PurchaseReceiptDetailPage() {
 
     if (!isNew) return;
 
-    if (!formValidation.canSave) {
-      setDocUploadError(t(formValidation.errorKey ?? 'purchaseReceipts.documentNeedsDraftFields'));
+    if (!formValidation.canSaveDraft) {
+      setDocUploadError(t(formValidation.draftErrorKey ?? 'purchaseReceipts.documentNeedsDraftFields'));
     } else {
       setDocUploadError('');
     }
@@ -1173,18 +1344,6 @@ export function PurchaseReceiptDetailPage() {
   const pickerReplaceProductId = pickerReplaceKey
     ? lines.find((l) => l.key === pickerReplaceKey)?.productId ?? null
     : null;
-
-  const mergeProductsIntoCatalog = (incoming: Product[]) => {
-    setProducts((prev) => {
-      const byId = new Map(prev.map((p) => [p.id, p]));
-      for (const p of incoming) {
-        byId.set(p.id, p);
-      }
-      return [...byId.values()].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      );
-    });
-  };
 
   const onPickerSave = (picks: PickedReceiptProduct[]) => {
     if (picks.length) {
@@ -1424,7 +1583,8 @@ export function PurchaseReceiptDetailPage() {
                   <tbody>
                     {lines.map((line) => {
                       const lineProduct = line.productId ? productById.get(line.productId) : undefined;
-                      const lineTracksStock = lineProduct ? productTracksStock(lineProduct) : false;
+                      const warehouseDisabled =
+                        isPosted || (lineProduct != null && !productTracksStock(lineProduct));
                       const displayLineIls = lineTotalIlsValue(line, usdRateValue, currencyMode);
                       const computedUnitCost = lineUnitCostIlsValue(line, usdRateValue, currencyMode);
                       const displayUnitCost = line.unitCostManual
@@ -1452,9 +1612,9 @@ export function PurchaseReceiptDetailPage() {
                           <select
                             className="pr-warehouse-select"
                             value={line.warehouseId}
-                            disabled={isPosted || !lineTracksStock}
+                            disabled={warehouseDisabled}
                             title={
-                              !lineTracksStock
+                              warehouseDisabled && lineProduct && !productTracksStock(lineProduct)
                                 ? t('purchaseReceipts.warehouseNotApplicable')
                                 : line.warehouseId
                                   ? warehouses.find((w) => w.id === line.warehouseId)?.name
@@ -1809,9 +1969,13 @@ export function PurchaseReceiptDetailPage() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={saving || uploading || !formValidation.canSave}
+                  disabled={saving || uploading || !editorReady || !formValidation.canPost}
                   title={
-                    !formValidation.canSave ? t('purchaseReceipts.saveDisabledHint') : undefined
+                    !editorReady
+                      ? t('purchaseReceipts.loadingReceipt')
+                      : !formValidation.canPost
+                        ? t('purchaseReceipts.postDisabledHint')
+                        : undefined
                   }
                   onClick={() => void onPostClick()}
                 >
@@ -1820,9 +1984,13 @@ export function PurchaseReceiptDetailPage() {
                 <button
                   type="submit"
                   className="btn btn-secondary"
-                  disabled={saving || uploading || !formValidation.canSave}
+                  disabled={saving || uploading || !editorReady || !formValidation.canSaveDraft}
                   title={
-                    !formValidation.canSave ? t('purchaseReceipts.saveDisabledHint') : undefined
+                    !editorReady
+                      ? t('purchaseReceipts.loadingReceipt')
+                      : !formValidation.canSaveDraft
+                        ? t('purchaseReceipts.saveDisabledHint')
+                        : undefined
                   }
                 >
                   {saving ? t('settings.saving') : t('purchaseReceipts.saveDocument')}
@@ -2184,7 +2352,7 @@ export function PurchaseReceiptDetailPage() {
         discardLabel={t('purchaseReceipts.unsavedDiscard')}
         cancelLabel={t('settings.cancel')}
         busy={leaveBusy || saving}
-        saveDisabled={!formValidation.canSave}
+        saveDisabled={!formValidation.canSaveDraft}
         onSave={() => void handleLeaveSave()}
         onDiscard={handleLeaveDiscard}
         onCancel={closeLeaveDialog}
