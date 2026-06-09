@@ -77,6 +77,23 @@
   color: var(--primary);
 }
 
+.pr-list-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.25;
+}
+
+.pr-list-amount-primary {
+  white-space: nowrap;
+}
+
+.pr-list-amount-secondary {
+  font-size: 0.88em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* —— Detail page —— */
 
 .purchase-receipt-detail-page {

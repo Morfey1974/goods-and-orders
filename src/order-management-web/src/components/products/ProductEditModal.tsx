@@ -200,6 +200,7 @@ export function ProductEditModal({
   const { t } = useTranslation();
   const [modalError, setModalError] = useState('');
   const [unsavedOpen, setUnsavedOpen] = useState(false);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const baselineRef = useRef<FormSnapshot | null>(null);
   const [savedProduct, setSavedProduct] = useState<Product | null>(null);
@@ -335,6 +336,7 @@ export function ProductEditModal({
     if (!open) {
       baselineRef.current = null;
       setUnsavedOpen(false);
+      setPhotoPreviewOpen(false);
       return;
     }
     baselineRef.current = snapshotFromState(form, selectedGroupIds, warehouseId);
@@ -506,12 +508,14 @@ export function ProductEditModal({
       open={open}
       onClose={requestClose}
       className="product-card-modal"
-      overlayClassName="product-card-overlay"
+      overlayClassName={
+        zIndex !== undefined ? 'product-card-overlay product-card-overlay--stacked' : 'product-card-overlay'
+      }
       zIndex={zIndex}
       noCard
       resize={PRODUCT_CARD_RESIZE}
       preventClose={saving || unsavedOpen}
-      closeOnEscape={!unsavedOpen}
+      closeOnEscape={!unsavedOpen && !photoPreviewOpen}
     >
         <div className="product-card-header">
           <h2>{t('products.cardTitle')}</h2>
@@ -541,6 +545,8 @@ export function ProductEditModal({
             product={effectiveProduct}
             token={token}
             canEdit={!!effectiveProduct}
+            lightboxZIndex={zIndex !== undefined ? zIndex + 150 : undefined}
+            onPreviewOpenChange={setPhotoPreviewOpen}
             onUpdated={(p) => {
               setSavedProduct(p);
               onProductUpdated?.(p);

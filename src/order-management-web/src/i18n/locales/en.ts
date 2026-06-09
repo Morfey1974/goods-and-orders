@@ -539,6 +539,22 @@ export default {
     download: 'Download PDF',
     balancesPdfTitle: 'Stock balances report',
     movementsPdfTitle: 'Stock movements report',
+    categoryFinancial: 'Finance',
+    incomeTitle: 'Income report',
+    incomeDesc:
+      'Period income (cash basis): finalized receipts (R), payment lines by payment date. Excludes drafts and withholding tax.',
+    incomeHint:
+      'Only finalized receipts are included. Line date is the payment date when set, otherwise the receipt date. ILS total uses Bank of Israel rate for USD.',
+    incomeRun: 'Run report',
+    incomeSummary: 'Period {{from}} — {{to}} · receipts: {{receipts}} · total {{total}} ₪',
+    incomeEmpty: 'No income in the selected period.',
+    incomeGrandTotal: 'Total',
+    incomeDateError: 'From date must be on or before to date.',
+    incomeColPaymentDate: 'Payment date',
+    incomeColReceipt: 'Receipt',
+    incomeColReceiptDate: 'Receipt date',
+    incomeColAmount: 'Amount',
+    incomeColAmountIls: 'Amount ₪',
   },
   inventory: {
     valuationDetailed: 'FIFO batch detail',

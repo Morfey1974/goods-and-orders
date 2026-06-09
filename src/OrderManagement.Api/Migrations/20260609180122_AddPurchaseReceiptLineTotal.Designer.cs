@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OrderManagement.Api.Data;
@@ -11,9 +12,11 @@ using OrderManagement.Api.Data;
 namespace OrderManagement.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260609180122_AddPurchaseReceiptLineTotal")]
+    partial class AddPurchaseReceiptLineTotal
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -905,10 +908,6 @@ namespace OrderManagement.Api.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
-                    b.Property<decimal?>("LineTotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
@@ -921,8 +920,8 @@ namespace OrderManagement.Api.Migrations
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<decimal?>("UnitPrice")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uuid");

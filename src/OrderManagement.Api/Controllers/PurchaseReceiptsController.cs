@@ -31,6 +31,7 @@ public class PurchaseReceiptsController(
         var query = db.PurchaseReceipts
             .Include(r => r.Supplier)
             .Include(r => r.Documents)
+            .Include(r => r.Lines)
             .Where(r => r.TenantId == tenantId);
 
         if (supplierId.HasValue) query = query.Where(r => r.SupplierId == supplierId);

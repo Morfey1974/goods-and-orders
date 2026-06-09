@@ -541,6 +541,22 @@ export default {
     download: 'Скачать PDF',
     balancesPdfTitle: 'Отчёт по остаткам',
     movementsPdfTitle: 'Отчёт по движениям',
+    categoryFinancial: 'Финансы',
+    incomeTitle: 'Отчёт по доходам',
+    incomeDesc:
+      'Доходы за период по кассовому методу: проведённые קבלות (R), строки оплаты по дате платежа. Без черновиков и без ניכוי במקור.',
+    incomeHint:
+      'Учитываются только проведённые קבלות. Дата строки — дата платежа (если указана), иначе дата קבלה. Сумма в ₪ — по курсу Банка Израиля для USD.',
+    incomeRun: 'Построить отчёт',
+    incomeSummary: 'Период {{from}} — {{to}} · קבלות: {{receipts}} · итого {{total}} ₪',
+    incomeEmpty: 'За выбранный период доходов нет.',
+    incomeGrandTotal: 'Итого',
+    incomeDateError: 'Дата «с» не может быть позже даты «по».',
+    incomeColPaymentDate: 'Дата платежа',
+    incomeColReceipt: 'קבלה',
+    incomeColReceiptDate: 'Дата קבלה',
+    incomeColAmount: 'Сумма',
+    incomeColAmountIls: 'Сумма ₪',
   },
   inventory: {
     openingNav: 'Начальный מלאי',

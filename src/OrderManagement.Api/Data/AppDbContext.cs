@@ -231,7 +231,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Quantity).HasPrecision(18, 4);
-            e.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            e.Property(x => x.LineTotal).HasPrecision(18, 2);
+            e.Property(x => x.UnitPrice).HasPrecision(18, 6);
             e.Property(x => x.UnitCostIls).HasPrecision(18, 2);
             e.Property(x => x.SupplierSku).HasMaxLength(64);
             e.Property(x => x.Notes).HasMaxLength(512);

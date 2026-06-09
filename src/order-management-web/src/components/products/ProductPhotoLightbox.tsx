@@ -21,6 +21,8 @@ type Props = {
   initialView?: ProductPhotoViewState;
   onClose: () => void;
   onCloseWithView?: (view: ProductPhotoViewState) => void;
+  /** Above nested product card (e.g. picker stack at 2700). */
+  zIndex?: number;
 };
 
 export function ProductPhotoLightbox({
@@ -30,6 +32,7 @@ export function ProductPhotoLightbox({
   initialView = DEFAULT_PRODUCT_PHOTO_VIEW,
   onClose,
   onCloseWithView,
+  zIndex,
 }: Props) {
   const { t } = useTranslation();
   const [fitToWindow, setFitToWindow] = useState(initialView.fitToWindow);
@@ -217,6 +220,7 @@ export function ProductPhotoLightbox({
   return createPortal(
     <div
       className="product-photo-lightbox"
+      style={zIndex !== undefined ? { zIndex } : undefined}
       role="presentation"
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;

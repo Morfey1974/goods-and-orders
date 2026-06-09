@@ -300,18 +300,29 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
   const ils = isIlsCurrency(receipt.currency);
   return receipt.lines.map((l) => {
     const qty = l.quantity;
+    const storedLineTotal = l.lineTotal != null && l.lineTotal > 0 ? l.lineTotal : null;
     const unitPrice = l.unitPrice != null ? String(l.unitPrice) : '';
-    const hasUsdLineAmount = usd && l.unitPrice != null && l.unitPrice > 0;
-    const lineTotalUsd = hasUsdLineAmount ? String(roundMoney(l.unitPrice! * qty)) : '';
-    const lineTotalIlsInput =
-      ils && l.unitPrice != null
-        ? String(roundMoney(l.unitPrice * qty))
-        : l.unitCostIls != null
-          ? String(roundMoney(l.unitCostIls * qty))
+    const hasUsdLineAmount =
+      usd && (storedLineTotal != null || (l.unitPrice != null && l.unitPrice > 0));
+    const lineTotalUsd =
+      usd && storedLineTotal != null
+        ? String(roundMoney(storedLineTotal))
+        : usd && l.unitPrice != null && l.unitPrice > 0
+          ? String(roundMoney(l.unitPrice * qty))
           : '';
+    const lineTotalIlsInput =
+      ils && storedLineTotal != null
+        ? String(roundMoney(storedLineTotal))
+        : ils && l.unitPrice != null
+          ? String(roundMoney(l.unitPrice * qty))
+          : l.unitCostIls != null
+            ? String(roundMoney(l.unitCostIls * qty))
+            : '';
     const unitCostIls =
       hasUsdLineAmount
-        ? ''
+        ? l.unitCostIls != null
+          ? String(l.unitCostIls)
+          : ''
         : l.unitCostIls != null
           ? String(l.unitCostIls)
           : ils && l.unitPrice != null
@@ -326,7 +337,7 @@ function linesToRows(receipt: PurchaseReceipt): LineRow[] {
       lineTotalIlsInput,
       unitCostIls,
       unitCostManual: hasUsdLineAmount
-        ? false
+        ? l.unitCostIls != null
         : l.unitCostIls != null || (ils && l.unitPrice != null),
     };
   });
@@ -360,6 +371,7 @@ function rowsToPayload(
           productId: r.productId,
           warehouseId: r.warehouseId || undefined,
           quantity: qty,
+          lineTotal: totalIls > 0 ? roundMoney(totalIls) : undefined,
           unitPrice: qty > 0 && totalIls > 0 ? roundMoney(totalIls / qty) : undefined,
           unitCostIls: unitCostIls > 0 ? unitCostIls : undefined,
         };
@@ -377,6 +389,7 @@ function rowsToPayload(
         productId: r.productId,
         warehouseId: r.warehouseId || undefined,
         quantity: qty,
+        lineTotal: totalUsd > 0 ? roundMoney(totalUsd) : undefined,
         unitPrice,
         unitCostIls: unitCostIls > 0 ? unitCostIls : undefined,
       };
@@ -1251,6 +1264,9 @@ export function PurchaseReceiptDetailPage() {
       setUseManualUsdRate(manualRate.useManualUsdRate);
       setUsdIlsRateManual(manualRate.usdIlsRateManual);
 
+      const nextLines = linesToRows(saved);
+      setLines(nextLines);
+
       if (isNew) {
         navigate(`/purchase-receipts/${saved.id}`, { replace: true });
       } else {
@@ -1265,7 +1281,7 @@ export function PurchaseReceiptDetailPage() {
             usdIlsRateManual: manualRate.usdIlsRateManual.trim(),
             applyLandedCosts,
             landedCosts: landedCostsForCompare(landedCostRows),
-            lines: linesForCompare(lines),
+            lines: linesForCompare(nextLines),
             pendingDocNames: [] as string[],
           })
         );

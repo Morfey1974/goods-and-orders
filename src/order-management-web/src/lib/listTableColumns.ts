@@ -110,7 +110,7 @@ export const PURCHASE_RECEIPTS_DEFAULT_WIDTHS: Record<PurchaseReceiptsColumnKey,
   number: 108,
   supplier: 220,
   date: 100,
-  amount: 120,
+  amount: 140,
   status: 100,
   document: 80,
 };

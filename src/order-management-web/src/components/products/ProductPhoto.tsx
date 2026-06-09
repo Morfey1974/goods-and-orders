@@ -30,6 +30,7 @@ type Props = {
   /** Render expand control in parent (ProductPhotoEditor) — avoids clipping inside circle. */
   externalExpandButton?: boolean;
   onPreviewOpenChange?: (open: boolean) => void;
+  lightboxZIndex?: number;
 };
 
 export const ProductPhoto = forwardRef<ProductPhotoHandle, Props>(function ProductPhoto(
@@ -44,6 +45,7 @@ export const ProductPhoto = forwardRef<ProductPhotoHandle, Props>(function Produ
     showPreviewButton = false,
     externalExpandButton = false,
     onPreviewOpenChange,
+    lightboxZIndex,
   },
   ref
 ) {
@@ -203,6 +205,7 @@ export const ProductPhoto = forwardRef<ProductPhotoHandle, Props>(function Produ
           src={src}
           alt={alt}
           initialView={thumbView}
+          zIndex={lightboxZIndex}
           onClose={() => setPreview(false)}
           onCloseWithView={persistView ? onCloseWithView : undefined}
         />

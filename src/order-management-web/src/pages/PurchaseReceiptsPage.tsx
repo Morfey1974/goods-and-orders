@@ -25,6 +25,39 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
+function isUsdListCurrency(currency: string) {
+  return currency.trim().toUpperCase() === 'USD';
+}
+
+function renderListAmount(r: PurchaseReceiptListItem) {
+  const usd = r.totalAmountUsd;
+  const ils = r.totalAmountIls;
+  const isUsd = isUsdListCurrency(r.currency);
+
+  if (isUsd && (ils != null || usd != null)) {
+    return (
+      <div className="pr-list-amounts">
+        {ils != null && (
+          <span className="pr-list-amount-primary">{ils.toFixed(2)} ₪</span>
+        )}
+        {usd != null && (
+          <span className="pr-list-amount-secondary">{usd.toFixed(2)} USD</span>
+        )}
+      </div>
+    );
+  }
+
+  if (ils != null) {
+    return `${ils.toFixed(2)} ₪`;
+  }
+
+  if (r.totalAmount != null) {
+    return `${r.totalAmount.toFixed(2)} ${r.currency}`;
+  }
+
+  return '—';
+}
+
 export function PurchaseReceiptsPage() {
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -189,9 +222,7 @@ export function PurchaseReceiptsPage() {
                   <td className={cellClass('number')}>{r.receiptNumber}</td>
                   <td className={`${cellClass('supplier')} bidi-auto`}>{r.supplierName}</td>
                   <td className={cellClass('date')}>{formatDate(r.documentDate)}</td>
-                  <td className={cellClass('amount')}>
-                    {r.totalAmount != null ? `${r.totalAmount.toFixed(2)} ${r.currency}` : '—'}
-                  </td>
+                  <td className={cellClass('amount')}>{renderListAmount(r)}</td>
                   <td className={cellClass('status')}>
                     <span className={`pr-status pr-status--${r.status.toLowerCase()}`}>
                       {r.status === 'Posted'

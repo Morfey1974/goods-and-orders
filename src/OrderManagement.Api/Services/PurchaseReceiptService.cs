@@ -481,6 +481,7 @@ public class PurchaseReceiptService(
                 l.ProductId,
                 l.WarehouseId,
                 l.Quantity,
+                l.LineTotal,
                 l.UnitPrice,
                 l.UnitCostIls,
                 l.SupplierSku,
@@ -541,6 +542,11 @@ public class PurchaseReceiptService(
         var order = 0;
         foreach (var input in lines)
         {
+            var (lineTotal, unitPrice) = ResolveLineAmounts(
+                input.Quantity,
+                input.LineTotal,
+                input.UnitPrice);
+
             result.Add(new PurchaseReceiptLine
             {
                 Id = Guid.NewGuid(),
@@ -548,8 +554,9 @@ public class PurchaseReceiptService(
                 ProductId = input.ProductId,
                 WarehouseId = input.WarehouseId,
                 Quantity = input.Quantity,
-                UnitPrice = input.UnitPrice,
-                UnitCostIls = input.UnitCostIls,
+                LineTotal = lineTotal,
+                UnitPrice = unitPrice,
+                UnitCostIls = input.UnitCostIls is > 0 ? RoundMoney(input.UnitCostIls.Value) : null,
                 SupplierSku = TrimOrNull(input.SupplierSku),
                 Notes = TrimOrNull(input.Notes),
                 SortOrder = order++
@@ -557,6 +564,36 @@ public class PurchaseReceiptService(
         }
         return result;
     }
+
+    private static (decimal? LineTotal, decimal? UnitPrice) ResolveLineAmounts(
+        decimal quantity,
+        decimal? lineTotal,
+        decimal? unitPrice)
+    {
+        if (quantity <= 0) return (null, null);
+
+        if (lineTotal is > 0)
+        {
+            var total = RoundMoney(lineTotal.Value);
+            var unit = RoundUnitPrice(total / quantity);
+            return (total, unit);
+        }
+
+        if (unitPrice is > 0)
+        {
+            var unit = RoundUnitPrice(unitPrice.Value);
+            var total = RoundMoney(unit * quantity);
+            return (total, unit);
+        }
+
+        return (null, null);
+    }
+
+    private static decimal RoundMoney(decimal value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private static decimal RoundUnitPrice(decimal value) =>
+        Math.Round(value, 6, MidpointRounding.AwayFromZero);
 
     private static List<PurchaseReceiptLandedCostLine> BuildLandedCostEntities(
         Guid receiptId,
@@ -612,7 +649,7 @@ public class PurchaseReceiptService(
             if (product is null)
                 throw new InvalidOperationException("Product not found.");
 
-            if (line.UnitPrice is null or <= 0)
+            if ((line.UnitPrice is null or <= 0) && (line.LineTotal is null or <= 0))
                 throw new InvalidOperationException("Purchase price is required for all lines.");
 
             if (ProductInventoryHelper.TracksStock(product))

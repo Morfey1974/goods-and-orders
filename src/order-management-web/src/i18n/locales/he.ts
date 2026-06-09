@@ -539,6 +539,22 @@ export default {
     download: 'הורד PDF',
     balancesPdfTitle: 'דוח יתרות מלאי',
     movementsPdfTitle: 'דוח תנועות מלאי',
+    categoryFinancial: 'כספים',
+    incomeTitle: 'דוח הכנסות',
+    incomeDesc:
+      'הכנסות לתקופה (מזומן): קבלות סופיות (R), שורות תשלום לפי תאריך התשלום. ללא טיוטות וללא ניכוי במקור.',
+    incomeHint:
+      'נכללות רק קבלות סופיות. תאריך השורה — תאריך התשלום אם צוין, אחרת תאריך הקבלה. סכום בש״ח — לפי שער בנק ישראל ל-USD.',
+    incomeRun: 'הפק דוח',
+    incomeSummary: 'תקופה {{from}} — {{to}} · קבלות: {{receipts}} · סה״כ {{total}} ₪',
+    incomeEmpty: 'אין הכנסות בתקופה שנבחרה.',
+    incomeGrandTotal: 'סה״כ',
+    incomeDateError: 'תאריך התחלה חייב להיות לפני או שווה לתאריך סיום.',
+    incomeColPaymentDate: 'תאריך תשלום',
+    incomeColReceipt: 'קבלה',
+    incomeColReceiptDate: 'תאריך קבלה',
+    incomeColAmount: 'סכום',
+    incomeColAmountIls: 'סכום ₪',
   },
   inventory: {
     valuationDetailed: 'פירוט מנות FIFO',

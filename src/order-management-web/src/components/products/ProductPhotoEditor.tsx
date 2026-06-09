@@ -12,9 +12,19 @@ type Props = {
   canEdit: boolean;
   onUpdated: (product: Product) => void;
   onError: (message: string) => void;
+  onPreviewOpenChange?: (open: boolean) => void;
+  lightboxZIndex?: number;
 };
 
-export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError }: Props) {
+export function ProductPhotoEditor({
+  product,
+  token,
+  canEdit,
+  onUpdated,
+  onError,
+  onPreviewOpenChange: onPreviewOpenChangeProp,
+  lightboxZIndex,
+}: Props) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<ProductPhotoHandle>(null);
@@ -72,6 +82,7 @@ export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError
 
   const onPreviewOpenChange = (open: boolean) => {
     if (!open) blockReplaceBriefly();
+    onPreviewOpenChangeProp?.(open);
   };
 
   const onSlotClick = () => {
@@ -145,6 +156,7 @@ export function ProductPhotoEditor({ product, token, canEdit, onUpdated, onError
               size="lg"
               showPreviewButton
               externalExpandButton
+              lightboxZIndex={lightboxZIndex}
               onPreviewOpenChange={onPreviewOpenChange}
             />
           ) : (

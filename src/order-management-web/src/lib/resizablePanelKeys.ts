@@ -33,6 +33,7 @@ export const RESIZABLE_PANEL_KEYS = {
   purchaseReceiptsPanel: 'ordermgmt.purchase-receipts-panel-size',
   documentsColumns: 'ordermgmt.documents-column-widths',
   documentsPanel: 'ordermgmt.documents-panel-size',
+  incomeReportPanel: 'ordermgmt.income-report-panel-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -189,6 +190,12 @@ export const PURCHASE_RECEIPTS_PANEL_RESIZE: ResizablePanelConfig = {
 
 export const DOCUMENTS_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.documentsPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 600 },
+};
+
+export const INCOME_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.incomeReportPanel,
   ...LIST_PANEL_DEFAULT,
   defaultSize: { width: 1280, height: 600 },
 };

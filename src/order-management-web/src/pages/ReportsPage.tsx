@@ -8,7 +8,7 @@ import { ReportRunModal, type ReportRunKind } from '../components/reports/Report
 import { useAuth } from '../context/AuthContext';
 import '../styles/reports.css';
 
-type ReportCategoryId = 'warehouse';
+type ReportCategoryId = 'warehouse' | 'financial';
 
 type ReportDef = {
   id: string;
@@ -41,6 +41,18 @@ const REPORT_CATEGORIES: { id: ReportCategoryId; labelKey: string; reports: Repo
         kind: 'movements',
         titleKey: 'reports.movementsTitle',
         descKey: 'reports.movementsDesc',
+      },
+    ],
+  },
+  {
+    id: 'financial',
+    labelKey: 'reports.categoryFinancial',
+    reports: [
+      {
+        id: 'income',
+        titleKey: 'reports.incomeTitle',
+        descKey: 'reports.incomeDesc',
+        href: '/reports/income',
       },
     ],
   },

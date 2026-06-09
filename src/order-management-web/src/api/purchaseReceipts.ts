@@ -11,6 +11,7 @@ export type PurchaseReceiptLine = {
   warehouseId?: string;
   warehouseName?: string;
   quantity: number;
+  lineTotal?: number;
   unitPrice?: number;
   unitCostIls?: number;
   supplierSku?: string;
@@ -50,6 +51,7 @@ export type PurchaseReceiptLineInput = {
   productId: string;
   warehouseId?: string;
   quantity: number;
+  lineTotal?: number;
   unitPrice?: number;
   unitCostIls?: number;
   supplierSku?: string;
@@ -63,6 +65,8 @@ export type PurchaseReceiptListItem = {
   documentDate: string;
   currency: string;
   totalAmount?: number;
+  totalAmountUsd?: number;
+  totalAmountIls?: number;
   status: string;
   documentCount: number;
   createdAt: string;
@@ -126,6 +130,9 @@ function mapLine(raw: Record<string, unknown>): PurchaseReceiptLine {
     warehouseId: (raw.warehouseId ?? raw.WarehouseId) as string | undefined,
     warehouseName: (raw.warehouseName ?? raw.WarehouseName) as string | undefined,
     quantity: normalizeStockQuantity(Number(raw.quantity ?? raw.Quantity ?? 0)),
+    lineTotal: raw.lineTotal != null || raw.LineTotal != null
+      ? Number(raw.lineTotal ?? raw.LineTotal)
+      : undefined,
     unitPrice: raw.unitPrice != null || raw.UnitPrice != null
       ? Number(raw.unitPrice ?? raw.UnitPrice)
       : undefined,
@@ -191,6 +198,14 @@ function mapListItem(raw: Record<string, unknown>): PurchaseReceiptListItem {
     totalAmount: raw.totalAmount != null || raw.TotalAmount != null
       ? Number(raw.totalAmount ?? raw.TotalAmount)
       : undefined,
+    totalAmountUsd:
+      raw.totalAmountUsd != null || raw.TotalAmountUsd != null
+        ? Number(raw.totalAmountUsd ?? raw.TotalAmountUsd)
+        : undefined,
+    totalAmountIls:
+      raw.totalAmountIls != null || raw.TotalAmountIls != null
+        ? Number(raw.totalAmountIls ?? raw.TotalAmountIls)
+        : undefined,
     status: String(raw.status ?? raw.Status ?? 'Draft'),
     documentCount: Number(raw.documentCount ?? raw.DocumentCount ?? documentsCount),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ''),
