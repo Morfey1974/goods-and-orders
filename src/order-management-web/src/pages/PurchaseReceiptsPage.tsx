@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { purchaseReceiptsApi, type PurchaseReceiptListItem } from '../api/purchaseReceipts';
@@ -58,6 +58,44 @@ function renderListAmount(r: PurchaseReceiptListItem) {
   return '—';
 }
 
+type SortKey = PurchaseReceiptsColumnKey;
+type SortDir = 'asc' | 'desc';
+
+function listAmountSortValue(r: PurchaseReceiptListItem): number {
+  if (r.totalAmountIls != null) return r.totalAmountIls;
+  if (r.totalAmountUsd != null) return r.totalAmountUsd;
+  if (r.totalAmount != null) return r.totalAmount;
+  return 0;
+}
+
+function compareReceipts(a: PurchaseReceiptListItem, b: PurchaseReceiptListItem, key: SortKey): number {
+  switch (key) {
+    case 'number':
+      return a.receiptNumber.localeCompare(b.receiptNumber, undefined, { numeric: true, sensitivity: 'base' });
+    case 'supplier':
+      return a.supplierName.localeCompare(b.supplierName, undefined, { sensitivity: 'base' });
+    case 'date':
+      return a.documentDate.localeCompare(b.documentDate);
+    case 'amount':
+      return listAmountSortValue(a) - listAmountSortValue(b);
+    case 'status':
+      return a.status.localeCompare(b.status);
+    case 'document':
+      return a.documentCount - b.documentCount;
+    default:
+      return 0;
+  }
+}
+
+const SORTABLE_COLUMNS = new Set<PurchaseReceiptsColumnKey>([
+  'number',
+  'supplier',
+  'date',
+  'amount',
+  'status',
+  'document',
+]);
+
 export function PurchaseReceiptsPage() {
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -69,6 +107,8 @@ export function PurchaseReceiptsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
     PURCHASE_RECEIPTS_COLUMN_WIDTHS_KEY,
@@ -97,12 +137,32 @@ export function PurchaseReceiptsPage() {
     load();
   }, [load]);
 
-  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(list, [
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const cmp = compareReceipts(a, b, sortKey);
+      if (cmp !== 0) return cmp * dir;
+      return a.receiptNumber.localeCompare(b.receiptNumber, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [list, sortKey, sortDir]);
+
+  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(sorted, [
     supplierId,
     status,
     from,
     to,
+    sortKey,
+    sortDir,
   ]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
 
   const columnLabel = (key: PurchaseReceiptsColumnKey): string => {
     switch (key) {
@@ -200,7 +260,15 @@ export function PurchaseReceiptsPage() {
                   PURCHASE_RECEIPTS_COLUMN_CLASS[key],
                   onResizeHandleMouseDown,
                   t('products.resizeColumn'),
-                  PURCHASE_RECEIPTS_TEXT_START_COLUMNS.has(key)
+                  PURCHASE_RECEIPTS_TEXT_START_COLUMNS.has(key),
+                  'dt',
+                  SORTABLE_COLUMNS.has(key)
+                    ? {
+                        active: sortKey === key,
+                        direction: sortDir,
+                        onToggle: () => toggleSort(key),
+                      }
+                    : undefined
                 )
               )}
             </tr>

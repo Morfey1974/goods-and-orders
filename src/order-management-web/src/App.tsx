@@ -23,6 +23,7 @@ import { PurchaseReceiptDetailRoute } from './pages/PurchaseReceiptDetailPage';
 import { InventoryOpeningBalancePage } from './pages/InventoryOpeningBalancePage';
 import { InventoryValuationPage } from './pages/InventoryValuationPage';
 import { IncomeReportPage } from './pages/IncomeReportPage';
+import { ExpenseReportPage } from './pages/ExpenseReportPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: 'warehouse/opening-balance', element: <InventoryOpeningBalancePage /> },
       { path: 'reports/inventory-valuation', element: <InventoryValuationPage /> },
       { path: 'reports/income', element: <IncomeReportPage /> },
+      { path: 'reports/expenses', element: <ExpenseReportPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

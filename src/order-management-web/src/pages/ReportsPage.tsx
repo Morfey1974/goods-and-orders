@@ -54,6 +54,12 @@ const REPORT_CATEGORIES: { id: ReportCategoryId; labelKey: string; reports: Repo
         descKey: 'reports.incomeDesc',
         href: '/reports/income',
       },
+      {
+        id: 'expenses',
+        titleKey: 'reports.expenseTitle',
+        descKey: 'reports.expenseDesc',
+        href: '/reports/expenses',
+      },
     ],
   },
 ];

@@ -18,3 +18,21 @@ public record IncomeReportDto(
     IReadOnlyList<IncomeReportLineDto> Lines,
     decimal GrandTotalIls,
     int ReceiptCount);
+
+public record ExpenseReportLineDto(
+    Guid PurchaseReceiptId,
+    string ReceiptNumber,
+    DateTime DocumentDate,
+    string SupplierName,
+    string? SupplierInvoiceNumber,
+    string Currency,
+    decimal? AmountOriginal,
+    decimal AmountIls,
+    int LineCount);
+
+public record ExpenseReportDto(
+    DateTime? From,
+    DateTime? To,
+    IReadOnlyList<ExpenseReportLineDto> Lines,
+    decimal GrandTotalIls,
+    int ReceiptCount);

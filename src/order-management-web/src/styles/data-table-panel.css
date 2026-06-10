@@ -352,6 +352,35 @@
   justify-content: flex-start;
 }
 
+.dt-panel-table th.dt-th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dt-panel-table th.dt-th-sortable:hover {
+  background: #cce8ee;
+}
+
+.dt-panel-table th.dt-th-sortable.sorted {
+  color: var(--palette-turquoise);
+}
+
+.dt-th-sort-label {
+  gap: 0.35rem;
+}
+
+.dt-sort-indicator {
+  font-size: 0.72rem;
+  opacity: 0.55;
+  min-width: 1em;
+  flex-shrink: 0;
+}
+
+.dt-panel-table th.dt-th-sortable.sorted .dt-sort-indicator {
+  opacity: 1;
+  font-weight: 700;
+}
+
 .dt-col-resize-handle {
   position: absolute;
   top: 0;

@@ -135,7 +135,7 @@ public static class PurchaseReceiptMappers
             r.PostedAt);
     }
 
-    private static (decimal? Usd, decimal? Ils) ResolveListAmounts(PurchaseReceipt r)
+    public static (decimal? Usd, decimal? Ils) ResolveListAmounts(PurchaseReceipt r)
     {
         if (r.Lines.Count > 0)
             return ResolveListAmountsFromLines(r);

@@ -60,7 +60,7 @@ export function ReportRunModal({
     setDatePreset(preset);
   };
 
-  const presetLabelKey: Record<ReportDatePresetId, string> = {
+  const presetLabelKey: Partial<Record<ReportDatePresetId, string>> = {
     today: 'reports.datePresetToday',
     week: 'reports.datePresetWeek',
     month: 'reports.datePresetMonth',
@@ -103,7 +103,7 @@ export function ReportRunModal({
                 <option value="">{t('reports.datePresetSelect')}</option>
                 {REPORT_DATE_PRESETS.map((preset) => (
                   <option key={preset} value={preset}>
-                    {t(presetLabelKey[preset])}
+                    {t(presetLabelKey[preset] ?? 'reports.datePresetSelect')}
                   </option>
                 ))}
               </select>

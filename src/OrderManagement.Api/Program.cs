@@ -44,6 +44,8 @@ builder.Services.AddScoped<InventoryCostService>();
 builder.Services.AddScoped<InventoryValuationService>();
 builder.Services.AddScoped<InventoryValuationPdfService>();
 builder.Services.AddScoped<IncomeReportService>();
+builder.Services.AddScoped<ExpenseReportService>();
+builder.Services.AddScoped<FinancialReportPdfService>();
 builder.Services.AddScoped<PurchaseReceiptService>();
 builder.Services.AddScoped<ExchangeRateService>();
 builder.Services.AddScoped<SupplierImportService>();

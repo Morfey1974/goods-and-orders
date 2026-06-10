@@ -34,6 +34,7 @@ export const RESIZABLE_PANEL_KEYS = {
   documentsColumns: 'ordermgmt.documents-column-widths',
   documentsPanel: 'ordermgmt.documents-panel-size',
   incomeReportPanel: 'ordermgmt.income-report-panel-size',
+  expenseReportPanel: 'ordermgmt.expense-report-panel-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -196,6 +197,12 @@ export const DOCUMENTS_PANEL_RESIZE: ResizablePanelConfig = {
 
 export const INCOME_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.incomeReportPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 600 },
+};
+
+export const EXPENSE_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.expenseReportPanel,
   ...LIST_PANEL_DEFAULT,
   defaultSize: { width: 1280, height: 600 },
 };
