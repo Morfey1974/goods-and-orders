@@ -33,6 +33,8 @@ services:
       Cors__Origins__2: http://localhost:5175
       Cors__Origins__3: http://localhost:3000
       Uploads__Path: /app/uploads
+      Backup__RootPath: /app/backups
+      Backup__HostMountHint: ${BACKUP_HOST_PATH:-./backups}
     ports:
       - "8080:8080"
     depends_on:
@@ -40,6 +42,7 @@ services:
         condition: service_healthy
     volumes:
       - ordermgmt_uploads:/app/uploads
+      - ${BACKUP_HOST_PATH:-./backups}:/app/backups
 
 volumes:
   ordermgmt_pgdata:

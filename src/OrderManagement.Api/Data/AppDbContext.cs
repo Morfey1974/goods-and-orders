@@ -61,6 +61,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.DefaultLanguage).HasMaxLength(8);
             e.Property(x => x.LogoPath).HasMaxLength(512);
             e.Property(x => x.SignaturePath).HasMaxLength(512);
+            e.Property(x => x.BackupHostPath).HasMaxLength(512);
+            e.Property(x => x.LastBackupFileName).HasMaxLength(256);
+            e.Property(x => x.LastBackupError).HasMaxLength(2000);
             e.HasIndex(x => x.Email).IsUnique();
         });
 

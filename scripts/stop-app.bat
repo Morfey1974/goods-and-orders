@@ -1,18 +1,16 @@
 @echo off
-chcp 65001 >nul
-setlocal
+setlocal EnableExtensions
 
-set "ROOT=%~dp0.."
-cd /d "%ROOT%"
+cd /d "%~dp0.."
 
-title Остановка — Учёт заказов
+title Ostanovit - Uchet zakazov
 
 echo.
-echo  Остановка Docker (база + API)...
+echo  Stopping Docker database and API...
 docker compose down 2>nul
 
-echo  Закройте окно "Учёт заказов — веб" вручную (Ctrl+C или крестик).
+echo  Close the OrderWeb window manually if it is still open.
 echo.
-echo  Готово.
+echo  Done.
 echo.
 pause

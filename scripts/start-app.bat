@@ -1,60 +1,57 @@
 @echo off
-chcp 65001 >nul
-setlocal
+setlocal EnableExtensions
 
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 
-title Запуск — Учёт заказов
+title Zapusk - Uchet zakazov
 
 echo.
 echo  ========================================
-echo   Учёт заказов — запуск
+echo   Uchet zakazov - zapusk
 echo  ========================================
 echo.
 
 where docker >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [Ошибка] Docker не найден. Установите Docker Desktop.
+if errorlevel 1 (
+    echo ERROR - Docker not found. Install Docker Desktop.
     pause
     exit /b 1
 )
 
 docker info >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [Ошибка] Docker Engine не запущен.
-    echo        Откройте Docker Desktop и дождитесь Engine running.
+if errorlevel 1 (
+    echo ERROR - Docker Engine is not running. Start Docker Desktop first.
     pause
     exit /b 1
 )
 
-echo [1/4] Запуск базы данных и API...
+echo [1/4] Starting database and API...
 docker compose up -d --build
-if %ERRORLEVEL% NEQ 0 (
-    echo [Ошибка] Не удалось запустить docker compose.
+if errorlevel 1 (
+    echo ERROR - docker compose failed.
     pause
     exit /b 1
 )
 
-echo [2/4] Ожидание API (15 сек)...
+echo [2/4] Waiting for API 15 sec...
 timeout /t 15 /nobreak >nul
 
-echo [3/4] Запуск агента сканирования...
-start "ScanAgent" /MIN cmd /k call "%~dp0start-scan-agent.bat"
+echo [3/4] Starting local helper on port 9181...
+start "LocalHelper" /MIN cmd /c call "%~dp0start-local-helper.bat"
 
-echo [4/4] Запуск веб-интерфейса...
+echo [4/4] Starting web UI on port 5173...
 start "OrderWeb" cmd /k call "%~dp0start-web.bat"
 
 timeout /t 5 /nobreak >nul
 start "" "http://localhost:5173"
 
 echo.
-echo  Готово.
-echo  - Браузер: http://localhost:5173
-echo  - API:     http://localhost:8080/swagger
+echo  Done.
+echo  Browser - localhost port 5173
+echo  API     - localhost port 8080
 echo.
-echo  НЕ ЗАКРЫВАЙТЕ окно "OrderWeb" / "Учёт заказов - веб" - там сайт.
-echo  Это окно можно свернуть. Закрыть - ярлык Ostanovit.
+echo  Keep the OrderWeb window open while using the app.
+echo  Press any key to minimize this window.
 echo.
-echo  Нажмите любую клавишу здесь, чтобы свернуть это окно (сайт продолжит работать).
 pause >nul

@@ -941,3 +941,138 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* —— Settings tabs —— */
+.settings-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  padding: 0.25rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 35%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 18%, var(--border));
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-tab:hover {
+  color: var(--palette-turquoise-dark);
+}
+
+.settings-tab--active {
+  background: var(--surface);
+  color: var(--palette-turquoise-dark);
+  box-shadow: 0 1px 4px rgba(30, 81, 92, 0.12);
+}
+
+/* —— Program backup —— */
+.settings-program-backup-intro {
+  margin: 0 0 0.65rem;
+}
+
+.settings-program-backup-list {
+  margin: 0 0 0.85rem;
+  padding-inline-start: 1.25rem;
+  color: var(--text-muted);
+}
+
+.settings-program-backup-list li {
+  margin-bottom: 0.25rem;
+}
+
+.settings-program-backup-mount {
+  margin: 0.35rem 0 0.85rem;
+}
+
+.settings-program-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.settings-section--nested {
+  margin-top: 0.5rem;
+  box-shadow: none;
+}
+
+.settings-program-backup-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 0.65rem 1.25rem;
+  margin: 0;
+  align-items: start;
+}
+
+.settings-program-backup-meta dt {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-program-backup-meta dd {
+  margin: 0.15rem 0 0;
+  font-weight: 500;
+}
+
+.settings-program-backup-meta > div:first-child dd,
+.settings-program-backup-meta > div:last-child dd {
+  white-space: nowrap;
+}
+
+.settings-program-backup-meta > div:nth-child(2) dd {
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .settings-program-backup-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-program-backup-meta > div:first-child dd,
+  .settings-program-backup-meta > div:last-child dd {
+    white-space: normal;
+  }
+}
+
+.settings-program-backup-last-error {
+  margin: 0.65rem 0 0;
+  color: var(--danger, #b42318);
+  font-size: 0.85rem;
+}
+
+.settings-path-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.settings-path-input-row .settings-path-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-path-browse {
+  flex: 0 0 auto;
+  min-width: 2.5rem;
+  padding-inline: 0.65rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.settings-path-browse-status {
+  margin: 0.35rem 0 0;
+}

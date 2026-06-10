@@ -96,6 +96,7 @@ docker compose up -d --build api
 - `ClearLegacyPurchaseReceiptDocumentFields` — перенос старого одиночного вложения в таблицу документов
 - `AddPurchaseReceiptUsdIlsRate` — **свой курс USD→ILS** в черновике приходной накладной (иначе — курс Банка Израиля на дату документа)
 - `AddPurchaseReceiptLineTotal` — **сумма строки** в валюте накладной (`LineTotal`); точность `UnitPrice` до 6 знаков (исправляет округление USD при сохранении)
+- `AddTenantBackupFields` — настройки резервного копирования (путь, статус последней копии)
 
 Фронтенд при изменениях UI:
 
@@ -111,17 +112,27 @@ npm run dev
 
 | Ярлык | Действие |
 |-------|----------|
-| **Zapusk - Uchet zakazov** | Docker + API + веб + **агент сканирования** + браузер |
+| **Zapusk - Uchet zakazov** | Docker + API + веб + **локальный помощник** (сканер, выбор папки бэкапа) + браузер |
 | **Ostanovit - Uchet zakazov** | Остановка |
 
 Перед запуском: **Docker Desktop** → Engine running.  
 Ярлыки: `scripts\Установить ярлыки на рабочий стол.bat`
 
-**Сканер (опционально):** для кнопки «Добавить со сканера» в приходной накладной нужны [NAPS2](https://www.naps2.com/) (профиль «A4, 300 dpi, PDF») и .NET SDK. Ярлык запуска поднимает **LocalScanLauncher** (`scripts\start-scan-agent.bat`, порт 9181); при сканировании агент (9182) стартует автоматически. Перезапуск вручную — тот же `.bat`.
+**Локальный помощник (порт 9181):** поднимается при запуске (`start-app.bat` / `start-web.bat`) или вручную: `scripts\start-scan-agent.bat`, `scripts\restart-local-helper.bat`. Нужен .NET SDK на Windows.
+
+- **Сканер:** кнопка «Добавить со сканера» в приходной накладной — [NAPS2](https://www.naps2.com/) (профиль «A4, 300 dpi, PDF»); агент сканирования (9182) стартует автоматически.
+- **Резервное копирование:** в **Настройки → Настройка программы** кнопка **«…»** открывает выбор папки через проводник Windows (диалог может мигать на панели задач — кликните по иконке).
 
 ---
 
-## Настройки бизнеса (вкладка «Настройки»)
+## Настройки (две вкладки)
+
+| Вкладка | Содержание |
+|---------|------------|
+| **Настройка бизнеса** | Профиль, контакты, брендинг, PDF для клиентов, нумерация документов, сброс склада, банк |
+| **Настройка программы** | **Резервное копирование** — полный ZIP, выбор папки, статус последней копии |
+
+### Настройка бизнеса — разделы
 
 | Раздел | Содержание |
 |--------|------------|
@@ -131,9 +142,20 @@ npm run dev
 | Документы для клиентов | PDF: אישור חשבון, כרטיס חברה, ניהול ספרים, ניכוי מס — загрузка и **отправка по email** |
 | **Нумерация документов** | Следующий номер для הצעה / заказа / חשבון / קבלה — **без префикса**, как в YeshInvoice |
 | **Сброс складских данных** | Удаление всех движений, остатков и партий FIFO/WAC (товары и склады сохраняются); для повторного ввода начального מלאи |
+| **Настройка программы → Резервное копирование** | Кнопка **«…»** — выбор папки (LocalScanLauncher); **«Сохранить путь»** пишет `BACKUP_HOST_PATH` в `.env` и перезапускает API; **«Сделать резервную копию»** — ZIP с `database.sql`, `uploads/`, `KAK_VOSSTANOVIT.txt`; подпапка **ДДММГГ-ЧЧ ММ** |
 | Банковские реквизиты | Код банка (справочник IL), филиал, счёт, SWIFT/ABA/IBAN |
 
 Файлы хранятся в Docker-volume `ordermgmt_uploads` (путь в контейнере: `/app/uploads`).
+
+### Резервное копирование и восстановление
+
+1. **Настройки** → **«Настройка программы»** → **«…»** — выберите папку → **«Сохранить путь»**.
+2. **«Сделать резервную копию сейчас»** — в папке появится подкаталог **ДДММГГ-ЧЧ ММ** (например `100626-19 32`) с ZIP-архивом.
+3. В архиве: `database.sql`, `uploads/`, `KAK_VOSSTANOVIT.txt`, `manifest.json`.
+4. Ручной бэкап: `powershell -File scripts\backup-all.ps1` (контейнеры должны быть запущены).
+5. Перезапуск помощника выбора папки: `scripts\restart-local-helper.bat`.
+
+Переменная `.env`: `BACKUP_HOST_PATH` — путь на диске Windows (монтируется в контейнер API как `/app/backups`). После смены: `docker compose up -d api`.
 
 ---
 
@@ -357,7 +379,7 @@ docker compose down -v
 ```
 ├── docker-compose.yml
 ├── docs/
-├── scripts/                    # ярлыки запуска; start-scan-agent.bat — LocalScanLauncher
+├── scripts/                    # start-app.bat, start-web.bat, backup-all.ps1, restart-local-helper.bat
 ├── tools/
 │   ├── HashPassword/           # хеш пароля (dev)
 │   ├── ClearStockData/         # сброс движений и остатков tenant
@@ -365,7 +387,7 @@ docker compose down -v
 │   ├── DeletePurchaseReceipts/ # удаление накладных (dev)
 │   ├── ReclassifyProductsToFg/ # CP→FG: артикул, склад, строки накладных, движения
 │   ├── LocalScanAgent/         # HTTP :9182 — сканирование через NAPS2.Console
-│   └── LocalScanLauncher/      # HTTP :9181 — автозапуск агента при «Добавить со сканера»
+│   └── LocalScanLauncher/      # HTTP :9181 — сканер + выбор папки бэкапа (Windows)
 ├── src/
 │   ├── OrderManagement.Api/    # .NET 9 Web API, QuestPDF, импорт клиентов, складские отчёты
 │   │   └── Assets/Fonts/       # NotoSansHebrew + NotoSans (иврит, кириллица, латиница в PDF)
@@ -383,6 +405,8 @@ docker compose down -v
 | POST | `/api/auth/forgot-password`, `/reset-password` | Запрос ссылки сброса / установка нового пароля |
 | GET/PUT | `/api/tenant/profile` | Профиль |
 | PUT | `/api/tenant/bank-details` | Банк |
+| GET/PUT | `/api/backup/settings` | Путь и статус резервного копирования |
+| POST | `/api/backup/run` | Создать полный ZIP-бэкап |
 | GET | `/api/tenant/assets` | Сводка: лого, подпись, PDF |
 | POST/DELETE | `/api/tenant/assets/logo`, `/signature` | Брендинг |
 | POST/DELETE | `/api/tenant/assets/compliance/{kind}` | PDF (`AccountOwnership`, `BusinessCard`, `BooksManagement`, `WithholdingTax`) |

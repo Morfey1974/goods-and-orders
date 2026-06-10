@@ -27,6 +27,9 @@ Thumbs.db
 # Uploads (tenant files, product images)
 uploads/
 
+# Backup ZIP archives (host-mounted folder)
+backups/
+
 # Local tool build output
 tools/**/bin/
 tools/**/obj/

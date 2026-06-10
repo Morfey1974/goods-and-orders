@@ -50,5 +50,12 @@ public class Tenant
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Preferred backup folder on the host PC (for display / documentation).</summary>
+    public string? BackupHostPath { get; set; }
+    public DateTime? LastBackupUtc { get; set; }
+    public string? LastBackupFileName { get; set; }
+    public long? LastBackupSizeBytes { get; set; }
+    public string? LastBackupError { get; set; }
+
     public User? User { get; set; }
 }

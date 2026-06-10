@@ -14,6 +14,7 @@ import { TenantBrandingSection } from '../components/settings/TenantBrandingSect
 import { TenantComplianceSection } from '../components/settings/TenantComplianceSection';
 import { DocumentSequencesSection } from '../components/settings/DocumentSequencesSection';
 import { StockResetSettingsSection } from '../components/settings/StockResetSettingsSection';
+import { ProgramBackupSection } from '../components/settings/ProgramBackupSection';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
@@ -90,9 +91,12 @@ function applyBankCodeToForm(form: BankForm, code: string, lang: string): BankFo
   return { ...form, bankCode: norm, bankName: name || form.bankName };
 }
 
+type SettingsTab = 'business' | 'program';
+
 export function SettingsPage() {
   const { t, i18n } = useTranslation();
   const { token, patchSession } = useAuth();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('business');
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [bankForm, setBankForm] = useState<BankForm | null>(null);
   const [bankModalOpen, setBankModalOpen] = useState(false);
@@ -278,9 +282,32 @@ export function SettingsPage() {
     <div className="page settings-page">
       <h1>{t('settings.title')}</h1>
 
-      {error && <div className="error-banner">{error}</div>}
-      {message && <div className="success-banner">{message}</div>}
+      <div className="settings-tabs" role="tablist" aria-label={t('settings.title')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'business'}
+          className={`settings-tab${activeTab === 'business' ? ' settings-tab--active' : ''}`}
+          onClick={() => setActiveTab('business')}
+        >
+          {t('settings.tabBusiness')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'program'}
+          className={`settings-tab${activeTab === 'program' ? ' settings-tab--active' : ''}`}
+          onClick={() => setActiveTab('program')}
+        >
+          {t('settings.tabProgram')}
+        </button>
+      </div>
 
+      {error && activeTab === 'business' && <div className="error-banner">{error}</div>}
+      {message && activeTab === 'business' && <div className="success-banner">{message}</div>}
+
+      {activeTab === 'business' && (
+        <>
       <form
         id="settings-profile-form"
         className="settings-form"
@@ -649,6 +676,19 @@ export function SettingsPage() {
           {saving ? t('settings.saving') : t('settings.saveToDb')}
         </button>
       </div>
+        </>
+      )}
+
+      {activeTab === 'program' && (
+        <section className="card settings-section settings-section--standalone">
+          <div className="settings-section-head">
+            <h2 className="settings-section-title">{t('settings.programBackup.sectionTitle')}</h2>
+          </div>
+          <div className="settings-section-body">
+            <ProgramBackupSection />
+          </div>
+        </section>
+      )}
 
       {bankModalOpen && bankForm && (
         <AppModal

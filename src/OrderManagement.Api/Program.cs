@@ -15,6 +15,7 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSett
 builder.Services.Configure<SubscriptionSettings>(builder.Configuration.GetSection(SubscriptionSettings.SectionName));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection(AppSettings.SectionName));
+builder.Services.Configure<BackupSettings>(builder.Configuration.GetSection(BackupSettings.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -40,6 +41,7 @@ builder.Services.AddSingleton<CustomerLogoService>();
 builder.Services.AddScoped<TenantEmailService>();
 builder.Services.AddScoped<PasswordResetMailer>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<BackupService>();
 builder.Services.AddScoped<InventoryCostService>();
 builder.Services.AddScoped<InventoryValuationService>();
 builder.Services.AddScoped<InventoryValuationPdfService>();
