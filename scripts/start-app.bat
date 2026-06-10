@@ -28,7 +28,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [1/3] Запуск базы данных и API...
+echo [1/4] Запуск базы данных и API...
 docker compose up -d --build
 if %ERRORLEVEL% NEQ 0 (
     echo [Ошибка] Не удалось запустить docker compose.
@@ -36,10 +36,13 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [2/3] Ожидание API (15 сек)...
+echo [2/4] Ожидание API (15 сек)...
 timeout /t 15 /nobreak >nul
 
-echo [3/3] Запуск веб-интерфейса...
+echo [3/4] Запуск агента сканирования...
+start "ScanAgent" /MIN cmd /k call "%~dp0start-scan-agent.bat"
+
+echo [4/4] Запуск веб-интерфейса...
 start "OrderWeb" cmd /k call "%~dp0start-web.bat"
 
 timeout /t 5 /nobreak >nul

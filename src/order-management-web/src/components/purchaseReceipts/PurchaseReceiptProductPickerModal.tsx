@@ -145,6 +145,22 @@ export function PurchaseReceiptProductPickerModal({
     updateDraft(id, { quantity: String(Math.max(1, normalizeStockQuantity(cur + delta))) });
   };
 
+  const finalizeQtyDraft = (id: string, raw: string) => {
+    const q = raw.trim();
+    const finalized = q === '' ? '1' : String(finalizeQuantityDraft(q));
+    updateDraft(id, { quantity: finalized });
+    return finalized;
+  };
+
+  const selectProduct = (p: Product) => {
+    setSelectedIds((prev) => {
+      if (replaceMode) return new Set([p.id]);
+      const next = new Set(prev);
+      next.add(p.id);
+      return next;
+    });
+  };
+
   const toggleSelect = (p: Product) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -160,6 +176,11 @@ export function PurchaseReceiptProductPickerModal({
       else next.add(p.id);
       return next;
     });
+  };
+
+  const handleQtyEnter = (p: Product, draft: RowDraft) => {
+    finalizeQtyDraft(p.id, draft.quantity);
+    selectProduct(p);
   };
 
   const handleSave = () => {
@@ -352,10 +373,12 @@ export function PurchaseReceiptProductPickerModal({
                               updateDraft(p.id, { quantity: sanitizeQuantityDraft(e.target.value) })
                             }
                             onBlur={() => {
-                              const q = draft.quantity.trim();
-                              updateDraft(p.id, {
-                                quantity: q === '' ? '1' : String(finalizeQuantityDraft(q)),
-                              });
+                              finalizeQtyDraft(p.id, draft.quantity);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return;
+                              e.preventDefault();
+                              handleQtyEnter(p, draft);
                             }}
                           />
                           <button type="button" onClick={() => changeQty(p.id, 1)} aria-label="+">

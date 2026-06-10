@@ -14,6 +14,50 @@
   font-size: 1.5rem;
 }
 
+.warehouse-list-filters {
+  align-items: flex-start;
+  gap: 0.55rem 0.75rem;
+}
+
+.warehouse-list-filters .warehouse-list-filter {
+  flex: 0 0 auto;
+}
+
+.warehouse-list-filters .dt-panel-search {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.warehouse-list-filters .warehouse-list-filter--search {
+  width: 14rem;
+}
+
+.warehouse-list-filters .warehouse-list-filter--warehouse {
+  width: 14rem;
+}
+
+.warehouse-list-filters .warehouse-list-filter input,
+.warehouse-list-filters .warehouse-list-filter select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.1rem;
+  height: 2.1rem;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.warehouse-list-filters .warehouse-list-filter--search input {
+  min-height: 2.24rem;
+  height: 2.24rem;
+  padding-block: 0.38rem;
+}
+
 .warehouse-toolbar .warehouse-filter-label {
   display: flex;
   flex-direction: column;

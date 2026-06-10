@@ -189,7 +189,10 @@ export function ProductGroupsMultiSelect({
                     + {t('products.groupsCardAdd')}
                   </button>
                 ) : (
-                  <form className="product-groups-select-add-form" onSubmit={(e) => void submitCreate(e)}>
+                  <div
+                    className="product-groups-select-add-form"
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <input
                       ref={addInputRef}
                       value={newName}
@@ -197,13 +200,20 @@ export function ProductGroupsMultiSelect({
                       placeholder={t('products.groupsNamePlaceholder')}
                       autoComplete="off"
                       disabled={creating}
-                      onKeyDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void submitCreate(e);
+                        }
+                      }}
                     />
                     <div className="product-groups-select-add-actions">
                       <button
-                        type="submit"
+                        type="button"
                         className="btn btn-primary btn-sm"
                         disabled={creating || !newName.trim()}
+                        onClick={(e) => void submitCreate(e)}
                       >
                         {creating ? t('settings.saving') : t('products.groupsCardCreate')}
                       </button>
@@ -217,7 +227,7 @@ export function ProductGroupsMultiSelect({
                       </button>
                     </div>
                     {createError && <p className="product-groups-select-add-error">{createError}</p>}
-                  </form>
+                  </div>
                 )}
               </div>
             )}

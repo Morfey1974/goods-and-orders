@@ -5,6 +5,7 @@ using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
 using OrderManagement.Api.Extensions;
+using OrderManagement.Api.Helpers;
 using OrderManagement.Api.Services;
 
 namespace OrderManagement.Api.Controllers;
@@ -38,8 +39,14 @@ public class PurchaseReceiptsController(
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<PurchaseReceiptStatus>(status, true, out var st))
             query = query.Where(r => r.Status == st);
-        if (from.HasValue) query = query.Where(r => r.DocumentDate >= from.Value.Date);
-        if (to.HasValue) query = query.Where(r => r.DocumentDate <= to.Value.Date);
+
+        var rangeError = ReportDateRange.Validate(from, to);
+        if (rangeError is not null) return BadRequest(new { message = rangeError });
+
+        var fromUtc = ReportDateRange.StartUtc(from);
+        var toExclusiveUtc = ReportDateRange.EndExclusiveUtc(to);
+        if (fromUtc.HasValue) query = query.Where(r => r.DocumentDate >= fromUtc.Value);
+        if (toExclusiveUtc.HasValue) query = query.Where(r => r.DocumentDate < toExclusiveUtc.Value);
 
         var list = await query
             .OrderByDescending(r => r.DocumentDate)

@@ -35,6 +35,7 @@ export function WarehousePage() {
   const { token } = useAuth();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [filterWarehouseId, setFilterWarehouseId] = useState(ALL_WAREHOUSES);
+  const [search, setSearch] = useState('');
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [products, setProducts] = useState<
     { id: string; articleCode: string; legacySku?: string | null; name: string }[]
@@ -62,9 +63,21 @@ export function WarehousePage() {
     WAREHOUSE_BALANCE_DEFAULT_WIDTHS
   );
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return balances;
+    return balances.filter(
+      (b) =>
+        b.articleCode.toLowerCase().includes(q) ||
+        (b.legacySku ?? '').toLowerCase().includes(q) ||
+        b.productName.toLowerCase().includes(q) ||
+        b.warehouseName.toLowerCase().includes(q)
+    );
+  }, [balances, search]);
+
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(
-    balances,
-    [filterWarehouseId, showWarehouseColumn]
+    filtered,
+    [filterWarehouseId, showWarehouseColumn, search]
   );
 
   const loadWarehouses = useCallback(() => {
@@ -230,19 +243,31 @@ export function WarehousePage() {
           </>
         }
         toolbarSecondary={
-          <label className="warehouse-filter-label inventory-toolbar-date">
-            <span>{t('warehouse.filterBy')}</span>
-            <select value={filterWarehouseId} onChange={(e) => setFilterWarehouseId(e.target.value)}>
-              <option value={ALL_WAREHOUSES}>{t('warehouse.allWarehouses')}</option>
-              {warehouses
-                .filter((w) => w.isActive)
-                .map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <div className="dt-panel-filters warehouse-list-filters">
+            <label className="dt-panel-search warehouse-list-filter warehouse-list-filter--search">
+              <span>{t('warehouse.search')}</span>
+              <input
+                type="search"
+                autoComplete="off"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('warehouse.searchPlaceholder')}
+              />
+            </label>
+            <label className="warehouse-filter-label warehouse-list-filter warehouse-list-filter--warehouse">
+              <span>{t('warehouse.filterBy')}</span>
+              <select value={filterWarehouseId} onChange={(e) => setFilterWarehouseId(e.target.value)}>
+                <option value={ALL_WAREHOUSES}>{t('warehouse.allWarehouses')}</option>
+                {warehouses
+                  .filter((w) => w.isActive)
+                  .map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
         }
         pagination={{
           page,

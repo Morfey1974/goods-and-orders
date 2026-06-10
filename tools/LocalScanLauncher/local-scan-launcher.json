@@ -1,0 +1,10 @@
+{
+  "ListenUrl": "http://127.0.0.1:9181/",
+  "AgentHealthUrl": "http://127.0.0.1:9182/health",
+  "AgentProjectRelative": "tools/LocalScanAgent/LocalScanAgent.csproj",
+  "AgentStartTimeoutSeconds": 25,
+  "AllowedOrigins": [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+  ]
+}

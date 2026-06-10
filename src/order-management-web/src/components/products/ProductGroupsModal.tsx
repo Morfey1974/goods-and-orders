@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
 import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { AppModal } from '../ui/AppModal';
 import { BidiText } from '../BidiText';
 import { PRODUCT_GROUPS_RESIZE } from '../../lib/resizablePanelKeys';
@@ -24,6 +25,7 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState<ProductGroup | null>(null);
 
   const loadGroups = useCallback(() => {
     if (!token) return;
@@ -49,6 +51,7 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
       setError('');
       setNewName('');
       setSearch('');
+      setGroupToDelete(null);
       loadGroups();
       loadProducts();
     }
@@ -94,11 +97,13 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
     }
   };
 
-  const onDeleteGroup = async (id: string) => {
-    if (!token || !window.confirm(t('products.groupsDeleteConfirm'))) return;
+  const confirmDeleteGroup = async () => {
+    if (!token || !groupToDelete) return;
     setBusy(true);
+    setError('');
     try {
-      await productGroupsApi.delete(token, id);
+      await productGroupsApi.delete(token, groupToDelete.id);
+      setGroupToDelete(null);
       loadGroups();
       onChanged();
     } catch (e) {
@@ -185,7 +190,7 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
                   type="button"
                   className="product-groups-delete"
                   title={t('products.groupsDelete')}
-                  onClick={() => void onDeleteGroup(g.id)}
+                  onClick={() => setGroupToDelete(g)}
                 >
                   ×
                 </button>
@@ -246,6 +251,18 @@ export function ProductGroupsModal({ open, onClose, onChanged }: Props) {
           </button>
         )}
       </footer>
+
+      <ConfirmDialog
+        open={groupToDelete !== null}
+        title={t('products.groupsDelete')}
+        message={t('products.groupsDeleteConfirm')}
+        confirmLabel={t('products.groupsDelete')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        busy={busy}
+        onConfirm={() => void confirmDeleteGroup()}
+        onCancel={() => !busy && setGroupToDelete(null)}
+      />
     </AppModal>
   );
 }

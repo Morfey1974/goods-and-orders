@@ -24,6 +24,7 @@ import {
 } from '../api/purchaseReceipts';
 import { exchangeRatesApi, type UsdIlsRate } from '../api/exchangeRates';
 import { suppliersApi, type Supplier } from '../api/suppliers';
+import { fetchScanPdf, LocalScanAgentError } from '../api/localScan';
 import { warehouseApi, type Warehouse } from '../api/warehouse';
 import {
   PurchaseReceiptProductPickerModal,
@@ -643,6 +644,8 @@ export function PurchaseReceiptDetailPage() {
   const [saving, setSaving] = useState(false);
   const [postConfirmOpen, setPostConfirmOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanPhase, setScanPhase] = useState<'starting' | 'scanning' | null>(null);
   const [docDeleting, setDocDeleting] = useState(false);
   const [baseline, setBaseline] = useState('');
   const [bankUsdRate, setBankUsdRate] = useState<UsdIlsRate | null>(null);
@@ -659,6 +662,7 @@ export function PurchaseReceiptDetailPage() {
   const canUploadDocument =
     canManageDocument &&
     !uploading &&
+    !scanning &&
     !docDeleting &&
     !saving &&
     (isNew || (Boolean(docTargetId) && (!receiptLoading || Boolean(routeReceiptId))));
@@ -1392,6 +1396,30 @@ export function PurchaseReceiptDetailPage() {
     input.value = '';
     if (!files.length) return;
     void processDocumentFiles(files);
+  };
+
+  const onScanDocument = async () => {
+    if (!canUploadDocument || scanning || uploading) return;
+    setScanning(true);
+    setScanPhase(null);
+    setDocUploadError('');
+    setDocUploadSuccess('');
+    setPreviewError('');
+    try {
+      const { blob, fileName } = await fetchScanPdf((phase) => setScanPhase(phase));
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      await processDocumentFiles([file]);
+    } catch (err) {
+      if (err instanceof LocalScanAgentError && err.code === 'unavailable') {
+        setDocUploadError(t('purchaseReceipts.scanAgentUnavailable'));
+      } else {
+        const message = err instanceof Error ? err.message : 'Error';
+        setDocUploadError(t('purchaseReceipts.scanFailed', { message }));
+      }
+    } finally {
+      setScanning(false);
+      setScanPhase(null);
+    }
   };
 
   const processDocumentFiles = async (files: File[]) => {
@@ -2300,20 +2328,47 @@ export function PurchaseReceiptDetailPage() {
             <h2 className="pr-section-title">{t('purchaseReceipts.sectionDocument')}</h2>
             {canManageDocument && (
               <div className="pr-doc-upload-row">
-                <label
-                  className={`btn btn-secondary btn-sm pr-doc-upload-label${!canUploadDocument || uploading ? ' pr-doc-upload-label--disabled' : ''}`}
-                >
-                  {uploading ? t('purchaseReceipts.uploading') : t('purchaseReceipts.addDocument')}
-                  <input
-                    ref={docFileInputRef}
-                    id={PR_DOC_FILE_INPUT_ID}
-                    type="file"
-                    accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/*"
-                    multiple
-                    className="sr-only"
-                    onChange={onPickDocument}
-                  />
-                </label>
+                <div className="pr-doc-upload-actions">
+                  <label
+                    className={`btn btn-secondary btn-sm pr-doc-upload-label${!canUploadDocument || uploading ? ' pr-doc-upload-label--disabled' : ''}`}
+                  >
+                    {uploading ? t('purchaseReceipts.uploading') : t('purchaseReceipts.addDocument')}
+                    <input
+                      ref={docFileInputRef}
+                      id={PR_DOC_FILE_INPUT_ID}
+                      type="file"
+                      accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/*"
+                      multiple
+                      className="sr-only"
+                      onChange={onPickDocument}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!canUploadDocument || uploading || scanning}
+                    onClick={() => void onScanDocument()}
+                  >
+                    {scanning
+                      ? scanPhase === 'starting'
+                        ? t('purchaseReceipts.scanAgentStarting')
+                        : t('purchaseReceipts.scanningDocument')
+                      : t('purchaseReceipts.scanDocument')}
+                  </button>
+                  {scanning && (
+                    <span
+                      className="pr-doc-scan-status muted"
+                      aria-live="polite"
+                      title={
+                        scanPhase === 'starting'
+                          ? t('purchaseReceipts.scanAgentStarting')
+                          : t('purchaseReceipts.scanningDocument')
+                      }
+                    >
+                      <span className="pr-doc-scan-spinner" aria-hidden />
+                    </span>
+                  )}
+                </div>
                 {savedDocuments.length > 0 && (
                   <span className="muted pr-doc-upload-hint">
                     {t('purchaseReceipts.documentsCount', { count: savedDocuments.length })}
@@ -2328,9 +2383,15 @@ export function PurchaseReceiptDetailPage() {
             )}
           </div>
 
-          {(uploading || docDeleting) && (
+          {(uploading || scanning || docDeleting) && (
             <p className="muted pr-doc-pending-hint">
-              {uploading ? t('purchaseReceipts.uploading') : t('purchaseReceipts.loading')}
+              {scanning
+                ? scanPhase === 'starting'
+                  ? t('purchaseReceipts.scanAgentStarting')
+                  : t('purchaseReceipts.scanningDocument')
+                : uploading
+                  ? t('purchaseReceipts.uploading')
+                  : t('purchaseReceipts.loading')}
             </p>
           )}
 

@@ -11,10 +11,13 @@ import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
 import {
   PURCHASE_RECEIPTS_COLUMN_CLASS,
   PURCHASE_RECEIPTS_COLUMN_KEYS,
+  loadPurchaseReceiptsSort,
   PURCHASE_RECEIPTS_COLUMN_WIDTHS_KEY,
   PURCHASE_RECEIPTS_DEFAULT_WIDTHS,
   PURCHASE_RECEIPTS_TEXT_START_COLUMNS,
+  savePurchaseReceiptsSort,
   type PurchaseReceiptsColumnKey,
+  type TableSortDirection,
 } from '../lib/listTableColumns';
 import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
 import { PURCHASE_RECEIPTS_PANEL_RESIZE } from '../lib/resizablePanelKeys';
@@ -59,7 +62,9 @@ function renderListAmount(r: PurchaseReceiptListItem) {
 }
 
 type SortKey = PurchaseReceiptsColumnKey;
-type SortDir = 'asc' | 'desc';
+type SortDir = TableSortDirection;
+
+const DEFAULT_SORT = { key: 'date' as SortKey, dir: 'desc' as SortDir };
 
 function listAmountSortValue(r: PurchaseReceiptListItem): number {
   if (r.totalAmountIls != null) return r.totalAmountIls;
@@ -107,8 +112,13 @@ export function PurchaseReceiptsPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('date');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>(
+    () => loadPurchaseReceiptsSort(DEFAULT_SORT).key
+  );
+  const [sortDir, setSortDir] = useState<SortDir>(
+    () => loadPurchaseReceiptsSort(DEFAULT_SORT).dir
+  );
 
   const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
     PURCHASE_RECEIPTS_COLUMN_WIDTHS_KEY,
@@ -137,20 +147,42 @@ export function PurchaseReceiptsPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    savePurchaseReceiptsSort({ key: sortKey, dir: sortDir });
+  }, [sortKey, sortDir]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((r) => {
+      const statusLabel =
+        r.status === 'Posted'
+          ? t('purchaseReceipts.statusPosted')
+          : t('purchaseReceipts.statusDraft');
+      return (
+        r.receiptNumber.toLowerCase().includes(q) ||
+        r.supplierName.toLowerCase().includes(q) ||
+        r.status.toLowerCase().includes(q) ||
+        statusLabel.toLowerCase().includes(q)
+      );
+    });
+  }, [list, search, t]);
+
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
-    return [...list].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const cmp = compareReceipts(a, b, sortKey);
       if (cmp !== 0) return cmp * dir;
       return a.receiptNumber.localeCompare(b.receiptNumber, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [list, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir]);
 
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(sorted, [
     supplierId,
     status,
     from,
     to,
+    search,
     sortKey,
     sortDir,
   ]);
@@ -206,8 +238,18 @@ export function PurchaseReceiptsPage() {
           </div>
         }
         toolbarSecondary={
-          <div className="dt-panel-filters">
-            <label>
+          <div className="dt-panel-filters pr-list-filters">
+            <label className="dt-panel-search pr-list-filter pr-list-filter--search">
+              <span>{t('purchaseReceipts.search')}</span>
+              <input
+                type="search"
+                autoComplete="off"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('purchaseReceipts.searchPlaceholder')}
+              />
+            </label>
+            <label className="pr-list-filter pr-list-filter--supplier">
               <span>{t('purchaseReceipts.filterSupplier')}</span>
               <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">{t('purchaseReceipts.allSuppliers')}</option>
@@ -218,7 +260,7 @@ export function PurchaseReceiptsPage() {
                 ))}
               </select>
             </label>
-            <label>
+            <label className="pr-list-filter pr-list-filter--status">
               <span>{t('purchaseReceipts.filterStatus')}</span>
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">{t('purchaseReceipts.allStatuses')}</option>
@@ -226,11 +268,11 @@ export function PurchaseReceiptsPage() {
                 <option value="Posted">{t('purchaseReceipts.statusPosted')}</option>
               </select>
             </label>
-            <label>
+            <label className="pr-list-filter pr-list-filter--date">
               <span>{t('purchaseReceipts.dateFrom')}</span>
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </label>
-            <label>
+            <label className="pr-list-filter pr-list-filter--date">
               <span>{t('purchaseReceipts.dateTo')}</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </label>

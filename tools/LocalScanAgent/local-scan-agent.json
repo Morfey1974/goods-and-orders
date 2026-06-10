@@ -1,0 +1,11 @@
+{
+  "ListenUrl": "http://127.0.0.1:9182/",
+  "Naps2ConsolePath": "",
+  "ProfileName": "A4, 300 dpi, PDF",
+  "IdleExitMinutes": 60,
+  "ScanTimeoutSeconds": 300,
+  "AllowedOrigins": [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+  ]
+}

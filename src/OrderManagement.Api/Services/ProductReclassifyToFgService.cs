@@ -20,7 +20,8 @@ public static class ProductReclassifyToFgService
 {
     /// <summary>
     /// Renames CP-* articles to FG-* (same number), sets FinishedGood, assigns FG warehouse,
-    /// moves balances/lots/WAC to finished-goods warehouse. Does not create stock movements.
+    /// moves balances/lots/WAC/purchase lines/stock movements to finished-goods warehouse.
+    /// Does not create stock movements.
     /// </summary>
     public static async Task<ProductReclassifyBatchResult> ReclassifyAsync(
         AppDbContext db,
@@ -112,6 +113,18 @@ public static class ProductReclassifyToFgService
                     .ToListAsync(ct);
                 foreach (var lot in lots)
                     lot.WarehouseId = finishedWh.Id;
+
+                var receiptLines = await db.PurchaseReceiptLines
+                    .Where(l => l.ProductId == product.Id && l.WarehouseId != finishedWh.Id)
+                    .ToListAsync(ct);
+                foreach (var line in receiptLines)
+                    line.WarehouseId = finishedWh.Id;
+
+                var movements = await db.StockMovements
+                    .Where(m => m.TenantId == tenantId && m.ProductId == product.Id && m.WarehouseId != finishedWh.Id)
+                    .ToListAsync(ct);
+                foreach (var movement in movements)
+                    movement.WarehouseId = finishedWh.Id;
 
                 var wacRows = await db.InventoryAverageCosts
                     .Where(c => c.TenantId == tenantId && c.ProductId == product.Id)

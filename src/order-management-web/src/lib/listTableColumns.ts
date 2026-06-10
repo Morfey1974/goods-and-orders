@@ -97,6 +97,53 @@ export const SUPPLIERS_COLUMN_CLASS: Record<SuppliersColumnKey, string> = {
 export const SUPPLIERS_TEXT_START_COLUMNS = new Set<SuppliersColumnKey>(['name', 'contact']);
 
 export const PURCHASE_RECEIPTS_COLUMN_WIDTHS_KEY = RESIZABLE_PANEL_KEYS.purchaseReceiptsColumns;
+export const PURCHASE_RECEIPTS_SORT_STORAGE_KEY = 'ordermgmt.purchase-receipts-sort';
+
+export type TableSortDirection = 'asc' | 'desc';
+
+export type PersistedTableSort<K extends string> = {
+  key: K;
+  dir: TableSortDirection;
+};
+
+const PURCHASE_RECEIPTS_SORTABLE = new Set<string>([
+  'number',
+  'supplier',
+  'date',
+  'amount',
+  'status',
+  'document',
+]);
+
+export function loadPurchaseReceiptsSort(
+  fallback: PersistedTableSort<PurchaseReceiptsColumnKey>
+): PersistedTableSort<PurchaseReceiptsColumnKey> {
+  try {
+    if (typeof localStorage === 'undefined') return fallback;
+    const raw = localStorage.getItem(PURCHASE_RECEIPTS_SORT_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { key?: string; dir?: string };
+    if (
+      parsed.key &&
+      PURCHASE_RECEIPTS_SORTABLE.has(parsed.key) &&
+      (parsed.dir === 'asc' || parsed.dir === 'desc')
+    ) {
+      return { key: parsed.key as PurchaseReceiptsColumnKey, dir: parsed.dir };
+    }
+  } catch {
+    // ignore corrupt storage
+  }
+  return fallback;
+}
+
+export function savePurchaseReceiptsSort(sort: PersistedTableSort<PurchaseReceiptsColumnKey>): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PURCHASE_RECEIPTS_SORT_STORAGE_KEY, JSON.stringify(sort));
+  } catch {
+    // ignore quota / private mode
+  }
+}
 export const PURCHASE_RECEIPTS_COLUMN_KEYS = [
   'number',
   'supplier',
