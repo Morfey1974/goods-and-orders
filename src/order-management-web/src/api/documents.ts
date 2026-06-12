@@ -37,6 +37,9 @@ export type Document = {
   discountPercent?: number | null;
   discountAmount?: number | null;
   paymentMethod?: string;
+  clientOrderReceivedAt?: string;
+  clientOrderReference?: string;
+  clientOrderFileName?: string;
   lines: DocumentLine[];
   paymentLines?: ReceiptPaymentLine[];
   parentChargeAmount?: number;
@@ -108,6 +111,9 @@ function mapDocument(raw: Record<string, unknown>): Document {
     discountPercent: (raw.discountPercent ?? raw.DiscountPercent) as number | null | undefined,
     discountAmount: (raw.discountAmount ?? raw.DiscountAmount) as number | null | undefined,
     paymentMethod: (raw.paymentMethod ?? raw.PaymentMethod) as string | undefined,
+    clientOrderReceivedAt: (raw.clientOrderReceivedAt ?? raw.ClientOrderReceivedAt) as string | undefined,
+    clientOrderReference: (raw.clientOrderReference ?? raw.ClientOrderReference) as string | undefined,
+    clientOrderFileName: (raw.clientOrderFileName ?? raw.ClientOrderFileName) as string | undefined,
     lines: Array.isArray(linesRaw) ? linesRaw.map(mapLine) : [],
     paymentLines: Array.isArray(paymentLinesRaw) ? paymentLinesRaw.map(mapPaymentLine) : undefined,
     parentChargeAmount: (raw.parentChargeAmount ?? raw.ParentChargeAmount) as number | undefined,
@@ -273,6 +279,51 @@ export const documentsApi = {
       stub: Boolean(data.stub ?? data.Stub),
       message: String(data.message ?? data.Message ?? ''),
     };
+  },
+
+  uploadClientOrder: async (
+    token: string,
+    quoteId: string,
+    options?: { file?: File; receivedAt?: string; clientReference?: string }
+  ) => {
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const fd = new FormData();
+    if (options?.file) fd.append('file', options.file, options.file.name);
+    if (options?.receivedAt) fd.append('receivedAt', options.receivedAt);
+    if (options?.clientReference !== undefined)
+      fd.append('clientReference', options.clientReference);
+    const res = await fetch(`${API_BASE}/api/documents/${quoteId}/client-order`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+      message?: string;
+    };
+    if (!res.ok) throw new Error(data.message ?? res.statusText);
+    return mapDocument(data);
+  },
+
+  deleteClientOrder: async (token: string, quoteId: string) => {
+    const data = await request<Record<string, unknown>>(
+      `/api/documents/${quoteId}/client-order`,
+      { method: 'DELETE' },
+      token
+    );
+    return mapDocument(data);
+  },
+
+  fetchClientOrderBlob: async (token: string, quoteId: string) => {
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const res = await fetch(`${API_BASE}/api/documents/${quoteId}/client-order/file`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const body = data as { message?: string };
+      throw new Error(body.message ?? res.statusText);
+    }
+    return res.blob();
   },
 
   importCsv: async (token: string, file: File) => {

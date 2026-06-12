@@ -1,5 +1,29 @@
 /* Shared resizable data-table panel — toolbar + table resize together */
 
+:root {
+  --table-row-hover-bg: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.dt-panel-table tbody tr:not(:has(td.dt-panel-doc-month)):not(:has(td.dt-panel-empty)):hover > td,
+.data-table tbody tr:not(.data-table__total-row):hover > td,
+.catalog-table tbody tr:hover > td,
+.inv-report-table tbody tr:hover > td,
+.pr-lines-table tbody tr:hover > td,
+.pr-landed-costs-table tbody tr:hover > td,
+.purchase-receipts-table tbody tr:hover > td {
+  background: var(--table-row-hover-bg);
+}
+
+.dt-panel-table tbody tr:not(:has(td.dt-panel-doc-month)):not(:has(td.dt-panel-empty)),
+.data-table tbody tr:not(.data-table__total-row),
+.catalog-table tbody tr,
+.inv-report-table tbody tr,
+.pr-lines-table tbody tr,
+.pr-landed-costs-table tbody tr,
+.purchase-receipts-table tbody tr {
+  transition: background 0.12s ease;
+}
+
 .dt-panel {
   padding: 0;
   overflow: hidden;
@@ -321,10 +345,6 @@
 
 .dt-panel-table tbody tr.dt-panel-row-clickable {
   cursor: pointer;
-}
-
-.dt-panel-table tbody tr.dt-panel-row-clickable:hover td {
-  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
 }
 
 .dt-panel-table .dt-panel-empty {

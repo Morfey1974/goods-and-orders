@@ -78,7 +78,7 @@ export function DocumentSequencesSection({ token, onError, onMessage }: Props) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.filter((row) => row.kind !== 'Order').map((row) => (
               <tr key={row.kind}>
                 <td>{t(KIND_LABEL_KEYS[row.labelKey] ?? row.labelKey)}</td>
                 <td>

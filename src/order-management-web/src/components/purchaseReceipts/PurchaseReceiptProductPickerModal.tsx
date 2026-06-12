@@ -41,6 +41,8 @@ type Props = {
   productFilter?: (product: Product) => boolean;
   initialFilterKind?: ProductKindFilter;
   initialFilterType?: string;
+  /** Products already in the parent list (e.g. BOM) — shown with a green marker when reopening. */
+  existingPicks?: readonly { productId: string; quantity: number }[];
   resizeConfig?: ResizablePanelConfig;
   overlayZIndex?: number;
   nestedProductModalZIndex?: number;
@@ -65,6 +67,7 @@ export function PurchaseReceiptProductPickerModal({
   productFilter,
   initialFilterKind = '',
   initialFilterType = '',
+  existingPicks = [],
   resizeConfig = PURCHASE_RECEIPT_PICKER_RESIZE,
   overlayZIndex,
   nestedProductModalZIndex = 2700,
@@ -92,6 +95,17 @@ export function PurchaseReceiptProductPickerModal({
   const productsRef = useRef(products);
   productsRef.current = products;
 
+  const existingPickMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const pick of existingPicks) map.set(pick.productId, pick.quantity);
+    return map;
+  }, [existingPicks]);
+
+  const existingProductIds = useMemo(
+    () => new Set(existingPickMap.keys()),
+    [existingPickMap]
+  );
+
   useEffect(() => {
     if (!open || !token) return;
     setSearch('');
@@ -100,7 +114,16 @@ export function PurchaseReceiptProductPickerModal({
     setFilterGroupId('');
     setProductModalMsg('');
     setSelectedIds(initialSelectedProductId ? new Set([initialSelectedProductId]) : new Set());
-  }, [open, token, initialSelectedProductId, initialFilterKind, initialFilterType]);
+    if (existingPicks.length > 0) {
+      setRowDrafts((prev) => {
+        const next = { ...prev };
+        for (const pick of existingPicks) {
+          next[pick.productId] = { quantity: String(normalizeStockQuantity(pick.quantity)) };
+        }
+        return next;
+      });
+    }
+  }, [open, token, initialSelectedProductId, initialFilterKind, initialFilterType, existingPicks]);
 
   useEffect(() => {
     if (!open || !token) return;
@@ -344,6 +367,7 @@ export function PurchaseReceiptProductPickerModal({
                 {filtered.map((p) => {
                   const draft = rowDrafts[p.id] ?? draftForProduct();
                   const isSelected = selectedIds.has(p.id);
+                  const isAlreadyAdded = existingProductIds.has(p.id);
                   const isService = isServiceProductType(p.productType);
                   const showStock = productTracksStock(p);
                   const stock = p.stockQuantity ?? 0;
@@ -352,12 +376,22 @@ export function PurchaseReceiptProductPickerModal({
                       key={p.id}
                       className={[
                         isSelected ? 'doc-picker-row-selected' : '',
+                        isAlreadyAdded ? 'doc-picker-row-already-added' : '',
                         !p.isActive ? 'pr-picker-row-inactive' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
                     >
                       <td>
+                        {isAlreadyAdded && (
+                          <span
+                            className="doc-picker-added-mark"
+                            title={t('products.bomInComposition')}
+                            aria-label={t('products.bomInComposition')}
+                          >
+                            ✓
+                          </span>
+                        )}
                         <code>{p.articleCode}</code>
                       </td>
                       <td className="doc-picker-name">
@@ -414,10 +448,18 @@ export function PurchaseReceiptProductPickerModal({
                       <td>
                         <button
                           type="button"
-                          className={`doc-picker-select-btn${isSelected ? ' is-selected' : ''}`}
+                          className={[
+                            'doc-picker-select-btn',
+                            isSelected ? 'is-selected' : '',
+                            isAlreadyAdded && !isSelected ? 'is-already-added' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
                           onClick={() => toggleSelect(p)}
                         >
-                          + {t('purchaseReceipts.pickerSelectItem')}
+                          {isAlreadyAdded && !isSelected
+                            ? `✓ ${t('products.bomInComposition')}`
+                            : `+ ${t('purchaseReceipts.pickerSelectItem')}`}
                         </button>
                       </td>
                     </tr>

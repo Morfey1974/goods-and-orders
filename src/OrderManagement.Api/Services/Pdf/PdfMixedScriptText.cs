@@ -1,5 +1,6 @@
 using System.Globalization;
 using QuestPDF.Fluent;
+using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 namespace OrderManagement.Api.Services.Pdf;
@@ -25,6 +26,28 @@ public static class PdfMixedScriptText
         if (IsRtlDominant(text))
             target = target.ContentFromRightToLeft();
         target.Text(t => ComposeRuns(t, text, fontSize, bold));
+    }
+
+    /// <summary>Dark banner above document line tables — explicit RTL run order for Hebrew + Latin.</summary>
+    public static void RenderDocumentTableBanner(IContainer container, string? value, float fontSize)
+    {
+        var text = value ?? "";
+        container.ContentFromRightToLeft().Text(t =>
+        {
+            foreach (var (kind, run) in SplitRuns(text))
+            {
+                var span = t.Span(run)
+                    .FontFamily(FontFamily(kind, bold: true))
+                    .FontSize(fontSize)
+                    .FontColor(Colors.White)
+                    .Bold();
+
+                if (kind == PdfScriptKind.Hebrew)
+                    span.DirectionFromRightToLeft();
+                else
+                    span.DirectionFromLeftToRight();
+            }
+        });
     }
 
     public static void ComposeRuns(TextDescriptor text, string value, float fontSize, bool bold)

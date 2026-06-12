@@ -13,7 +13,6 @@ import { CustomersPage } from './pages/CustomersPage';
 import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { WarehousePage } from './pages/WarehousePage';
-import { OrdersPage } from './pages/OrdersPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SuppliersPage } from './pages/SuppliersPage';
@@ -45,7 +44,6 @@ const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'orders', element: <OrdersPage /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/new', element: <CustomerDetailPage /> },
       { path: 'customers/:id', element: <CustomerDetailPage /> },

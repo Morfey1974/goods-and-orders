@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
@@ -7,7 +7,11 @@ import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
 import { mergeRefs } from '../../lib/mergeRefs';
 import { bidiAutoInput } from '../BidiText';
-import { normalizeStockQuantity } from '../../lib/stockQuantity';
+import {
+  finalizePriceDraft,
+  normalizeStockQuantity,
+  sanitizePriceDraft,
+} from '../../lib/stockQuantity';
 import {
   DocumentProductPickerModal,
   type PickedProductLine,
@@ -23,7 +27,8 @@ type DraftLine = {
   productId: string;
   description: string;
   quantity: number;
-  unitPrice: number;
+  /** Editable price text — empty while the user clears the field. */
+  unitPrice: string;
 };
 
 type Props = {
@@ -61,7 +66,7 @@ function loadDocumentIntoForm(doc: Document, options?: { forDuplicate?: boolean 
     productId: l.productId ?? '',
     description: l.description,
     quantity: l.quantity,
-    unitPrice: l.unitPrice,
+    unitPrice: String(l.unitPrice),
   }));
   let showDiscount = false;
   let discountKind: DiscountKind = 'percent';
@@ -94,13 +99,79 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+type FormSnapshot = {
+  customerId: string;
+  issueDate: string;
+  dueDate: string;
+  description: string;
+  notes: string;
+  lines: { productId: string; description: string; quantity: number; unitPrice: number }[];
+  showDiscount: boolean;
+  discountKind: DiscountKind;
+  discountValue: number;
+  clientOrderReceivedAt: string;
+  clientOrderReference: string;
+  clientOrderFileName: string;
+  pendingClientOrderFileName: string;
+};
+
+function emptyFormSnapshot(issueDate: string): FormSnapshot {
+  return {
+    customerId: '',
+    issueDate,
+    dueDate: '',
+    description: '',
+    notes: '',
+    lines: [],
+    showDiscount: false,
+    discountKind: 'percent',
+    discountValue: 0,
+    clientOrderReceivedAt: '',
+    clientOrderReference: '',
+    clientOrderFileName: '',
+    pendingClientOrderFileName: '',
+  };
+}
+
+function snapshotFromLoaded(
+  loaded: ReturnType<typeof loadDocumentIntoForm>,
+  clientOrder?: Pick<Document, 'clientOrderReceivedAt' | 'clientOrderReference' | 'clientOrderFileName'>
+): FormSnapshot {
+  return {
+    customerId: loaded.customer.id,
+    issueDate: loaded.issueDate,
+    dueDate: loaded.dueDate,
+    description: loaded.description,
+    notes: loaded.notes,
+    lines: loaded.lines.map((l) => ({
+      productId: l.productId,
+      description: l.description,
+      quantity: l.quantity,
+      unitPrice: finalizePriceDraft(l.unitPrice),
+    })),
+    showDiscount: loaded.showDiscount,
+    discountKind: loaded.discountKind,
+    discountValue: loaded.discountValue,
+    clientOrderReceivedAt: clientOrder?.clientOrderReceivedAt
+      ? isoToDateInput(clientOrder.clientOrderReceivedAt)
+      : '',
+    clientOrderReference: clientOrder?.clientOrderReference ?? '',
+    clientOrderFileName: clientOrder?.clientOrderFileName ?? '',
+    pendingClientOrderFileName: '',
+  };
+}
+
+function serializeSnapshot(snapshot: FormSnapshot): string {
+  return JSON.stringify(snapshot);
+}
+
 function draftFromPicked(p: PickedProductLine): DraftLine {
   return {
     key: crypto.randomUUID(),
     productId: p.productId,
     description: p.description,
     quantity: p.quantity,
-    unitPrice: p.unitPrice,
+    unitPrice: String(p.unitPrice),
   };
 }
 
@@ -125,6 +196,8 @@ export function DocumentCreateWizard({
 }: Props) {
   const { t } = useTranslation();
   const formWizardRef = useRef<HTMLDivElement>(null);
+  const clientOrderFileInputRef = useRef<HTMLInputElement>(null);
+  const savedSnapshotRef = useRef<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -148,11 +221,62 @@ export function DocumentCreateWizard({
   const [editTitle, setEditTitle] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
+  const [clientOrderReceivedAt, setClientOrderReceivedAt] = useState('');
+  const [clientOrderReference, setClientOrderReference] = useState('');
+  const [clientOrderFileName, setClientOrderFileName] = useState('');
+  const [pendingClientOrderFile, setPendingClientOrderFile] = useState<File | null>(null);
+  const [clientOrderBusy, setClientOrderBusy] = useState(false);
 
   const isEdit = Boolean(editDocumentId);
   const isDuplicateDraft = Boolean(duplicateFromDocumentId);
   const effectiveDocId = editDocumentId ?? persistedDocId;
   const canPreviewPdf = Boolean(effectiveDocId && editDoc);
+
+  const captureSnapshot = useCallback((): string => {
+    const validLines = lines.filter((l) => l.productId && l.quantity > 0);
+    return serializeSnapshot({
+      customerId,
+      issueDate,
+      dueDate,
+      description,
+      notes,
+      lines: validLines.map((l) => ({
+        productId: l.productId,
+        description:
+          l.description.trim() || products.find((p) => p.id === l.productId)?.name || '',
+        quantity: normalizeStockQuantity(l.quantity),
+        unitPrice: finalizePriceDraft(l.unitPrice),
+      })),
+      showDiscount,
+      discountKind,
+      discountValue,
+      clientOrderReceivedAt,
+      clientOrderReference,
+      clientOrderFileName,
+      pendingClientOrderFileName: pendingClientOrderFile?.name ?? '',
+    });
+  }, [
+    customerId,
+    issueDate,
+    dueDate,
+    description,
+    notes,
+    lines,
+    products,
+    showDiscount,
+    discountKind,
+    discountValue,
+    clientOrderReceivedAt,
+    clientOrderReference,
+    clientOrderFileName,
+    pendingClientOrderFile,
+  ]);
+
+  const isFormDirty = useCallback(() => {
+    const saved = savedSnapshotRef.current;
+    if (saved === null) return false;
+    return captureSnapshot() !== saved;
+  }, [captureSnapshot]);
 
   const applyLoadedDocument = (
     loaded: ReturnType<typeof loadDocumentIntoForm>,
@@ -171,16 +295,29 @@ export function DocumentCreateWizard({
     setEditTitle(loaded.title);
   };
 
+  const applyClientOrderFromDoc = (doc: Document) => {
+    setClientOrderReceivedAt(doc.clientOrderReceivedAt ? isoToDateInput(doc.clientOrderReceivedAt) : '');
+    setClientOrderReference(doc.clientOrderReference ?? '');
+    setClientOrderFileName(doc.clientOrderFileName ?? '');
+    setPendingClientOrderFile(null);
+  };
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      savedSnapshotRef.current = null;
+      return;
+    }
     setError('');
     if (editDocumentId && token) {
       setLoadingEdit(true);
       documentsApi
         .get(token, editDocumentId)
         .then((doc) => {
+          const loaded = loadDocumentIntoForm(doc);
           setEditDoc(doc);
-          applyLoadedDocument(loadDocumentIntoForm(doc));
+          applyLoadedDocument(loaded);
+          applyClientOrderFromDoc(doc);
+          savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loaded, doc));
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
         .finally(() => setLoadingEdit(false));
@@ -190,15 +327,22 @@ export function DocumentCreateWizard({
       setLoadingEdit(true);
       documentsApi
         .get(token, duplicateFromDocumentId)
-        .then((doc) => applyLoadedDocument(loadDocumentIntoForm(doc, { forDuplicate: true }), { issueDateToday: true }))
+        .then((doc) => {
+          const loaded = loadDocumentIntoForm(doc, { forDuplicate: true });
+          applyLoadedDocument(loaded, { issueDateToday: true });
+          savedSnapshotRef.current = serializeSnapshot(
+            snapshotFromLoaded({ ...loaded, issueDate: todayIso() })
+          );
+        })
         .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
         .finally(() => setLoadingEdit(false));
       return;
     }
+    const freshIssueDate = todayIso();
     setCustomerId('');
     setNewCustomerOpen(false);
     setNewCustomerName('');
-    setIssueDate(todayIso());
+    setIssueDate(freshIssueDate);
     setDueDate('');
     setDescription('');
     setNotes('');
@@ -211,6 +355,11 @@ export function DocumentCreateWizard({
     setEditDoc(null);
     setPersistedDocId(null);
     setInfoMessage('');
+    setClientOrderReceivedAt('');
+    setClientOrderReference('');
+    setClientOrderFileName('');
+    setPendingClientOrderFile(null);
+    savedSnapshotRef.current = serializeSnapshot(emptyFormSnapshot(freshIssueDate));
   }, [open, documentType, editDocumentId, duplicateFromDocumentId, token]);
 
   const formVisible = open;
@@ -224,10 +373,16 @@ export function DocumentCreateWizard({
     onClose();
   };
 
-  const requestClose = () => setCloseConfirmOpen(true);
+  const requestClose = () => {
+    if (!isFormDirty()) {
+      handleClose();
+      return;
+    }
+    setCloseConfirmOpen(true);
+  };
 
   const lineTotals = useMemo(
-    () => lines.map((l) => l.quantity * l.unitPrice),
+    () => lines.map((l) => l.quantity * finalizePriceDraft(l.unitPrice)),
     [lines]
   );
   const subtotal = useMemo(() => lineTotals.reduce((a, b) => a + b, 0), [lineTotals]);
@@ -292,7 +447,7 @@ export function DocumentCreateWizard({
         productId: l.productId,
         description: l.description.trim() || products.find((p) => p.id === l.productId)?.name || '',
         quantity: normalizeStockQuantity(l.quantity),
-        unitPrice: l.unitPrice,
+        unitPrice: finalizePriceDraft(l.unitPrice),
       }));
       const discountPayload = {
         discountPercent:
@@ -328,6 +483,8 @@ export function DocumentCreateWizard({
       setEditVersion(saved.version);
       setEditTitle(saved.documentNumber);
 
+      savedSnapshotRef.current = captureSnapshot();
+
       if (closeOnSuccess) {
         onSuccess(wasUpdate ? t('documents.updated') : t('documents.created'));
         handleClose();
@@ -352,6 +509,110 @@ export function DocumentCreateWizard({
   const onSaveDraft = () => void persistDocument(false);
 
   const onSaveAndExit = () => void persistDocument(true);
+
+  const saveClientOrder = async () => {
+    if (!token || !effectiveDocId) {
+      setError(t('documents.clientOrderNeedSave'));
+      return;
+    }
+    if (!pendingClientOrderFile && !clientOrderReceivedAt && !clientOrderReference.trim()) {
+      setError(t('documents.clientOrderEmpty'));
+      return;
+    }
+    setClientOrderBusy(true);
+    setError('');
+    try {
+      const saved = await documentsApi.uploadClientOrder(token, effectiveDocId, {
+        file: pendingClientOrderFile ?? undefined,
+        receivedAt: clientOrderReceivedAt ? `${clientOrderReceivedAt}T12:00:00Z` : undefined,
+        clientReference: clientOrderReference,
+      });
+      setEditDoc(saved);
+      applyClientOrderFromDoc(saved);
+      const snapshot = JSON.parse(captureSnapshot()) as FormSnapshot;
+      snapshot.clientOrderReceivedAt = saved.clientOrderReceivedAt
+        ? isoToDateInput(saved.clientOrderReceivedAt)
+        : '';
+      snapshot.clientOrderReference = saved.clientOrderReference ?? '';
+      snapshot.clientOrderFileName = saved.clientOrderFileName ?? '';
+      snapshot.pendingClientOrderFileName = '';
+      savedSnapshotRef.current = serializeSnapshot(snapshot);
+      setInfoMessage(t('documents.clientOrderSaved'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setClientOrderBusy(false);
+    }
+  };
+
+  const removeClientOrder = async () => {
+    if (!token || !effectiveDocId) return;
+    if (!window.confirm(t('documents.clientOrderRemoveConfirm'))) return;
+    setClientOrderBusy(true);
+    setError('');
+    try {
+      const saved = await documentsApi.deleteClientOrder(token, effectiveDocId);
+      setEditDoc(saved);
+      applyClientOrderFromDoc(saved);
+      const snapshot = JSON.parse(captureSnapshot()) as FormSnapshot;
+      snapshot.clientOrderReceivedAt = '';
+      snapshot.clientOrderReference = '';
+      snapshot.clientOrderFileName = '';
+      snapshot.pendingClientOrderFileName = '';
+      savedSnapshotRef.current = serializeSnapshot(snapshot);
+      setInfoMessage(t('documents.clientOrderRemoved'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setClientOrderBusy(false);
+    }
+  };
+
+  const viewClientOrderFile = async () => {
+    if (!token || !effectiveDocId) return;
+    setClientOrderBusy(true);
+    try {
+      const blob = await documentsApi.fetchClientOrderBlob(token, effectiveDocId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setClientOrderBusy(false);
+    }
+  };
+
+  const displayClientOrderFileName =
+    pendingClientOrderFile?.name ?? clientOrderFileName ?? '';
+
+  const clearPendingClientOrderFile = () => {
+    setPendingClientOrderFile(null);
+    setClientOrderFileName(editDoc?.clientOrderFileName ?? '');
+    if (clientOrderFileInputRef.current) clientOrderFileInputRef.current.value = '';
+  };
+
+  const onViewClientOrderFile = () => {
+    if (pendingClientOrderFile) {
+      const url = URL.createObjectURL(pendingClientOrderFile);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return;
+    }
+    void viewClientOrderFile();
+  };
+
+  const onDeleteClientOrderFile = () => {
+    if (pendingClientOrderFile) {
+      clearPendingClientOrderFile();
+      const snapshot = JSON.parse(captureSnapshot()) as FormSnapshot;
+      snapshot.pendingClientOrderFileName = '';
+      snapshot.clientOrderFileName = editDoc?.clientOrderFileName ?? '';
+      savedSnapshotRef.current = serializeSnapshot(snapshot);
+      return;
+    }
+    void removeClientOrder();
+  };
 
   const onFormKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
     if (e.key !== 'Enter') return;
@@ -559,12 +820,19 @@ export function DocumentCreateWizard({
                           </td>
                           <td className="col-price">
                             <input
-                              type="number"
-                              min={0}
-                              step={0.01}
+                              type="text"
+                              inputMode="decimal"
+                              className="doc-line-price"
                               value={line.unitPrice}
                               onChange={(e) =>
-                                updateLine(line.key, { unitPrice: Number(e.target.value) })
+                                updateLine(line.key, {
+                                  unitPrice: sanitizePriceDraft(e.target.value),
+                                })
+                              }
+                              onBlur={() =>
+                                updateLine(line.key, {
+                                  unitPrice: String(finalizePriceDraft(line.unitPrice)),
+                                })
                               }
                               required
                             />
@@ -644,14 +912,105 @@ export function DocumentCreateWizard({
               </div>
             </section>
 
-            <section className="doc-panel">
+            {documentType === 'Quote' && (
+              <section className="doc-panel doc-panel-client-order">
+                <h2 className="doc-panel-heading">{t('documents.clientOrderTitle')}</h2>
+                <p className="muted field-hint">{t('documents.clientOrderHint')}</p>
+                {!effectiveDocId && (
+                  <p className="muted field-hint">{t('documents.clientOrderNeedSave')}</p>
+                )}
+                <div className="doc-client-order-toolbar">
+                  <label className="doc-client-order-field doc-client-order-field--date">
+                    <span className="doc-panel-label">{t('documents.clientOrderReceivedAt')}</span>
+                    <input
+                      type="date"
+                      value={clientOrderReceivedAt}
+                      disabled={!effectiveDocId || clientOrderBusy}
+                      onChange={(e) => setClientOrderReceivedAt(e.target.value)}
+                    />
+                  </label>
+                  <label className="doc-client-order-field doc-client-order-field--ref">
+                    <span className="doc-panel-label">{t('documents.clientOrderReference')}</span>
+                    <input
+                      type="text"
+                      value={clientOrderReference}
+                      disabled={!effectiveDocId || clientOrderBusy}
+                      onChange={(e) => setClientOrderReference(e.target.value)}
+                      {...bidiAutoInput()}
+                    />
+                  </label>
+                  <div className="doc-client-order-btn-group">
+                    <span className="doc-panel-label doc-client-order-label-spacer" aria-hidden="true">
+                      &nbsp;
+                    </span>
+                    <div className="doc-client-order-btn-row">
+                      <label
+                        className={`btn btn-secondary doc-client-order-file-btn${
+                          !effectiveDocId || clientOrderBusy ? ' doc-client-order-file-btn--disabled' : ''
+                        }`}
+                      >
+                        {t('documents.clientOrderChooseFile')}
+                        <input
+                          ref={clientOrderFileInputRef}
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*"
+                          className="sr-only"
+                          disabled={!effectiveDocId || clientOrderBusy}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            setPendingClientOrderFile(file);
+                            if (file) setClientOrderFileName(file.name);
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-primary doc-client-order-save-btn"
+                        disabled={!effectiveDocId || clientOrderBusy}
+                        onClick={() => void saveClientOrder()}
+                      >
+                        {clientOrderBusy ? '…' : t('documents.clientOrderSave')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {displayClientOrderFileName && (
+                  <div className="doc-client-order-file-row">
+                    <button
+                      type="button"
+                      className="doc-client-order-file-link"
+                      disabled={clientOrderBusy}
+                      onClick={() => onViewClientOrderFile()}
+                      title={displayClientOrderFileName}
+                    >
+                      {displayClientOrderFileName}
+                    </button>
+                    {pendingClientOrderFile && (
+                      <span className="muted doc-client-order-pending-tag">
+                        {t('documents.clientOrderPendingSave')}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost-inline doc-client-order-delete-btn"
+                      disabled={!effectiveDocId || clientOrderBusy}
+                      onClick={() => onDeleteClientOrderFile()}
+                    >
+                      {t('documents.clientOrderRemove')}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section className="doc-panel doc-panel-notes">
               <label className="doc-field-block">
                 <span className="doc-panel-label">{t('documents.notes')}</span>
                 <textarea
                   rows={4}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="doc-textarea"
+                  className="doc-textarea doc-textarea--resizable"
                 />
               </label>
             </section>

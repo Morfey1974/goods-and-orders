@@ -222,9 +222,6 @@ public class DocumentService(
         if (doc.DocumentType is DocumentType.Receipt or DocumentType.Order)
             throw new InvalidOperationException("This document type cannot be edited.");
 
-        if (doc.OrderId is not null)
-            throw new InvalidOperationException("Documents linked to an order cannot be edited here.");
-
         var hasFinalizedReceipt = await db.BusinessDocuments.AnyAsync(
             d => d.ParentDocumentId == doc.Id &&
                  d.DocumentType == DocumentType.Receipt &&
@@ -289,9 +286,6 @@ public class DocumentService(
             .Include(d => d.Lines)
             .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
             ?? throw new InvalidOperationException("Document not found.");
-
-        if (doc.OrderId is not null)
-            throw new InvalidOperationException("Documents linked to an order cannot be deleted here.");
 
         var childIds = await db.BusinessDocuments
             .Where(d => d.ParentDocumentId == doc.Id && d.TenantId == tenantId)
@@ -362,9 +356,6 @@ public class DocumentService(
 
         if (quote.DocumentType != DocumentType.Quote)
             throw new InvalidOperationException("Charge invoice can only be issued from a price quote.");
-
-        if (quote.OrderId is not null)
-            throw new InvalidOperationException("Documents linked to an order cannot issue a charge invoice here.");
 
         if (quote.Lines.Count == 0)
             throw new InvalidOperationException("Quote has no lines.");

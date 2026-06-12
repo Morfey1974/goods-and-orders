@@ -22,6 +22,12 @@ public class BusinessDocument
     /// <summary>Fixed discount amount in document currency.</summary>
     public decimal? DiscountAmount { get; set; }
     public string? PaymentMethod { get; set; }
+    /// <summary>הזמנה from customer attached to הצעת מחיר (received date).</summary>
+    public DateTime? ClientOrderReceivedAt { get; set; }
+    /// <summary>Customer PO / הזמנה number on the attached file.</summary>
+    public string? ClientOrderReference { get; set; }
+    public string? ClientOrderFilePath { get; set; }
+    public string? ClientOrderFileName { get; set; }
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

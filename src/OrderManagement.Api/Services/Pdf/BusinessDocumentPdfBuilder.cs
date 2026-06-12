@@ -63,7 +63,11 @@ public static class BusinessDocumentPdfBuilder
             {
                 string? sku = null;
                 if (line.ProductId is { } pid && productsById.TryGetValue(pid, out var product))
-                    sku = product.LegacySku ?? product.ArticleCode;
+                {
+                    sku = product.ArticleCode;
+                    if (string.IsNullOrWhiteSpace(sku))
+                        sku = product.LegacySku;
+                }
 
                 pdfLines.Add(new BusinessDocumentPdfLine(
                     row++,
@@ -156,7 +160,7 @@ public static class BusinessDocumentPdfBuilder
             return null;
 
         var quoteNum = StripDocumentPrefix(sourceQuote.DocumentNumber);
-        var parts = new List<string> { $"חשבון חיוב זה הוצא על בסיס הצעת מחיר מס׳ {quoteNum}" };
+        var parts = new List<string> { $"יצא מתוך הצעת מחיר מס׳ {quoteNum}" };
         var project = FormatProjectLine(sourceQuote.Description);
         if (!string.IsNullOrWhiteSpace(project))
             parts.Add(project);
@@ -187,10 +191,30 @@ public static class BusinessDocumentPdfBuilder
     private static string? FormatProjectLine(string? description)
     {
         if (string.IsNullOrWhiteSpace(description)) return null;
-        var text = description.Trim();
-        if (text.Contains("לפרויקט", StringComparison.OrdinalIgnoreCase))
-            return text;
-        return $"לפרויקט {text}";
+        var first = description
+            .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(first)) return null;
+        return NormalizeProjectBannerLine(first.Trim());
+    }
+
+    /// <summary>לפרויקט prefix before Latin project name (fixes reversed bidi like "MAPI_PHARMA לפרויקט").</summary>
+    private static string NormalizeProjectBannerLine(string line)
+    {
+        const string prefix = "לפרויקט";
+        if (line.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            var rest = line[prefix.Length..].TrimStart();
+            return string.IsNullOrEmpty(rest) ? prefix : $"{prefix} {rest}";
+        }
+
+        if (line.EndsWith(prefix, StringComparison.Ordinal))
+        {
+            var name = line[..^prefix.Length].Trim().TrimEnd('-', '–', ':', ' ');
+            return string.IsNullOrEmpty(name) ? prefix : $"{prefix} {name}";
+        }
+
+        return line;
     }
 
     private static string? FormatCustomerId(Customer customer)

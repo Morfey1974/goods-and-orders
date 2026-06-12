@@ -6,7 +6,6 @@ import i18n from '../i18n';
 
 const navItems = [
   { to: '/', key: 'dashboard' },
-  { to: '/orders', key: 'orders' },
   { to: '/customers', key: 'customers' },
   { to: '/suppliers', key: 'suppliers' },
   { to: '/products', key: 'products' },

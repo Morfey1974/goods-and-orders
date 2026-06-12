@@ -124,11 +124,6 @@
 
 .customers-table tbody tr {
   cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.customers-table tbody tr:hover {
-  background: color-mix(in srgb, var(--palette-turquoise-light) 25%, transparent);
 }
 
 .customers-row--inactive {

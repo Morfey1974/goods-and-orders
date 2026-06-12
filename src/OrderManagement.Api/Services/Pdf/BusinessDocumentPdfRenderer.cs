@@ -213,7 +213,7 @@ public static class BusinessDocumentPdfRenderer
             .Border(0.5f).BorderColor(TableBorderColor)
             .PaddingVertical(7).PaddingHorizontal(8)
             .AlignRight()
-            .Text(title).Style(Bold(10).FontColor(Colors.White));
+            .Element(c => PdfMixedScriptText.RenderDocumentTableBanner(c, title, 10));
 
     private static void ComposeProductLinesTable(IContainer container, BusinessDocumentPdfModel model)
     {
@@ -241,11 +241,10 @@ public static class BusinessDocumentPdfRenderer
             foreach (var line in model.Lines)
             {
                 var zebra = rowIndex % 2 == 1;
-                var detail = FormatLineDetail(line);
                 DataMoneyCell(table.Cell(), FormatMoney(line.LineTotal), zebra);
                 DataMoneyCell(table.Cell(), FormatMoney(line.UnitPrice), zebra);
                 DataCell(table.Cell(), FormatQuantity(line.Quantity), zebra, alignCenter: true);
-                DataCell(table.Cell(), detail, zebra, mixedScript: true);
+                RenderProductLineDetailCell(table.Cell(), line, zebra);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true);
                 rowIndex++;
             }
@@ -317,11 +316,30 @@ public static class BusinessDocumentPdfRenderer
         });
     }
 
-    private static string FormatLineDetail(BusinessDocumentPdfLine line)
+    private static void RenderProductLineDetailCell(IContainer cell, BusinessDocumentPdfLine line, bool zebra)
     {
-        if (!string.IsNullOrWhiteSpace(line.Sku))
-            return $"{line.Sku} / {line.Description}";
-        return line.Description;
+        var bg = zebra ? TableRowAltBg : TableRowBg;
+        var c = TableCellBorder(cell).Background(bg).PaddingVertical(6).PaddingHorizontal(5).AlignRight();
+
+        if (string.IsNullOrWhiteSpace(line.Sku))
+        {
+            PdfMixedScriptText.Render(c, line.Description, 9);
+            return;
+        }
+
+        // RTL table: first span is rightmost — article, then " / ", then name.
+        c.ContentFromRightToLeft().Text(t =>
+        {
+            t.Span(line.Sku)
+                .FontFamily(PdfFontRegistry.SansRegular)
+                .FontSize(9)
+                .DirectionFromLeftToRight();
+            t.Span(" / ")
+                .FontFamily(PdfFontRegistry.SansRegular)
+                .FontSize(9)
+                .DirectionFromLeftToRight();
+            PdfMixedScriptText.ComposeRuns(t, line.Description, 9, bold: false);
+        });
     }
 
     private static IContainer TableCellBorder(IContainer cell) =>

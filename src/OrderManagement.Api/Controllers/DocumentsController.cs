@@ -17,7 +17,8 @@ public class DocumentsController(
     AppDbContext db,
     DocumentService documents,
     DocumentPdfService documentPdf,
-    DocumentImportService documentImport) : ControllerBase
+    DocumentImportService documentImport,
+    TenantFileService files) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<DocumentListResponseDto>> List(
@@ -31,8 +32,6 @@ public class DocumentsController(
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
-
-        await documents.SyncChargeInvoicesFromOrdersAsync(tenantId.Value, ct);
 
         var query = db.BusinessDocuments
             .Where(d => d.TenantId == tenantId)
@@ -407,6 +406,109 @@ public class DocumentsController(
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpPost("{id:guid}/client-order")]
+    [RequestSizeLimit(TenantFileService.PurchaseDocumentMaxBytes)]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<DocumentDto>> UploadClientOrder(
+        Guid id,
+        [FromForm] IFormFile? file,
+        [FromForm] DateTime? receivedAt,
+        [FromForm] string? clientReference,
+        CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var doc = await db.BusinessDocuments
+            .Include(d => d.Customer)
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == id && d.TenantId == tenantId, ct);
+        if (doc is null) return NotFound();
+        if (doc.DocumentType != DocumentType.Quote)
+            return BadRequest(new { message = "Client order can only be attached to a price quote." });
+
+        try
+        {
+            if (file is { Length: > 0 })
+            {
+                if (!string.IsNullOrEmpty(doc.ClientOrderFilePath))
+                    files.DeleteFile(doc.ClientOrderFilePath);
+
+                var (path, _, originalName) = await files.SaveQuoteClientOrderAsync(
+                    tenantId.Value, id, file, ct);
+                doc.ClientOrderFilePath = path;
+                doc.ClientOrderFileName = originalName;
+            }
+
+            if (receivedAt.HasValue)
+                doc.ClientOrderReceivedAt = receivedAt.Value.ToUniversalTime();
+            if (clientReference is not null)
+                doc.ClientOrderReference = string.IsNullOrWhiteSpace(clientReference)
+                    ? null
+                    : clientReference.Trim();
+
+            doc.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Ok(DocumentMappers.ToDto(doc));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}/client-order")]
+    public async Task<ActionResult<DocumentDto>> DeleteClientOrder(Guid id, CancellationToken ct)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var doc = await db.BusinessDocuments
+            .Include(d => d.Customer)
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == id && d.TenantId == tenantId, ct);
+        if (doc is null) return NotFound();
+        if (doc.DocumentType != DocumentType.Quote)
+            return BadRequest(new { message = "Client order can only be attached to a price quote." });
+
+        if (!string.IsNullOrEmpty(doc.ClientOrderFilePath))
+            files.DeleteFile(doc.ClientOrderFilePath);
+
+        doc.ClientOrderFilePath = null;
+        doc.ClientOrderFileName = null;
+        doc.ClientOrderReceivedAt = null;
+        doc.ClientOrderReference = null;
+        doc.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return Ok(DocumentMappers.ToDto(doc));
+    }
+
+    [HttpGet("{id:guid}/client-order/file")]
+    public async Task<IActionResult> DownloadClientOrderFile(
+        Guid id,
+        [FromQuery] bool download = false,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var doc = await db.BusinessDocuments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && d.TenantId == tenantId, ct);
+        if (doc is null || string.IsNullOrEmpty(doc.ClientOrderFilePath))
+            return NotFound();
+
+        var absolute = files.GetAbsolutePath(doc.ClientOrderFilePath);
+        if (!System.IO.File.Exists(absolute))
+            return NotFound();
+
+        var contentType = doc.ClientOrderFilePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+            ? "application/pdf"
+            : "application/octet-stream";
+        var fileName = doc.ClientOrderFileName ?? "client-order";
+        return PhysicalFile(absolute, contentType, download ? fileName : null, enableRangeProcessing: true);
     }
 
     [HttpPost("{id:guid}/issue-charge-invoice")]

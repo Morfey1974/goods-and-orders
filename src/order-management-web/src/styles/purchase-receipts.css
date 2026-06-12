@@ -115,10 +115,6 @@
   cursor: pointer;
 }
 
-.purchase-receipts-table tbody tr:hover {
-  background: color-mix(in srgb, var(--primary) 6%, transparent);
-}
-
 .purchase-receipts-empty {
   padding: 1.5rem;
   text-align: center;

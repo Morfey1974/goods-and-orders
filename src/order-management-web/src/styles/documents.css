@@ -343,6 +343,22 @@
 .doc-type-receipt { color: #047857; }
 .doc-type-order { color: #475569; }
 
+.doc-client-order-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.35rem;
+  padding: 0.15rem 0.55rem;
+  background: #d9f0f8;
+  color: #1a6578;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(126 196 219 / 45%);
+}
+
 .doc-actions {
   display: flex;
   gap: 0.35rem;
@@ -654,6 +670,12 @@
   min-width: 0;
   box-sizing: border-box;
   resize: none;
+}
+
+.doc-textarea--resizable {
+  resize: vertical;
+  min-height: 5.5rem;
+  max-height: 24rem;
 }
 
 .doc-customer-selected {
@@ -1100,6 +1122,42 @@
   background: var(--success-bg);
 }
 
+.doc-picker-row-already-added {
+  background: color-mix(in srgb, var(--success-bg) 55%, transparent);
+}
+
+.doc-picker-row-already-added.doc-picker-row-selected {
+  background: var(--success-bg);
+}
+
+.doc-picker-added-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-inline-end: 0.35rem;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: middle;
+  border: 1px solid var(--palette-green);
+}
+
+.doc-picker-select-btn.is-already-added {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--palette-green);
+}
+
+.doc-picker-select-btn.is-already-added:hover {
+  background: #dff5df;
+  color: var(--success);
+  border-color: var(--palette-turquoise-dark);
+}
+
 .doc-picker-name {
   color: var(--primary);
   font-weight: 500;
@@ -1502,6 +1560,149 @@
 
 .receipt-notes-block {
   min-width: 0;
+}
+
+.doc-panel-client-order {
+  --doc-co-control-h: 2.125rem;
+  font-size: 0.9rem;
+}
+
+.doc-panel-client-order .doc-panel-heading {
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+}
+
+.doc-panel-client-order .field-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+}
+
+.doc-panel-client-order .doc-panel-label {
+  font-size: 0.85rem;
+  line-height: 1.25;
+  margin-bottom: 0.2rem;
+}
+
+.doc-client-order-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.75rem;
+}
+
+.doc-client-order-field {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.doc-client-order-field input {
+  height: var(--doc-co-control-h);
+  min-height: var(--doc-co-control-h);
+  padding: 0 0.6rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+.doc-client-order-field--date input {
+  width: 10.5rem;
+  max-width: 100%;
+}
+
+.doc-client-order-field--ref input {
+  width: 9.5rem;
+  max-width: 100%;
+}
+
+.doc-client-order-btn-group {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.doc-client-order-label-spacer {
+  visibility: hidden;
+  user-select: none;
+}
+
+.doc-client-order-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.doc-client-order-file-btn,
+.doc-client-order-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--doc-co-control-h);
+  margin: 0;
+  padding: 0 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.doc-client-order-file-btn {
+  cursor: pointer;
+}
+
+.doc-client-order-file-btn--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.doc-client-order-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.doc-client-order-file-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: var(--doc-co-control-h);
+  text-decoration: underline;
+  cursor: pointer;
+  max-width: min(100%, 28rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-client-order-file-link:hover:not(:disabled) {
+  color: var(--primary-hover);
+}
+
+.doc-client-order-file-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.doc-client-order-pending-tag {
+  font-size: 0.9rem;
+}
+
+.doc-client-order-delete-btn {
+  margin-inline-start: auto;
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: var(--doc-co-control-h);
 }
 
 @media (max-width: 900px) {

@@ -1061,6 +1061,10 @@ export function ProductEditModal({
         productFilter={bomProductFilter}
         initialFilterKind="goods"
         initialFilterType="ComponentPart"
+        existingPicks={form.bomLines.map((b) => ({
+          productId: b.componentProductId,
+          quantity: b.quantity,
+        }))}
         resizeConfig={BOM_COMPONENT_PICKER_RESIZE}
         overlayZIndex={(zIndex ?? 2000) + 500}
         nestedProductModalZIndex={(zIndex ?? 2000) + 700}

@@ -51,7 +51,6 @@ export function DocumentIssueMenu({
 
   const canIssueCharge =
     doc.documentType === 'Quote' &&
-    !doc.orderId &&
     !context.chargeForQuote;
 
   const existingReceipt = context.receiptForCharge;

@@ -64,11 +64,15 @@ function isWizardDocument(doc: Document) {
 }
 
 function canEditReceipt(doc: Document) {
-  return doc.documentType === 'Receipt' && !doc.orderId;
+  return doc.documentType === 'Receipt';
 }
 
 function canManageDocument(doc: Document) {
-  return (isWizardDocument(doc) || canEditReceipt(doc)) && !doc.orderId;
+  return isWizardDocument(doc) || canEditReceipt(doc);
+}
+
+function hasClientOrder(doc: Document) {
+  return Boolean(doc.clientOrderReceivedAt || doc.clientOrderFileName);
 }
 
 function supportsDocumentPdf(doc: Document) {
@@ -495,6 +499,8 @@ export function DocumentsPage() {
         return t('documents.colType');
       case 'customer':
         return t('documents.colCustomer');
+      case 'clientOrder':
+        return t('documents.colClientOrder');
       case 'description':
         return t('documents.colDescription');
       case 'payment':
@@ -542,6 +548,19 @@ export function DocumentsPage() {
         </span>
       </td>
       <td className={`${cellClass('customer')} bidi-auto`}>{doc.customerName}</td>
+      <td className={cellClass('clientOrder')}>
+        {doc.documentType === 'Quote' ? (
+          hasClientOrder(doc) ? (
+            <span className="doc-client-order-flag" title={doc.clientOrderReference ?? undefined}>
+              {t('documents.colClientOrder')}
+            </span>
+          ) : (
+            '—'
+          )
+        ) : (
+          '—'
+        )}
+      </td>
       <td className={cellClass('description')}>{doc.description ?? '—'}</td>
       <td className={cellClass('payment')}>{doc.paymentMethod ?? '—'}</td>
       <td className={cellClass('date')}>{formatDate(doc.issueDate)}</td>

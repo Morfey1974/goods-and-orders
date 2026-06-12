@@ -22,13 +22,10 @@ export function documentDisplayNumber(documentNumber: string) {
     : documentNumber;
 }
 
-/** First paragraph of document description = project name (same as PDF banner). */
+/** First paragraph of document description (same as PDF table banner). */
 export function projectLineFromDescription(description?: string | null): string {
   if (!description?.trim()) return '';
-  const text = description.split('\n\n')[0]?.trim().replace(/\s+/g, ' ') ?? '';
-  if (!text) return '';
-  if (/לפרויקט/i.test(text)) return text;
-  return `לפרויקט ${text}`;
+  return description.split('\n\n')[0]?.trim().replace(/\s+/g, ' ') ?? '';
 }
 
 /** Subject line matching PDF document title band + project. */
