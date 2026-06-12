@@ -22,13 +22,29 @@ type Props = {
   doc: Document;
   context: DocumentIssueContext;
   busy?: boolean;
+  menuOpen?: boolean;
+  onMenuOpenChange?: (open: boolean) => void;
   onIssueCharge: (quote: Document) => void;
   onIssueReceipt: (doc: Document) => void;
 };
 
-export function DocumentIssueMenu({ doc, context, busy, onIssueCharge, onIssueReceipt }: Props) {
+export function DocumentIssueMenu({
+  doc,
+  context,
+  busy,
+  menuOpen,
+  onMenuOpenChange,
+  onIssueCharge,
+  onIssueReceipt,
+}: Props) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = onMenuOpenChange !== undefined;
+  const open = isControlled ? Boolean(menuOpen) : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) onMenuOpenChange!(next);
+    else setInternalOpen(next);
+  };
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({ visibility: 'hidden' });
@@ -127,7 +143,7 @@ export function DocumentIssueMenu({ doc, context, busy, onIssueCharge, onIssueRe
         disabled={busy}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpen(!open);
         }}
       >
         +

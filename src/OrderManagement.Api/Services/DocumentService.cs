@@ -96,7 +96,7 @@ public class DocumentService(
             PaymentMethod = paymentMethod?.Trim(),
             Status = type switch
             {
-                DocumentType.Quote => DocumentStatus.Sent,
+                DocumentType.Quote => DocumentStatus.Open,
                 DocumentType.ChargeInvoice => DocumentStatus.Open,
                 DocumentType.Receipt => receiptAsDraft ? DocumentStatus.Draft : DocumentStatus.Closed,
                 _ => DocumentStatus.Draft

@@ -9,10 +9,8 @@ import {
 import { ReceiptEditWizard } from '../components/documents/ReceiptEditWizard';
 import { CatalogRowMenu } from '../components/products/CatalogRowMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { AppModal } from '../components/ui/AppModal';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
-import { bidiAutoInputProps } from '../components/BidiText';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { DocumentEmailModal } from '../components/documents/DocumentEmailModal';
 import {
@@ -150,7 +148,9 @@ export function DocumentsPage() {
   const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
   const [duplicateFromDocumentId, setDuplicateFromDocumentId] = useState<string | null>(null);
   const [receiptEditId, setReceiptEditId] = useState<string | null>(null);
+  const [receiptComposeOpen, setReceiptComposeOpen] = useState(false);
   const [rowMenuDoc, setRowMenuDoc] = useState<Document | null>(null);
+  const [issueMenuDocId, setIssueMenuDocId] = useState<string | null>(null);
   const rowMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -160,17 +160,6 @@ export function DocumentsPage() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createType, setCreateType] = useState<'Quote' | 'ChargeInvoice' | 'Receipt'>('Quote');
-  const [form, setForm] = useState({
-    customerId: '',
-    productId: '',
-    quantity: 1,
-    description: '',
-    dueDate: '',
-    parentDocumentId: '',
-    paymentMethod: '',
-  });
   const [pdfPreviewDoc, setPdfPreviewDoc] = useState<Document | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
@@ -223,6 +212,7 @@ export function DocumentsPage() {
         !el.closest('.action-dropdown')
       ) {
         setRowMenuDoc(null);
+        setIssueMenuDocId(null);
       }
     };
     document.addEventListener('click', onDocClick);
@@ -295,68 +285,13 @@ export function DocumentsPage() {
       setWizardType(type);
       return;
     }
-    setCreateType(type);
-    setForm({
-      customerId: '',
-      productId: '',
-      quantity: 1,
-      description: '',
-      dueDate: '',
-      parentDocumentId: openCharges[0]?.id ?? '',
-      paymentMethod: '',
-    });
-    setCreateOpen(true);
-  };
-
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
+    setReceiptComposeOpen(true);
+    setReceiptEditId(null);
     setError('');
-    try {
-      if (createType === 'Receipt') {
-        if (!form.parentDocumentId) {
-          setError(t('documents.receiptNeedsParent'));
-          return;
-        }
-        const charge = openCharges.find((c) => c.id === form.parentDocumentId);
-        const receipt = await documentsApi.create(token, {
-          documentType: 'Receipt',
-          customerId: charge?.customerId ?? customers[0]?.id ?? '',
-          parentDocumentId: form.parentDocumentId,
-          paymentMethod: form.paymentMethod || undefined,
-        });
-        setCreateOpen(false);
-        setReceiptEditId(receipt.id);
-        setMessage('');
-        load();
-        return;
-      } else {
-        if (!form.customerId || !form.productId) return;
-        const product = products.find((p) => p.id === form.productId);
-        await documentsApi.create(token, {
-          documentType: createType,
-          customerId: form.customerId,
-          description: form.description || product?.name,
-          dueDate: form.dueDate || undefined,
-          lines: [
-            {
-              productId: form.productId,
-              description: form.description || product?.name || '',
-              quantity: form.quantity,
-              unitPrice: 0,
-            },
-          ],
-        });
-        setMessage(t('documents.created'));
-      }
-      setCreateOpen(false);
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
-    }
   };
 
   const toggleRowMenu = (doc: Document, btn: HTMLButtonElement) => {
+    setIssueMenuDocId(null);
     if (rowMenuDoc?.id === doc.id) {
       setRowMenuDoc(null);
       return;
@@ -379,6 +314,7 @@ export function DocumentsPage() {
 
   const closeReceiptEditor = () => {
     setReceiptEditId(null);
+    setReceiptComposeOpen(false);
   };
 
   const onEditDocument = (doc: Document) => {
@@ -580,7 +516,7 @@ export function DocumentsPage() {
     `${DOCUMENTS_COLUMN_CLASS[key]}${DOCUMENTS_TEXT_START_COLUMNS.has(key) ? ' dt-col-text-start' : ''}`;
 
   const renderDocumentRow = (doc: Document) => (
-    <tr key={doc.id}>
+    <tr key={doc.id} className="dt-panel-doc-row">
       <td className={cellClass('number')}>
         {supportsDocumentPdf(doc) ? (
           <button
@@ -611,30 +547,41 @@ export function DocumentsPage() {
       <td className={cellClass('date')}>{formatDate(doc.issueDate)}</td>
       <td className={cellClass('due')}>{doc.dueDate ? formatDate(doc.dueDate) : '—'}</td>
       <td className={cellClass('amount')}>{formatMoney(doc.totalAmount)}</td>
-      <td className={`${cellClass('actions')} doc-actions table-actions-cell`}>
-        <DocumentIssueMenu
-          doc={doc}
-          context={issueContextMap.get(doc.id) ?? {}}
-          busy={issueBusy}
-          onIssueCharge={(q) => void onIssueCharge(q)}
-          onIssueReceipt={(d) => void onIssueReceipt(d)}
-        />
-        {documentHasActions(doc) && (
-          <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
-            <button
-              type="button"
-              className="row-menu-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleRowMenu(doc, e.currentTarget);
-              }}
-              aria-label={t('products.actions')}
-              aria-expanded={rowMenuDoc?.id === doc.id}
-            >
-              ⋮
-            </button>
-          </div>
-        )}
+      <td className={cellClass('actions')}>
+        <div className="doc-actions table-actions-cell">
+          <DocumentIssueMenu
+            doc={doc}
+            context={issueContextMap.get(doc.id) ?? {}}
+            busy={issueBusy}
+            menuOpen={issueMenuDocId === doc.id}
+            onMenuOpenChange={(open) => {
+              if (open) {
+                setRowMenuDoc(null);
+                setIssueMenuDocId(doc.id);
+              } else if (issueMenuDocId === doc.id) {
+                setIssueMenuDocId(null);
+              }
+            }}
+            onIssueCharge={(q) => void onIssueCharge(q)}
+            onIssueReceipt={(d) => void onIssueReceipt(d)}
+          />
+          {documentHasActions(doc) && (
+            <div className={`row-menu-wrap${rowMenuDoc?.id === doc.id ? ' is-open' : ''}`}>
+              <button
+                type="button"
+                className="row-menu-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleRowMenu(doc, e.currentTarget);
+                }}
+                aria-label={t('products.actions')}
+                aria-expanded={rowMenuDoc?.id === doc.id}
+              >
+                ⋮
+              </button>
+            </div>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -642,7 +589,9 @@ export function DocumentsPage() {
   return (
     <div className="page documents-page">
       {message && <div className="success-banner">{message}</div>}
-      {error && !createOpen && !wizardType && <div className="error-banner">{error}</div>}
+      {error && !wizardType && !receiptEditId && !receiptComposeOpen && (
+        <div className="error-banner">{error}</div>
+      )}
 
       <DataTablePanel
         resize={DOCUMENTS_PANEL_RESIZE}
@@ -886,12 +835,21 @@ export function DocumentsPage() {
         onCancel={() => !deleteBusy && setDeleteTarget(null)}
       />
 
-      {receiptEditId && token && (
+      {(receiptEditId || receiptComposeOpen) && token && (
         <ReceiptEditWizard
           open
           receiptId={receiptEditId}
+          composeMode={receiptComposeOpen && !receiptEditId}
+          openCharges={openCharges.map((c) => ({
+            id: c.id,
+            documentNumber: c.documentNumber,
+            customerId: c.customerId,
+            customerName: c.customerName,
+            totalAmount: c.totalAmount,
+          }))}
           token={token}
           onClose={closeReceiptEditor}
+          onDraftSaved={load}
           onSuccess={(msg) => {
             setMessage(msg);
             closeReceiptEditor();
@@ -948,109 +906,13 @@ export function DocumentsPage() {
             closeWizard();
             load();
           }}
+          onDraftSaved={load}
           onCustomersUpdated={reloadCustomers}
           onSendEmail={(doc) => setEmailDoc(doc)}
           onPreviewPdf={(doc) => void openPdfPreview(doc)}
         />
       )}
 
-      <AppModal open={createOpen} onClose={() => setCreateOpen(false)} size="md">
-            <h2>{t(`documents.types.${createType}`)}</h2>
-            <form className="form-grid" onSubmit={onCreate}>
-              {error && <div className="error-banner">{error}</div>}
-              {createType === 'Receipt' ? (
-                <label>
-                  {t('documents.parentInvoice')}
-                  <select
-                    value={form.parentDocumentId}
-                    onChange={(e) => setForm({ ...form, parentDocumentId: e.target.value })}
-                    required
-                  >
-                    <option value="">—</option>
-                    {openCharges.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.documentNumber} — {d.customerName} ({formatMoney(d.totalAmount)})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <>
-                  <label>
-                    {t('orders.customer')}
-                    <select
-                      value={form.customerId}
-                      onChange={(e) => setForm({ ...form, customerId: e.target.value })}
-                      required
-                    >
-                      <option value="">—</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t('products.name')}
-                    <select
-                      value={form.productId}
-                      onChange={(e) => setForm({ ...form, productId: e.target.value })}
-                      required
-                    >
-                      <option value="">—</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>{p.articleCode} — {p.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t('warehouse.qty')}
-                    <input
-                      type="number"
-                      min={0.0001}
-                      step={1}
-                      value={form.quantity}
-                      onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
-                      required
-                    />
-                  </label>
-                  {createType === 'Quote' && (
-                    <label>
-                      {t('documents.colDue')}
-                      <input
-                        type="date"
-                        value={form.dueDate}
-                        onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                      />
-                    </label>
-                  )}
-                  <label>
-                    {t('documents.colDescription')}
-                    <input
-                      {...bidiAutoInputProps}
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    />
-                  </label>
-                </>
-              )}
-              {(createType === 'Receipt' || createType === 'ChargeInvoice') && (
-                <label>
-                  {t('documents.colPayment')}
-                  <input
-                    value={form.paymentMethod}
-                    onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
-                    placeholder={t('documents.paymentPlaceholder')}
-                  />
-                </label>
-              )}
-              <div className="modal-actions">
-                <button type="button" className="btn btn-ghost-inline" onClick={() => setCreateOpen(false)}>
-                  {t('settings.cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary">{t('submit')}</button>
-              </div>
-            </form>
-      </AppModal>
     </div>
   );
 }

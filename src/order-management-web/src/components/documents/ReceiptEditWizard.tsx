@@ -51,12 +51,24 @@ function mapApiLine(line: ReceiptPaymentLine): SavedPaymentLine {
   };
 }
 
+type ChargeOption = {
+  id: string;
+  documentNumber: string;
+  customerId: string;
+  customerName: string;
+  totalAmount: number;
+};
+
 type Props = {
   open: boolean;
-  receiptId: string;
+  receiptId: string | null;
   token: string;
+  /** New receipt: pick parent charge invoice in the form instead of a pre-modal. */
+  composeMode?: boolean;
+  openCharges?: ChargeOption[];
   onClose: () => void;
   onSuccess: (message: string) => void;
+  onDraftSaved?: () => void;
   onPreviewPdf?: (doc: Document) => void;
   onSendEmail?: (doc: Document) => void;
 };
@@ -65,8 +77,11 @@ export function ReceiptEditWizard({
   open,
   receiptId,
   token,
+  composeMode = false,
+  openCharges = [],
   onClose,
   onSuccess,
+  onDraftSaved,
   onPreviewPdf,
   onSendEmail,
 }: Props) {
@@ -92,11 +107,20 @@ export function ReceiptEditWizard({
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [version, setVersion] = useState(1);
   const [tenantProfile, setTenantProfile] = useState<TenantProfile | null>(null);
+  const [parentDocumentId, setParentDocumentId] = useState('');
   const skipTabDraftResetRef = useRef(false);
 
-  const isDraft = doc?.status === 'Draft';
-  const chargeTotal = doc?.parentChargeAmount ?? 0;
-  const chargeNumber = doc?.parentChargeNumber?.replace(/^[A-Z]+-/, '') ?? '';
+  const selectedCharge = useMemo(
+    () => openCharges.find((c) => c.id === parentDocumentId) ?? null,
+    [openCharges, parentDocumentId]
+  );
+  const isDraft = composeMode && !doc ? true : doc?.status === 'Draft';
+  const chargeTotal = doc?.parentChargeAmount ?? selectedCharge?.totalAmount ?? 0;
+  const chargeNumber =
+    doc?.parentChargeNumber?.replace(/^[A-Z]+-/, '') ??
+    selectedCharge?.documentNumber.replace(/^[A-Z]+-/, '') ??
+    '';
+  const customerName = doc?.customerName ?? selectedCharge?.customerName ?? '';
   const totalPaid = useMemo(() => savedLines.reduce((s, l) => s + l.amount, 0), [savedLines]);
   const openBalance = Math.max(0, roundMoney(chargeTotal - totalPaid));
   const withholdingPercent = tenantProfile?.withholdingTaxPercent ?? null;
@@ -137,7 +161,30 @@ export function ReceiptEditWizard({
   }, [open, token]);
 
   useEffect(() => {
-    if (!open || !token || !receiptId) return;
+    if (!open || !token) return;
+    if (composeMode && !receiptId) {
+      setLoading(false);
+      setError('');
+      setInfoMessage('');
+      setDoc(null);
+      setParentDocumentId(openCharges[0]?.id ?? '');
+      setIssueDate(todayIso());
+      setDescription('');
+      setNotes('');
+      setSavedLines([]);
+      setVersion(1);
+      setEditingLineId(null);
+      setDraft(
+        buildPaymentDraft('BankTransfer', {
+          today: todayIso(),
+          chargeTotal: openCharges[0]?.totalAmount ?? 0,
+          openBalance: openCharges[0]?.totalAmount ?? 0,
+        })
+      );
+      setActiveTab('BankTransfer');
+      return;
+    }
+    if (!receiptId) return;
     setLoading(true);
     setError('');
     documentsApi
@@ -175,7 +222,21 @@ export function ReceiptEditWizard({
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
       .finally(() => setLoading(false));
-  }, [open, token, receiptId, t]);
+  }, [open, token, receiptId, composeMode, openCharges, t]);
+
+  useEffect(() => {
+    if (!composeMode || doc || !selectedCharge) return;
+    const balance = Math.max(0, roundMoney(selectedCharge.totalAmount));
+    setDraft(
+      buildPaymentDraft(activeTab, {
+        ...draftContext,
+        chargeTotal: selectedCharge.totalAmount,
+        openBalance: balance,
+        today: issueDate || todayIso(),
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync totals when parent charge changes
+  }, [parentDocumentId, selectedCharge?.id]);
 
   useEffect(() => {
     if (!open || !isDraft || loading) return;
@@ -283,19 +344,59 @@ export function ReceiptEditWizard({
     return reconcileBankTransferAmounts(savedLines, chargeTotal);
   };
 
+  const ensureReceiptCreated = async (): Promise<Document | null> => {
+    if (doc) return doc;
+    if (!parentDocumentId) {
+      setError(t('documents.receiptNeedsParent'));
+      return null;
+    }
+    const charge = openCharges.find((c) => c.id === parentDocumentId);
+    if (!charge) {
+      setError(t('documents.receiptNeedsParent'));
+      return null;
+    }
+    const created = await documentsApi.create(token, {
+      documentType: 'Receipt',
+      customerId: charge.customerId,
+      parentDocumentId,
+      issueDate: issueDate ? new Date(issueDate).toISOString() : undefined,
+      description: description.trim() || undefined,
+    });
+    setDoc(created);
+    setVersion(created.version);
+    return created;
+  };
+
   const persistReceipt = async (finalize: boolean): Promise<boolean> => {
-    if (!doc || !isDraft) return false;
-    const linesToSave = linesForPersist();
-    if (!linesToSave) return false;
+    if (!isDraft) return false;
 
     setBusy(true);
     setError('');
     setInfoMessage('');
     try {
+      let workingDoc = doc;
+      if (!workingDoc) {
+        workingDoc = await ensureReceiptCreated();
+        if (!workingDoc) return false;
+      }
+
+      if (savedLines.length === 0) {
+        if (!finalize) {
+          setInfoMessage(t('documents.draftSaved'));
+          onDraftSaved?.();
+          return true;
+        }
+        setError(t('documents.receiptNoLines'));
+        return false;
+      }
+
+      const linesToSave = linesForPersist();
+      if (!linesToSave) return false;
+
       const fullDescription = notes.trim()
         ? `${description.trim()}\n\n${notes.trim()}`.trim()
         : description.trim();
-      const updated = await documentsApi.saveReceipt(token, doc.id, {
+      const updated = await documentsApi.saveReceipt(token, workingDoc.id, {
         description: fullDescription || undefined,
         issueDate: new Date(issueDate).toISOString(),
         version,
@@ -318,6 +419,7 @@ export function ReceiptEditWizard({
       setVersion(updated.version);
       if (!finalize) {
         setInfoMessage(t('documents.draftSaved'));
+        onDraftSaved?.();
       }
       return true;
     } catch (err) {
@@ -927,9 +1029,9 @@ export function ReceiptEditWizard({
             <h1 id="receipt-wizard-title">
               {t('documents.types.Receipt')} {titleNum}
             </h1>
-            {doc && (
+            {(customerName || chargeNumber) && (
               <p className="muted receipt-wizard-sub">
-                {doc.customerName}
+                {customerName}
                 {chargeNumber ? ` · ${t('documents.receiptFromCharge', { number: chargeNumber })}` : ''}
               </p>
             )}
@@ -951,6 +1053,27 @@ export function ReceiptEditWizard({
 
             <section className="doc-panel">
               <div className="doc-panel-grid">
+                {composeMode && !doc && (
+                  <label style={{ gridColumn: '1 / -1' }}>
+                    <span className="doc-panel-label">{t('documents.parentInvoice')} *</span>
+                    <select
+                      value={parentDocumentId}
+                      required
+                      onChange={(e) => {
+                        setParentDocumentId(e.target.value);
+                        setError('');
+                      }}
+                    >
+                      <option value="">{t('documents.selectParentInvoice')}</option>
+                      {openCharges.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.documentNumber.replace(/^[A-Z]+-/, '')} — {c.customerName} (
+                          {formatMoney(c.totalAmount)})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label>
                   <span className="doc-panel-label">{t('documents.colDate')}</span>
                   <input

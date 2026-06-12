@@ -87,7 +87,7 @@ public partial class DocumentImportService(AppDbContext db, DocumentNumberServic
                 TotalAmount = row.Amount,
                 Status = docType switch
                 {
-                    DocumentType.Quote => DocumentStatus.Sent,
+                    DocumentType.Quote => DocumentStatus.Open,
                     DocumentType.ChargeInvoice => DocumentStatus.Open,
                     DocumentType.Receipt => DocumentStatus.Closed,
                     _ => DocumentStatus.Draft,

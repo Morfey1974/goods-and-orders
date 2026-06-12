@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
@@ -6,12 +6,13 @@ import { documentsApi, type Document } from '../../api/documents';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
 import { mergeRefs } from '../../lib/mergeRefs';
-import { BidiText, bidiAutoInput } from '../BidiText';
+import { bidiAutoInput } from '../BidiText';
 import { normalizeStockQuantity } from '../../lib/stockQuantity';
 import {
   DocumentProductPickerModal,
   type PickedProductLine,
 } from './DocumentProductPickerModal';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 export type WizardDocumentType = 'Quote' | 'ChargeInvoice';
 
@@ -37,6 +38,7 @@ type Props = {
   duplicateFromDocumentId?: string | null;
   onClose: () => void;
   onSuccess: (message: string) => void;
+  onDraftSaved?: () => void;
   onCustomersUpdated: () => void;
   onSendEmail?: (doc: Document) => void;
   onPreviewPdf?: (doc: Document) => void;
@@ -116,6 +118,7 @@ export function DocumentCreateWizard({
   duplicateFromDocumentId = null,
   onClose,
   onSuccess,
+  onDraftSaved,
   onCustomersUpdated,
   onSendEmail,
   onPreviewPdf,
@@ -123,9 +126,7 @@ export function DocumentCreateWizard({
   const { t } = useTranslation();
   const formWizardRef = useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [step, setStep] = useState<'customer' | 'form'>('customer');
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [customerId, setCustomerId] = useState('');
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerBusy, setNewCustomerBusy] = useState(false);
@@ -133,6 +134,7 @@ export function DocumentCreateWizard({
   const [infoMessage, setInfoMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [persistedDocId, setPersistedDocId] = useState<string | null>(null);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const [issueDate, setIssueDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState('');
@@ -156,7 +158,7 @@ export function DocumentCreateWizard({
     loaded: ReturnType<typeof loadDocumentIntoForm>,
     options?: { issueDateToday?: boolean }
   ) => {
-    setSelectedCustomer(loaded.customer);
+    setCustomerId(loaded.customer.id);
     setIssueDate(options?.issueDateToday ? todayIso() : loaded.issueDate || todayIso());
     setDueDate(loaded.dueDate);
     setDescription(loaded.description);
@@ -174,7 +176,6 @@ export function DocumentCreateWizard({
     setError('');
     if (editDocumentId && token) {
       setLoadingEdit(true);
-      setStep('form');
       documentsApi
         .get(token, editDocumentId)
         .then((doc) => {
@@ -187,7 +188,6 @@ export function DocumentCreateWizard({
     }
     if (duplicateFromDocumentId && token) {
       setLoadingEdit(true);
-      setStep('form');
       documentsApi
         .get(token, duplicateFromDocumentId)
         .then((doc) => applyLoadedDocument(loadDocumentIntoForm(doc, { forDuplicate: true }), { issueDateToday: true }))
@@ -195,9 +195,7 @@ export function DocumentCreateWizard({
         .finally(() => setLoadingEdit(false));
       return;
     }
-    setStep('customer');
-    setCustomerSearch('');
-    setSelectedCustomer(null);
+    setCustomerId('');
     setNewCustomerOpen(false);
     setNewCustomerName('');
     setIssueDate(todayIso());
@@ -215,7 +213,7 @@ export function DocumentCreateWizard({
     setInfoMessage('');
   }, [open, documentType, editDocumentId, duplicateFromDocumentId, token]);
 
-  const formVisible = open && step === 'form' && Boolean(selectedCustomer);
+  const formVisible = open;
   const { panelRef, persistSize, onResizeHandleMouseDown } = useResizablePanel(
     formVisible,
     DOCUMENT_WIZARD_RESIZE
@@ -226,11 +224,7 @@ export function DocumentCreateWizard({
     onClose();
   };
 
-  const filteredCustomers = useMemo(() => {
-    const q = customerSearch.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter((c) => c.name.toLowerCase().includes(q));
-  }, [customers, customerSearch]);
+  const requestClose = () => setCloseConfirmOpen(true);
 
   const lineTotals = useMemo(
     () => lines.map((l) => l.quantity * l.unitPrice),
@@ -248,14 +242,7 @@ export function DocumentCreateWizard({
 
   const totalDue = useMemo(() => Math.max(0, subtotal - discountTotal), [subtotal, discountTotal]);
 
-  const pickCustomer = (c: CustomerOption) => {
-    setSelectedCustomer(c);
-    setStep('form');
-    setError('');
-  };
-
-  const onCreateCustomer = async (e: FormEvent) => {
-    e.preventDefault();
+  const onCreateCustomer = async () => {
     if (!token || !newCustomerName.trim()) return;
     setNewCustomerBusy(true);
     setError('');
@@ -265,8 +252,9 @@ export function DocumentCreateWizard({
         defaultDiscountPercent: 0,
       });
       onCustomersUpdated();
-      pickCustomer({ id: created.id, name: created.name });
+      setCustomerId(created.id);
       setNewCustomerOpen(false);
+      setError('');
       setNewCustomerName('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
@@ -285,7 +273,11 @@ export function DocumentCreateWizard({
   };
 
   const persistDocument = async (closeOnSuccess: boolean): Promise<boolean> => {
-    if (!token || !selectedCustomer) return false;
+    if (!token) return false;
+    if (!customerId) {
+      setError(t('documents.customerRequired'));
+      return false;
+    }
     const validLines = lines.filter((l) => l.productId && l.quantity > 0);
     if (!validLines.length) {
       setError(t('documents.needLines'));
@@ -326,7 +318,7 @@ export function DocumentCreateWizard({
       } else {
         saved = await documentsApi.create(token, {
           documentType,
-          customerId: selectedCustomer.id,
+          customerId,
           ...payload,
         });
         setPersistedDocId(saved.id);
@@ -341,6 +333,7 @@ export function DocumentCreateWizard({
         handleClose();
       } else {
         setInfoMessage(t('documents.draftSaved'));
+        onDraftSaved?.();
       }
       return true;
     } catch (err) {
@@ -358,9 +351,13 @@ export function DocumentCreateWizard({
 
   const onSaveDraft = () => void persistDocument(false);
 
-  const onSubmit = async (e: FormEvent) => {
+  const onSaveAndExit = () => void persistDocument(true);
+
+  const onFormKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'TEXTAREA') return;
     e.preventDefault();
-    await persistDocument(true);
   };
 
   if (!open) return null;
@@ -370,14 +367,7 @@ export function DocumentCreateWizard({
       <button
         type="button"
         className="doc-wizard-back"
-        onClick={() => {
-          if (step === 'form' && !isEdit && !isDuplicateDraft) {
-            persistSize();
-            setStep('customer');
-            return;
-          }
-          handleClose();
-        }}
+        onClick={requestClose}
         aria-label={t('documents.back')}
       >
         ‹
@@ -387,79 +377,14 @@ export function DocumentCreateWizard({
           ? `${t(`documents.types.${documentType}`)} ${editTitle.replace(/^[A-Z]+-/, '')}`
           : t(`documents.types.${documentType}`)}
       </h1>
-      <button type="button" className="doc-wizard-close" onClick={handleClose} aria-label={t('products.close')}>
+      <button type="button" className="doc-wizard-close" onClick={requestClose} aria-label={t('products.close')}>
         ×
       </button>
     </header>
   );
 
   return createPortal(
-    <div className={`doc-wizard-overlay${step === 'form' ? ' doc-wizard-overlay--form' : ''}`}>
-      {step === 'customer' && !isEdit && !isDuplicateDraft && (
-        <div className="doc-wizard doc-wizard--customer">
-          {header}
-          <div className="doc-wizard-customer-step">
-            <div className="doc-customer-card">
-              <div className="doc-customer-card-head">
-                <h2>{t('documents.customerDetails')}</h2>
-                <button
-                  type="button"
-                  className="doc-link-btn"
-                  onClick={() => setNewCustomerOpen((v) => !v)}
-                >
-                  <span className="doc-radio-dot" aria-hidden />
-                  {t('documents.createCustomer')}
-                </button>
-              </div>
-
-              {newCustomerOpen && (
-                <form className="doc-new-customer-form" onSubmit={onCreateCustomer}>
-                  <input
-                    type="text"
-                    value={newCustomerName}
-                    onChange={(e) => setNewCustomerName(e.target.value)}
-                    placeholder={t('customers.name')}
-                    required
-                    autoFocus
-                  />
-                  <button type="submit" className="btn btn-primary" disabled={newCustomerBusy}>
-                    {newCustomerBusy ? '…' : t('customers.add')}
-                  </button>
-                </form>
-              )}
-
-              <label className="doc-customer-search">
-                <span className="doc-search-icon" aria-hidden>
-                  🔍
-                </span>
-                <input
-                  type="search"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  placeholder={t('documents.customerSearchPlaceholder')}
-                  autoFocus={!newCustomerOpen}
-                />
-              </label>
-
-              <ul className="doc-customer-list" role="listbox">
-                {filteredCustomers.length === 0 && (
-                  <li className="muted doc-customer-empty">{t('documents.noCustomersMatch')}</li>
-                )}
-                {filteredCustomers.map((c) => (
-                  <li key={c.id}>
-                    <button type="button" className="doc-customer-item" onClick={() => pickCustomer(c)}>
-                      {c.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {error && <div className="error-banner doc-wizard-error">{error}</div>}
-          </div>
-        </div>
-      )}
-
-      {step === 'form' && selectedCustomer && (
+    <div className="doc-wizard-overlay doc-wizard-overlay--form">
         <div className="doc-wizard-form-shell">
           <div
             ref={mergeRefs(panelRef, formWizardRef)}
@@ -467,7 +392,12 @@ export function DocumentCreateWizard({
           >
             {header}
             <div className="doc-wizard-body">
-              <form id="doc-create-form" className="doc-wizard-form" onSubmit={onSubmit}>
+              <form
+                id="doc-create-form"
+                className="doc-wizard-form"
+                onSubmit={(e) => e.preventDefault()}
+                onKeyDown={onFormKeyDown}
+              >
                 {loadingEdit && <p className="muted">{t('documents.loading')}</p>}
                 {isDuplicateDraft && !loadingEdit && (
                   <p className="type-change-note type-change-note-info">{t('documents.duplicateDraftHint')}</p>
@@ -477,15 +407,56 @@ export function DocumentCreateWizard({
 
             <section className="doc-panel doc-panel-customer">
               <div className="doc-panel-grid">
-                <div className="doc-customer-selected">
-                  <span className="doc-panel-label">{t('documents.customerDetails')}</span>
-                  <strong><BidiText as="span">{selectedCustomer.name}</BidiText></strong>
-                  {!isEdit && !isDuplicateDraft && (
-                    <button type="button" className="doc-link-btn" onClick={() => setStep('customer')}>
-                      {t('documents.changeCustomer')}
+                <label>
+                  <span className="doc-panel-label">{t('documents.customerDetails')} *</span>
+                  <select
+                    value={customerId}
+                    disabled={isEdit || isDuplicateDraft}
+                    required
+                    onChange={(e) => {
+                      setCustomerId(e.target.value);
+                      setError('');
+                    }}
+                  >
+                    <option value="">{t('documents.selectCustomer')}</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!isEdit && !isDuplicateDraft && (
+                  <div className="doc-customer-create-wrap">
+                    <button
+                      type="button"
+                      className="doc-link-btn"
+                      onClick={() => setNewCustomerOpen((v) => !v)}
+                    >
+                      + {t('documents.createCustomer')}
                     </button>
-                  )}
-                </div>
+                    {newCustomerOpen && (
+                      <div className="doc-new-customer-form">
+                        <input
+                          type="text"
+                          value={newCustomerName}
+                          onChange={(e) => setNewCustomerName(e.target.value)}
+                          placeholder={t('customers.name')}
+                          required
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={newCustomerBusy}
+                          onClick={() => void onCreateCustomer()}
+                        >
+                          {newCustomerBusy ? '…' : t('customers.add')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <label>
                   <span className="doc-panel-label">{t('documents.issueDate')}</span>
                   <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} required />
@@ -687,7 +658,7 @@ export function DocumentCreateWizard({
               </form>
             </div>
             <footer className="doc-wizard-footer">
-              <button type="button" className="btn btn-ghost-inline" onClick={handleClose} disabled={busy}>
+              <button type="button" className="btn btn-ghost-inline" onClick={requestClose} disabled={busy}>
                 {t('settings.cancel')}
               </button>
               {canPreviewPdf && editDoc && onSendEmail && (
@@ -718,8 +689,13 @@ export function DocumentCreateWizard({
               >
                 {busy ? '…' : t('documents.saveDraft')}
               </button>
-              <button type="submit" className="btn btn-primary" form="doc-create-form" disabled={busy || loadingEdit}>
-                {busy ? '…' : isEdit || effectiveDocId ? t('documents.save') : t('documents.generate')}
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy || loadingEdit}
+                onClick={onSaveAndExit}
+              >
+                {busy ? '…' : t('documents.saveAndExit')}
               </button>
             </footer>
             <div className="app-modal__resize-gutter" aria-hidden />
@@ -731,13 +707,27 @@ export function DocumentCreateWizard({
             />
           </div>
         </div>
-      )}
 
       <DocumentProductPickerModal
         open={pickerOpen}
         products={products}
         onClose={() => setPickerOpen(false)}
         onSave={addPickedLines}
+      />
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title={t('documents.closeConfirmTitle')}
+        message={t('documents.closeConfirmMessage')}
+        confirmLabel={t('documents.closeConfirmDiscard')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        zIndex={2900}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          handleClose();
+        }}
+        onCancel={() => setCloseConfirmOpen(false)}
       />
     </div>,
     document.body

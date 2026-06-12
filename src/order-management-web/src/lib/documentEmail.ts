@@ -55,7 +55,7 @@ function supplierTaxLine(profile: TenantProfile) {
     profile.taxRegime === 'Murshe'
       ? 'עוסק מורשה'
       : profile.taxRegime === 'Patur'
-        ? 'פטור עוסק'
+        ? 'עוסק פטור'
         : 'ח.פ';
   return `${number} : ${label}`;
 }

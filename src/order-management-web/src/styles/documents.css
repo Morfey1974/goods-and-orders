@@ -103,6 +103,27 @@
   color: var(--text);
 }
 
+/* Row frame: clip cell overflow so long text does not paint over neighbor borders */
+.dt-panel__table-scroll .documents-table tbody tr.dt-panel-doc-row > td {
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.documents-table .doc-col-type,
+.documents-table .doc-col-customer,
+.documents-table .doc-col-description,
+.documents-table .doc-col-payment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documents-table .doc-col-status .doc-badge {
+  max-width: 100%;
+  width: auto;
+  min-width: 4.5rem;
+}
+
 .documents-table .doc-col-number {
   width: 1%;
   white-space: nowrap;

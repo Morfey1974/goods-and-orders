@@ -469,6 +469,10 @@
   padding: 0;
 }
 
+.dt-panel__table-scroll .documents-table tbody tr.dt-panel-doc-row > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
 .dt-panel-table tbody td.dt-panel-doc-month {
   text-align: start;
   font-weight: 600;

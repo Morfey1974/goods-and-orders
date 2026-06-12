@@ -3,6 +3,12 @@
  * Use on tables (documents, suppliers, customers, products).
  */
 
+td.table-actions-cell {
+  display: table-cell;
+  text-align: end;
+  vertical-align: middle;
+}
+
 .table-actions-cell {
   display: flex;
   align-items: center;

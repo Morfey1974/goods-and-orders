@@ -31,7 +31,7 @@ public static class TenantPdfLetterheadBuilder
 
         var label = tenant.TaxRegime switch
         {
-            TaxRegime.Patur => "פטור עוסק",
+            TaxRegime.Patur => "עוסק פטור",
             TaxRegime.Murshe => "עוסק מורשה",
             _ => "ח.פ"
         };
