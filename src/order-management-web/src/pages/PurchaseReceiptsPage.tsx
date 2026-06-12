@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { purchaseReceiptsApi, type PurchaseReceiptListItem } from '../api/purchaseReceipts';
 import { suppliersApi, type Supplier } from '../api/suppliers';
+import { DateInput } from '../components/DateInput';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useAuth } from '../context/AuthContext';
@@ -270,11 +271,11 @@ export function PurchaseReceiptsPage() {
             </label>
             <label className="pr-list-filter pr-list-filter--date">
               <span>{t('purchaseReceipts.dateFrom')}</span>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <DateInput value={from} onChange={setFrom} />
             </label>
             <label className="pr-list-filter pr-list-filter--date">
               <span>{t('purchaseReceipts.dateTo')}</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <DateInput value={to} onChange={setTo} />
             </label>
           </div>
         }

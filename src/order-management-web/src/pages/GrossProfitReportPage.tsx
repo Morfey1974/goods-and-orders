@@ -87,7 +87,7 @@ export function GrossProfitReportPage() {
               {t('reports.grossProfitSummary', {
                 from: report.from ?? (from || t('reports.datePresetAll')),
                 to: report.to ?? (to || t('reports.datePresetAll')),
-                invoices: report.chargeInvoiceCount,
+                receipts: report.receiptCount,
               })}
             </p>
             <table className="data-table data-table--compact" style={{ maxWidth: 480, marginTop: '1rem' }}>

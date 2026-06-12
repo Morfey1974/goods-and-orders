@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { financialReportsApi, type Form1342Report } from '../api/financialReports';
@@ -11,6 +11,14 @@ import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { FORM1342_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
 import '../styles/inventory.css';
+import '../styles/reports.css';
+
+function buildTaxYearOptions(): number[] {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let year = current + 1; year >= 2000; year -= 1) years.push(year);
+  return years;
+}
 
 function formatIls(value: number): string {
   return `${value.toFixed(2)} ₪`;
@@ -32,6 +40,7 @@ export function Form1342ReportPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const taxYearOptions = useMemo(() => buildTaxYearOptions(), []);
 
   const lines = report?.lines ?? [];
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(lines, [
@@ -100,16 +109,16 @@ export function Form1342ReportPage() {
               title={t('reports.form1342Title')}
               count={t('products.results', { count: total })}
             />
-            <div className="dt-panel__toolbar-actions">
-              <label className="reports-year-field">
+            <div className="dt-panel__toolbar-actions reports-toolbar-actions">
+              <label className="reports-field reports-year-field">
                 <span>{t('reports.form1342TaxYear')}</span>
-                <input
-                  type="number"
-                  min={2000}
-                  max={2100}
-                  value={taxYear}
-                  onChange={(e) => setTaxYear(Number(e.target.value) || taxYear)}
-                />
+                <select value={taxYear} onChange={(e) => setTaxYear(Number(e.target.value))}>
+                  {taxYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
               </label>
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
                 {loading ? t('settings.saving') : t('reports.form1342Run')}

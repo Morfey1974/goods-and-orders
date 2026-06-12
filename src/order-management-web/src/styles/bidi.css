@@ -41,7 +41,9 @@
 .product-groups-select-add-form input,
 .doc-customer-search input,
 .doc-picker-filters input[type='search'],
+.doc-picker-filters input[type='text'],
 .pr-picker-filter input[type='search'],
+.pr-picker-filter input[type='text'],
 .warehouse-edit-form input[type='text'],
 .warehouse-edit-form textarea {
   unicode-bidi: plaintext;

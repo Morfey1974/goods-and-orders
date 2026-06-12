@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { inventoryApi, type InventoryValuationReport } from '../api/inventory';
 import { useAuth } from '../context/AuthContext';
+import { DateInput } from '../components/DateInput';
 import { ProductCodeCell } from '../components/products/ProductCodeCell';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { BidiText } from '../components/BidiText';
@@ -268,7 +269,7 @@ export function InventoryValuationPage() {
             <>
               <label className="pr-field pr-field--date inventory-toolbar-date">
                 <span>{t('inventory.asOfDate')}</span>
-                <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
+                <DateInput value={asOfDate} onChange={setAsOfDate} />
               </label>
               <p className="muted dt-panel__hint" style={{ margin: 0 }}>
                 {t('inventory.valuationHint')}
@@ -363,7 +364,7 @@ export function InventoryValuationPage() {
             <>
               <label className="pr-field pr-field--date inventory-toolbar-date">
                 <span>{t('inventory.asOfDate')}</span>
-                <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
+                <DateInput value={asOfDate} onChange={setAsOfDate} />
               </label>
               <p className="muted dt-panel__hint" style={{ margin: 0 }}>
                 {t('inventory.valuationHint')}

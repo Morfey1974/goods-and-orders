@@ -12,8 +12,10 @@ import {
 } from '../../lib/productKind';
 import { productTracksStock } from '../../lib/productInventory';
 import {
+  finalizePriceDraft,
   finalizeQuantityDraft,
   normalizeStockQuantity,
+  sanitizePriceDraft,
   sanitizeQuantityDraft,
 } from '../../lib/stockQuantity';
 import { PURCHASE_RECEIPT_PICKER_RESIZE } from '../../lib/resizablePanelKeys';
@@ -21,13 +23,17 @@ import type { ResizablePanelConfig } from '../../lib/modalSize';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { ModalResizeHandles } from '../ui/ModalResizeHandles';
 import '../../styles/documents.css';
+import '../../styles/purchase-receipts.css';
 
 export type PickedReceiptProduct = {
   product: Product;
   quantity: number;
+  unitPrice?: number;
 };
 
-type RowDraft = { quantity: string };
+type RowDraft = { quantity: string; unitPrice?: string };
+
+const EMPTY_EXISTING_PICKS: readonly { productId: string; quantity: number }[] = [];
 
 type Props = {
   open: boolean;
@@ -46,13 +52,20 @@ type Props = {
   resizeConfig?: ResizablePanelConfig;
   overlayZIndex?: number;
   nestedProductModalZIndex?: number;
+  /** Sales documents: editable unit price column. */
+  showUnitPrice?: boolean;
+  newProductType?: string;
   onClose: () => void;
   onSave: (picks: PickedReceiptProduct[]) => void;
   onProductCreated: (product: Product) => void;
 };
 
-function draftForProduct(): RowDraft {
-  return { quantity: '1' };
+function draftForProduct(product?: Product, showUnitPrice?: boolean): RowDraft {
+  const draft: RowDraft = { quantity: '1' };
+  if (showUnitPrice) {
+    draft.unitPrice = String(product?.unitPrice ?? 0);
+  }
+  return draft;
 }
 
 export function PurchaseReceiptProductPickerModal({
@@ -67,10 +80,12 @@ export function PurchaseReceiptProductPickerModal({
   productFilter,
   initialFilterKind = '',
   initialFilterType = '',
-  existingPicks = [],
+  existingPicks = EMPTY_EXISTING_PICKS,
   resizeConfig = PURCHASE_RECEIPT_PICKER_RESIZE,
   overlayZIndex,
   nestedProductModalZIndex = 2700,
+  showUnitPrice = false,
+  newProductType = 'ComponentPart',
   onClose,
   onSave,
   onProductCreated,
@@ -93,7 +108,9 @@ export function PurchaseReceiptProductPickerModal({
   const [components, setComponents] = useState<Product[]>([]);
   const [productModalMsg, setProductModalMsg] = useState('');
   const productsRef = useRef(products);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   productsRef.current = products;
+  const wasOpenRef = useRef(false);
 
   const existingPickMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -106,24 +123,40 @@ export function PurchaseReceiptProductPickerModal({
     [existingPickMap]
   );
 
+  const existingPicksKey = useMemo(
+    () => existingPicks.map((p) => `${p.productId}\t${p.quantity}`).join('\n'),
+    [existingPicks]
+  );
+
   useEffect(() => {
-    if (!open || !token) return;
-    setSearch('');
-    setFilterKind(initialFilterKind);
-    setFilterType(initialFilterType);
-    setFilterGroupId('');
-    setProductModalMsg('');
-    setSelectedIds(initialSelectedProductId ? new Set([initialSelectedProductId]) : new Set());
-    if (existingPicks.length > 0) {
-      setRowDrafts((prev) => {
-        const next = { ...prev };
-        for (const pick of existingPicks) {
-          next[pick.productId] = { quantity: String(normalizeStockQuantity(pick.quantity)) };
-        }
-        return next;
-      });
+    if (!open || !token) {
+      wasOpenRef.current = false;
+      return;
     }
-  }, [open, token, initialSelectedProductId, initialFilterKind, initialFilterType, existingPicks]);
+
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+
+    if (justOpened) {
+      setSearch('');
+      setFilterKind(initialFilterKind);
+      setFilterType(initialFilterType);
+      setFilterGroupId('');
+      setProductModalMsg('');
+      setSelectedIds(initialSelectedProductId ? new Set([initialSelectedProductId]) : new Set());
+    }
+  }, [open, token, initialSelectedProductId, initialFilterKind, initialFilterType]);
+
+  useEffect(() => {
+    if (!open || existingPicks.length === 0) return;
+    setRowDrafts((prev) => {
+      const next = { ...prev };
+      for (const pick of existingPicks) {
+        next[pick.productId] = { quantity: String(normalizeStockQuantity(pick.quantity)) };
+      }
+      return next;
+    });
+  }, [open, existingPicksKey, existingPicks]);
 
   useEffect(() => {
     if (!open || !token) return;
@@ -151,12 +184,12 @@ export function PurchaseReceiptProductPickerModal({
       const next = { ...prev };
       for (const p of catalogProducts) {
         if (!next[p.id]) {
-          next[p.id] = draftForProduct();
+          next[p.id] = draftForProduct(p, showUnitPrice);
         }
       }
       return next;
     });
-  }, [open, catalogProducts]);
+  }, [open, catalogProducts, showUnitPrice]);
 
   const excludedIds = useMemo(() => new Set(excludeProductIds), [excludeProductIds]);
 
@@ -236,6 +269,7 @@ export function PurchaseReceiptProductPickerModal({
       picks.push({
         product: p,
         quantity: finalizeQuantityDraft(draft.quantity),
+        unitPrice: showUnitPrice ? finalizePriceDraft(draft.unitPrice ?? '0') : undefined,
       });
     }
     if (picks.length) onSave(picks);
@@ -251,16 +285,18 @@ export function PurchaseReceiptProductPickerModal({
   const openNewProduct = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await catalogApi.products.peekArticle(token, 'ComponentPart');
+      const r = await catalogApi.products.peekArticle(token, newProductType);
       setNextArticle(r.articleCode);
-      const comps = await catalogApi.products.list(token, 'ComponentPart', true);
+      const comps = await catalogApi.products.list(token, newProductType, true);
       setComponents(comps);
       setNewProductOpen(true);
     } catch {
       setComponents([]);
       setNewProductOpen(true);
     }
-  }, [token]);
+  }, [token, newProductType]);
+
+  const colCount = showUnitPrice ? 8 : 7;
 
   if (!open) return null;
 
@@ -291,15 +327,32 @@ export function PurchaseReceiptProductPickerModal({
               + {t('purchaseReceipts.pickerNewItem')}
             </button>
             <div className="doc-picker-filters doc-picker-filters--grow">
-              <label className="pr-picker-filter">
+              <label className="pr-picker-filter pr-picker-filter--search">
                 <span className="doc-picker-filters-label">{t('purchaseReceipts.pickerSearch')}</span>
-                <input
-                  type="search"
-                  autoComplete="off"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t('purchaseReceipts.pickerSearchPlaceholder')}
-                />
+                <div className="doc-picker-search-field">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    inputMode="search"
+                    autoComplete="off"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('purchaseReceipts.pickerSearchPlaceholder')}
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      className="doc-picker-search-clear"
+                      onClick={() => {
+                        setSearch('');
+                        searchInputRef.current?.focus();
+                      }}
+                      aria-label={t('purchaseReceipts.pickerClearSearch')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </label>
               <label className="pr-picker-filter">
                 <span className="doc-picker-filters-label">{t('purchaseReceipts.pickerGroupLabel')}</span>
@@ -345,6 +398,7 @@ export function PurchaseReceiptProductPickerModal({
                   <th>{t('products.kindLabel')}</th>
                   <th>{t('products.typesLabel')}</th>
                   <th>{t('purchaseReceipts.pickerStock')}</th>
+                  {showUnitPrice && <th>{t('products.price')}</th>}
                   <th>{t('purchaseReceipts.pickerQty')}</th>
                   <th>{t('purchaseReceipts.pickerSelect')}</th>
                 </tr>
@@ -352,20 +406,20 @@ export function PurchaseReceiptProductPickerModal({
               <tbody>
                 {loadingCatalog && (
                   <tr>
-                    <td colSpan={7} className="muted doc-picker-empty">
+                    <td colSpan={colCount} className="muted doc-picker-empty">
                       {t('products.loading')}
                     </td>
                   </tr>
                 )}
                 {!loadingCatalog && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted doc-picker-empty">
+                    <td colSpan={colCount} className="muted doc-picker-empty">
                       {t('products.empty')}
                     </td>
                   </tr>
                 )}
                 {filtered.map((p) => {
-                  const draft = rowDrafts[p.id] ?? draftForProduct();
+                  const draft = rowDrafts[p.id] ?? draftForProduct(p, showUnitPrice);
                   const isSelected = selectedIds.has(p.id);
                   const isAlreadyAdded = existingProductIds.has(p.id);
                   const isService = isServiceProductType(p.productType);
@@ -418,6 +472,25 @@ export function PurchaseReceiptProductPickerModal({
                             : t('purchaseReceipts.pickerNoStock')
                           : '—'}
                       </td>
+                      {showUnitPrice && (
+                        <td>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            className="doc-picker-price-input"
+                            value={draft.unitPrice ?? '0'}
+                            onChange={(e) =>
+                              updateDraft(p.id, { unitPrice: sanitizePriceDraft(e.target.value) })
+                            }
+                            onBlur={() =>
+                              updateDraft(p.id, {
+                                unitPrice: String(finalizePriceDraft(draft.unitPrice ?? '')),
+                              })
+                            }
+                          />
+                        </td>
+                      )}
                       <td>
                         <div className="doc-picker-qty-control">
                           <button type="button" onClick={() => changeQty(p.id, -1)} aria-label="−">
@@ -509,7 +582,7 @@ export function PurchaseReceiptProductPickerModal({
           });
           setRowDrafts((prev) => ({
             ...prev,
-            [p.id]: draftForProduct(),
+            [p.id]: draftForProduct(p, showUnitPrice),
           }));
         }}
       />

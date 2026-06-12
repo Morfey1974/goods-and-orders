@@ -1079,6 +1079,7 @@
 }
 
 .doc-picker-filters input[type='search'],
+.doc-picker-filters input[type='text'],
 .doc-picker-filters select {
   min-width: 160px;
   padding: 0.45rem 0.6rem;

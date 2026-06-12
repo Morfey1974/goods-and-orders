@@ -227,6 +227,7 @@ public class DocumentsController(
                 request.DiscountPercent,
                 request.DiscountAmount,
                 receiptAsDraft: type == DocumentType.Receipt,
+                finalize: request.Finalize,
                 ct);
             BusinessDocument? parentCharge = null;
             if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
@@ -287,6 +288,7 @@ public class DocumentsController(
                 lines,
                 request.DiscountPercent,
                 request.DiscountAmount,
+                request.Finalize,
                 ct);
             return Ok(DocumentMappers.ToDto(doc));
         }

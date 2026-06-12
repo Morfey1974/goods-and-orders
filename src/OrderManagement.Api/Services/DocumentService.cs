@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Helpers;
 
 namespace OrderManagement.Api.Services;
 
@@ -72,6 +73,7 @@ public class DocumentService(
         decimal? discountPercent,
         decimal? discountAmount,
         bool receiptAsDraft = false,
+        bool finalize = false,
         CancellationToken ct = default)
     {
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.TenantId == tenantId, ct)
@@ -96,8 +98,8 @@ public class DocumentService(
             PaymentMethod = paymentMethod?.Trim(),
             Status = type switch
             {
-                DocumentType.Quote => DocumentStatus.Open,
-                DocumentType.ChargeInvoice => DocumentStatus.Open,
+                DocumentType.Quote => finalize ? DocumentStatus.Open : DocumentStatus.Draft,
+                DocumentType.ChargeInvoice => finalize ? DocumentStatus.Open : DocumentStatus.Draft,
                 DocumentType.Receipt => receiptAsDraft ? DocumentStatus.Draft : DocumentStatus.Closed,
                 _ => DocumentStatus.Draft
             },
@@ -150,22 +152,7 @@ public class DocumentService(
                 throw new InvalidOperationException("A charge invoice already exists for this quote.");
         }
 
-        // Standalone חשבון חיוב only — quote-linked invoices are created for editing first;
-        // stock is not deducted here (avoids blocking issue-from-quote when warehouse qty is low).
-        if (type == DocumentType.ChargeInvoice && lines is { Count: > 0 } && parentDocumentId is null)
-        {
-            foreach (var line in doc.Lines.Where(l => l.ProductId.HasValue))
-            {
-                await stock.DeductProductSaleAsync(
-                    tenantId,
-                    line.ProductId!.Value,
-                    line.Quantity,
-                    $"{number}",
-                    issue,
-                    ct);
-            }
-        }
-
+        // Stock is deducted when a charge invoice is finalized (Save and exit), not while editing a draft.
         if (type == DocumentType.Receipt && parentDocumentId is { } parentId)
         {
             var parent = await db.BusinessDocuments.FirstOrDefaultAsync(
@@ -193,6 +180,13 @@ public class DocumentService(
 
         db.BusinessDocuments.Add(doc);
         await db.SaveChangesAsync(ct);
+
+        if (type == DocumentType.ChargeInvoice && finalize)
+        {
+            await ApplyChargeFinalizationAsync(tenantId, doc, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
         await db.Entry(doc).Reference(d => d.Customer).LoadAsync(ct);
         await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
         await db.Entry(doc).Collection(d => d.PaymentLines).LoadAsync(ct);
@@ -210,7 +204,8 @@ public class DocumentService(
         IReadOnlyList<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines,
         decimal? discountPercent,
         decimal? discountAmount,
-        CancellationToken ct)
+        bool finalize = false,
+        CancellationToken ct = default)
     {
         var doc = await db.BusinessDocuments
             .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == tenantId, ct)
@@ -272,6 +267,29 @@ public class DocumentService(
             discountValue = amt;
         doc.TotalAmount = Math.Max(0, subtotal - discountValue);
 
+        if (finalize)
+        {
+            if (doc.DocumentType == DocumentType.Quote && doc.Status == DocumentStatus.Draft)
+            {
+                doc.Status = DocumentStatus.Open;
+            }
+            else if (doc.DocumentType == DocumentType.ChargeInvoice)
+            {
+                await ApplyChargeFinalizationAsync(tenantId, doc, ct);
+            }
+        }
+        else if (doc.DocumentType is DocumentType.Quote or DocumentType.ChargeInvoice &&
+                 doc.Status is DocumentStatus.Draft or DocumentStatus.Open or DocumentStatus.Sent)
+        {
+            doc.Status = DocumentStatus.Draft;
+        }
+
+        if (doc.DocumentType == DocumentType.ChargeInvoice && doc.Status == DocumentStatus.Draft
+            && await stock.HasStockIssuesForChargeAsync(tenantId, doc.DocumentNumber, ct))
+        {
+            await stock.ReverseStockForChargeAsync(tenantId, doc.DocumentNumber, ct);
+        }
+
         doc.Version++;
         doc.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -294,6 +312,12 @@ public class DocumentService(
 
         foreach (var childId in childIds)
             await DeleteAsync(tenantId, childId, ct);
+
+        if (doc.DocumentType == DocumentType.ChargeInvoice
+            && await stock.HasStockIssuesForChargeAsync(tenantId, doc.DocumentNumber, ct))
+        {
+            await stock.ReverseStockForChargeAsync(tenantId, doc.DocumentNumber, ct);
+        }
 
         if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
         {
@@ -341,6 +365,7 @@ public class DocumentService(
             source.DiscountPercent,
             source.DiscountAmount,
             receiptAsDraft: false,
+            finalize: false,
             ct);
     }
 
@@ -387,9 +412,9 @@ public class DocumentService(
             quote.DiscountPercent,
             quote.DiscountAmount,
             receiptAsDraft: false,
+            finalize: false,
             ct);
 
-        await DeductStockForChargeAsync(tenantId, charge, ct);
         return charge;
     }
 
@@ -411,6 +436,55 @@ public class DocumentService(
                 charge.IssueDate,
                 ct);
         }
+    }
+
+    private async Task ApplyChargeFinalizationAsync(
+        Guid tenantId,
+        BusinessDocument charge,
+        CancellationToken ct)
+    {
+        if (charge.DocumentType != DocumentType.ChargeInvoice)
+            return;
+
+        if (charge.Status == DocumentStatus.Draft)
+        {
+            if (charge.Lines.Count == 0)
+                await db.Entry(charge).Collection(c => c.Lines).LoadAsync(ct);
+
+            if (!await ChargeStockAlreadyDeductedAsync(tenantId, charge.DocumentNumber, ct))
+                await DeductStockForChargeAsync(tenantId, charge, ct);
+        }
+
+        charge.Status = DocumentStatus.Open;
+        charge.UpdatedAt = DateTime.UtcNow;
+
+        if (charge.ParentDocumentId is not { } quoteId)
+            return;
+
+        var quote = await db.BusinessDocuments.FirstOrDefaultAsync(
+            d => d.Id == quoteId && d.TenantId == tenantId, ct);
+        if (quote is { DocumentType: DocumentType.Quote } &&
+            quote.Status is not DocumentStatus.Closed and not DocumentStatus.Cancelled)
+        {
+            quote.Status = DocumentStatus.Closed;
+            quote.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    private async Task<bool> ChargeStockAlreadyDeductedAsync(
+        Guid tenantId,
+        string documentNumber,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(documentNumber))
+            return false;
+
+        return await ChargeStockReference
+            .WhereChargeReference(
+                db.StockMovements.AsNoTracking().Where(m =>
+                    m.TenantId == tenantId && m.MovementType == StockMovementType.Issue),
+                documentNumber)
+            .AnyAsync(ct);
     }
 
     public async Task<BusinessDocument> IssueReceiptAsync(
@@ -474,6 +548,7 @@ public class DocumentService(
             null,
             null,
             receiptAsDraft: true,
+            finalize: false,
             ct);
     }
 

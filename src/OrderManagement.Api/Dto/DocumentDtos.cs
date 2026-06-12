@@ -78,7 +78,8 @@ public record UpdateDocumentRequest(
     int Version,
     [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines,
     [Range(0, 100)] decimal? DiscountPercent = null,
-    [Range(0, double.MaxValue)] decimal? DiscountAmount = null);
+    [Range(0, double.MaxValue)] decimal? DiscountAmount = null,
+    bool Finalize = false);
 
 public record CreateDocumentRequest(
     [Required] string DocumentType,
@@ -91,7 +92,8 @@ public record CreateDocumentRequest(
     Guid? OrderId,
     [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines,
     [Range(0, 100)] decimal? DiscountPercent = null,
-    [Range(0, double.MaxValue)] decimal? DiscountAmount = null);
+    [Range(0, double.MaxValue)] decimal? DiscountAmount = null,
+    bool Finalize = false);
 
 public record RecordPaymentRequest(
     string? PaymentMethod,

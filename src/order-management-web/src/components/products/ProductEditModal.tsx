@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppModal } from '../ui/AppModal';
@@ -446,6 +446,14 @@ export function ProductEditModal({
   const showBom = form.productType === 'FinishedGood' || form.productType === 'Bundle';
   const bomProductFilter = useCallback((p: Product) => isBomComponentProduct(p), []);
   const bomExcludeIds = effectiveProduct ? [effectiveProduct.id] : [];
+  const bomExistingPicks = useMemo(
+    () =>
+      form.bomLines.map((b) => ({
+        productId: b.componentProductId,
+        quantity: b.quantity,
+      })),
+    [form.bomLines]
+  );
 
   const resolveBomLineLabel = useCallback(
     (line: BomInput) => {
@@ -1061,10 +1069,7 @@ export function ProductEditModal({
         productFilter={bomProductFilter}
         initialFilterKind="goods"
         initialFilterType="ComponentPart"
-        existingPicks={form.bomLines.map((b) => ({
-          productId: b.componentProductId,
-          quantity: b.quantity,
-        }))}
+        existingPicks={bomExistingPicks}
         resizeConfig={BOM_COMPONENT_PICKER_RESIZE}
         overlayZIndex={(zIndex ?? 2000) + 500}
         nestedProductModalZIndex={(zIndex ?? 2000) + 700}

@@ -31,6 +31,7 @@ import {
   type PickedReceiptProduct,
 } from '../components/purchaseReceipts/PurchaseReceiptProductPickerModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DateInput } from '../components/DateInput';
 import { UnsavedLeaveDialog } from '../components/UnsavedLeaveDialog';
 import { useAuth } from '../context/AuthContext';
 import { useUnsavedLeaveBlocker } from '../hooks/useUnsavedLeaveBlocker';
@@ -1831,12 +1832,11 @@ export function PurchaseReceiptDetailPage() {
               </label>
               <label className="pr-field pr-field--date">
                 <span>{t('purchaseReceipts.documentDate')}</span>
-                <input
-                  type="date"
+                <DateInput
                   value={documentDate}
                   disabled={isPosted}
                   required
-                  onChange={(e) => setDocumentDate(e.target.value)}
+                  onChange={setDocumentDate}
                 />
               </label>
               <label className="pr-field pr-field--currency">

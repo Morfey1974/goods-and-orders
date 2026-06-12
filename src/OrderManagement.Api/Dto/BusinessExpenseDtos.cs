@@ -135,7 +135,7 @@ public record GrossProfitReportDto(
     decimal RevenueIls,
     decimal CogsIls,
     decimal GrossProfitIls,
-    int ChargeInvoiceCount);
+    int ReceiptCount);
 
 public record OperatingExpenseCategoryLineDto(
     string Category,

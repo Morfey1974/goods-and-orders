@@ -1049,6 +1049,46 @@
   line-height: 1.25;
 }
 
+.pr-picker-filter--search {
+  min-width: 10rem;
+  flex: 1 1 10rem;
+}
+
+.pr-picker-toolbar .pr-picker-filter .doc-picker-search-field {
+  position: relative;
+  width: 100%;
+}
+
+.pr-picker-toolbar .pr-picker-filter .doc-picker-search-field input {
+  padding-inline-end: 1.75rem;
+}
+
+.doc-picker-search-clear {
+  position: absolute;
+  inset-inline-end: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.doc-picker-search-clear:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text);
+}
+
 .pr-picker-banner {
   margin: 0 0.75rem 0.5rem;
   font-size: 0.85rem;

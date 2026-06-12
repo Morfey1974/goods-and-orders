@@ -3,20 +3,25 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { catalogApi, type Product } from '../../api/catalog';
 import { documentsApi, type Document } from '../../api/documents';
+import { documentSequencesApi } from '../../api/documentSequences';
+import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
-import { DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
+import { DOCUMENT_PRODUCT_PICKER_RESIZE, DOCUMENT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
 import { mergeRefs } from '../../lib/mergeRefs';
 import { bidiAutoInput } from '../BidiText';
 import {
   finalizePriceDraft,
   normalizeStockQuantity,
   sanitizePriceDraft,
+  sanitizeQuantityDraft,
 } from '../../lib/stockQuantity';
 import {
-  DocumentProductPickerModal,
-  type PickedProductLine,
-} from './DocumentProductPickerModal';
+  PurchaseReceiptProductPickerModal,
+  type PickedReceiptProduct,
+} from '../purchaseReceipts/PurchaseReceiptProductPickerModal';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { DateInput } from '../DateInput';
+import { isoToDateInput, todayDateInput } from '../../lib/dateInput';
 
 export type WizardDocumentType = 'Quote' | 'ChargeInvoice';
 
@@ -51,9 +56,12 @@ type Props = {
 
 type DiscountKind = 'percent' | 'amount';
 
-function isoToDateInput(iso: string) {
-  if (!iso) return '';
-  return iso.slice(0, 10);
+function sequenceKindForDocumentType(documentType: WizardDocumentType): string {
+  return documentType === 'Quote' ? 'Quote' : 'ChargeInvoice';
+}
+
+function stripDocumentNumberPrefix(documentNumber: string): string {
+  return documentNumber.replace(/^[A-Z]+-/, '');
 }
 
 function loadDocumentIntoForm(doc: Document, options?: { forDuplicate?: boolean }) {
@@ -91,13 +99,11 @@ function loadDocumentIntoForm(doc: Document, options?: { forDuplicate?: boolean 
     discountKind,
     discountValue,
     version: doc.version,
-    title: doc.documentNumber,
+    title: forDuplicate ? '' : doc.documentNumber,
   };
 }
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+const todayIso = todayDateInput;
 
 type FormSnapshot = {
   customerId: string;
@@ -165,13 +171,13 @@ function serializeSnapshot(snapshot: FormSnapshot): string {
   return JSON.stringify(snapshot);
 }
 
-function draftFromPicked(p: PickedProductLine): DraftLine {
+function draftFromPicked(p: PickedReceiptProduct): DraftLine {
   return {
     key: crypto.randomUUID(),
-    productId: p.productId,
-    description: p.description,
+    productId: p.product.id,
+    description: p.product.name,
     quantity: p.quantity,
-    unitPrice: String(p.unitPrice),
+    unitPrice: String(p.unitPrice ?? p.product.unitPrice),
   };
 }
 
@@ -199,6 +205,8 @@ export function DocumentCreateWizard({
   const clientOrderFileInputRef = useRef<HTMLInputElement>(null);
   const savedSnapshotRef = useRef<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(products);
   const [customerId, setCustomerId] = useState('');
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -219,6 +227,8 @@ export function DocumentCreateWizard({
   const [discountValue, setDiscountValue] = useState(0);
   const [editVersion, setEditVersion] = useState(1);
   const [editTitle, setEditTitle] = useState('');
+  /** Next free number from counter — preview only until first save allocates it. */
+  const [previewNumber, setPreviewNumber] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
   const [clientOrderReceivedAt, setClientOrderReceivedAt] = useState('');
@@ -227,8 +237,32 @@ export function DocumentCreateWizard({
   const [pendingClientOrderFile, setPendingClientOrderFile] = useState<File | null>(null);
   const [clientOrderBusy, setClientOrderBusy] = useState(false);
 
+  useEffect(() => {
+    setCatalogProducts(products);
+  }, [products]);
+
+  useEffect(() => {
+    if (!open || !token) return;
+    productGroupsApi
+      .list(token)
+      .then(setProductGroups)
+      .catch(() => setProductGroups([]));
+  }, [open, token]);
+
+  useEffect(() => {
+    if (!open || !token || editDocumentId) return;
+    const kind = sequenceKindForDocumentType(documentType);
+    documentSequencesApi
+      .list(token)
+      .then((seqs) => {
+        const seq = seqs.find((s) => s.kind === kind);
+        setPreviewNumber(seq?.preview ?? '');
+      })
+      .catch(() => setPreviewNumber(''));
+  }, [open, token, documentType, editDocumentId]);
+
   const isEdit = Boolean(editDocumentId);
-  const isDuplicateDraft = Boolean(duplicateFromDocumentId);
+  const isDuplicateDraft = Boolean(duplicateFromDocumentId && !persistedDocId);
   const effectiveDocId = editDocumentId ?? persistedDocId;
   const canPreviewPdf = Boolean(effectiveDocId && editDoc);
 
@@ -330,6 +364,9 @@ export function DocumentCreateWizard({
         .then((doc) => {
           const loaded = loadDocumentIntoForm(doc, { forDuplicate: true });
           applyLoadedDocument(loaded, { issueDateToday: true });
+          setEditTitle('');
+          setEditDoc(null);
+          setPersistedDocId(null);
           savedSnapshotRef.current = serializeSnapshot(
             snapshotFromLoaded({ ...loaded, issueDate: todayIso() })
           );
@@ -352,6 +389,7 @@ export function DocumentCreateWizard({
     setDiscountValue(0);
     setEditVersion(1);
     setEditTitle('');
+    setPreviewNumber('');
     setEditDoc(null);
     setPersistedDocId(null);
     setInfoMessage('');
@@ -422,10 +460,18 @@ export function DocumentCreateWizard({
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   };
 
-  const addPickedLines = (picked: PickedProductLine[]) => {
+  const addPickedLines = (picked: PickedReceiptProduct[]) => {
     setLines((prev) => [...prev, ...picked.map(draftFromPicked)]);
     setError('');
   };
+
+  const pickerExistingLines = useMemo(
+    () =>
+      lines
+        .filter((l) => l.productId && l.quantity > 0)
+        .map((l) => ({ productId: l.productId, quantity: l.quantity })),
+    [lines]
+  );
 
   const persistDocument = async (closeOnSuccess: boolean): Promise<boolean> => {
     if (!token) return false;
@@ -461,6 +507,7 @@ export function DocumentCreateWizard({
         dueDate: dueDate ? `${dueDate}T12:00:00Z` : undefined,
         ...discountPayload,
         lines: linePayload,
+        finalize: closeOnSuccess,
       };
 
       const wasUpdate = Boolean(effectiveDocId);
@@ -623,6 +670,10 @@ export function DocumentCreateWizard({
 
   if (!open) return null;
 
+  const headerNumber = editTitle
+    ? stripDocumentNumberPrefix(editTitle)
+    : previewNumber;
+
   const header = (
     <header className="doc-wizard-header">
       <button
@@ -634,8 +685,8 @@ export function DocumentCreateWizard({
         ‹
       </button>
       <h1 className="doc-wizard-title">
-        {isEdit && editTitle
-          ? `${t(`documents.types.${documentType}`)} ${editTitle.replace(/^[A-Z]+-/, '')}`
+        {headerNumber
+          ? `${t(`documents.types.${documentType}`)} ${headerNumber}`
           : t(`documents.types.${documentType}`)}
       </h1>
       <button type="button" className="doc-wizard-close" onClick={requestClose} aria-label={t('products.close')}>
@@ -672,7 +723,7 @@ export function DocumentCreateWizard({
                   <span className="doc-panel-label">{t('documents.customerDetails')} *</span>
                   <select
                     value={customerId}
-                    disabled={isEdit || isDuplicateDraft}
+                    disabled={isEdit}
                     required
                     onChange={(e) => {
                       setCustomerId(e.target.value);
@@ -687,7 +738,7 @@ export function DocumentCreateWizard({
                     ))}
                   </select>
                 </label>
-                {!isEdit && !isDuplicateDraft && (
+                {!isEdit && (
                   <div className="doc-customer-create-wrap">
                     <button
                       type="button"
@@ -720,11 +771,11 @@ export function DocumentCreateWizard({
                 )}
                 <label>
                   <span className="doc-panel-label">{t('documents.issueDate')}</span>
-                  <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} required />
+                  <DateInput value={issueDate} onChange={setIssueDate} required />
                 </label>
                 <label>
                   <span className="doc-panel-label">{t('documents.colDue')}</span>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                  <DateInput value={dueDate} onChange={setDueDate} />
                 </label>
                 <label>
                   <span className="doc-panel-label">{t('documents.currency')}</span>
@@ -782,6 +833,7 @@ export function DocumentCreateWizard({
                       {lines.map((line, idx) => {
                         const articleCode =
                           products.find((p) => p.id === line.productId)?.articleCode ?? '';
+                        const qtyDisplay = line.quantity <= 0 ? '' : String(line.quantity);
                         return (
                         <tr key={line.key}>
                           <td className="col-article">
@@ -805,16 +857,22 @@ export function DocumentCreateWizard({
                           </td>
                           <td className="col-qty">
                             <input
-                              type="number"
-                              min={1}
-                              step={1}
+                              type="text"
                               inputMode="numeric"
-                              value={line.quantity}
-                              onChange={(e) =>
+                              autoComplete="off"
+                              value={qtyDisplay}
+                              onChange={(e) => {
+                                const raw = sanitizeQuantityDraft(e.target.value);
                                 updateLine(line.key, {
-                                  quantity: normalizeStockQuantity(Number(e.target.value)),
-                                })
-                              }
+                                  quantity:
+                                    raw === '' ? 0 : normalizeStockQuantity(Number(raw)),
+                                });
+                              }}
+                              onBlur={() => {
+                                if (normalizeStockQuantity(line.quantity) < 1) {
+                                  updateLine(line.key, { quantity: 1 });
+                                }
+                              }}
                               required
                             />
                           </td>
@@ -922,11 +980,10 @@ export function DocumentCreateWizard({
                 <div className="doc-client-order-toolbar">
                   <label className="doc-client-order-field doc-client-order-field--date">
                     <span className="doc-panel-label">{t('documents.clientOrderReceivedAt')}</span>
-                    <input
-                      type="date"
+                    <DateInput
                       value={clientOrderReceivedAt}
                       disabled={!effectiveDocId || clientOrderBusy}
-                      onChange={(e) => setClientOrderReceivedAt(e.target.value)}
+                      onChange={setClientOrderReceivedAt}
                     />
                   </label>
                   <label className="doc-client-order-field doc-client-order-field--ref">
@@ -1067,11 +1124,30 @@ export function DocumentCreateWizard({
           </div>
         </div>
 
-      <DocumentProductPickerModal
+      <PurchaseReceiptProductPickerModal
         open={pickerOpen}
-        products={products}
+        token={token}
+        products={catalogProducts}
+        groups={productGroups}
+        titleKey="documents.pickerTitle"
+        showUnitPrice
+        newProductType="FinishedGood"
+        resizeConfig={DOCUMENT_PRODUCT_PICKER_RESIZE}
+        overlayZIndex={2800}
+        nestedProductModalZIndex={2900}
+        existingPicks={pickerExistingLines}
         onClose={() => setPickerOpen(false)}
         onSave={addPickedLines}
+        onProductCreated={(p) => {
+          setCatalogProducts((prev) => {
+            const next = prev.some((x) => x.id === p.id)
+              ? prev.map((x) => (x.id === p.id ? p : x))
+              : [...prev, p];
+            return [...next].sort((a, b) =>
+              a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+            );
+          });
+        }}
       />
 
       <ConfirmDialog

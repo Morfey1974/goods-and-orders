@@ -69,7 +69,7 @@ export type GrossProfitReport = {
   revenueIls: number;
   cogsIls: number;
   grossProfitIls: number;
-  chargeInvoiceCount: number;
+  receiptCount: number;
 };
 
 export type OperatingExpenseCategoryLine = {
@@ -232,7 +232,7 @@ function mapGrossProfitReport(raw: Record<string, unknown>): GrossProfitReport {
     revenueIls: Number(raw.revenueIls ?? raw.RevenueIls ?? 0),
     cogsIls: Number(raw.cogsIls ?? raw.CogsIls ?? 0),
     grossProfitIls: Number(raw.grossProfitIls ?? raw.GrossProfitIls ?? 0),
-    chargeInvoiceCount: Number(raw.chargeInvoiceCount ?? raw.ChargeInvoiceCount ?? 0),
+    receiptCount: Number(raw.receiptCount ?? raw.ReceiptCount ?? raw.chargeInvoiceCount ?? raw.ChargeInvoiceCount ?? 0),
   };
 }
 

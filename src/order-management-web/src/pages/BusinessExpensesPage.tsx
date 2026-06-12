@@ -10,6 +10,7 @@ import {
 import { fetchScanPdf, LocalScanAgentError } from '../api/localScan';
 import { suppliersApi, type Supplier } from '../api/suppliers';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DateInput } from '../components/DateInput';
 import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { AppModal } from '../components/ui/AppModal';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
@@ -842,10 +843,9 @@ export function BusinessExpensesPage() {
               >
                 <label className="settings-field">
                   <span className="settings-field-label-row">{t('businessExpenses.colDate')}</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={form.expenseDate}
-                    onChange={(e) => setForm({ ...form, expenseDate: e.target.value })}
+                    onChange={(expenseDate) => setForm({ ...form, expenseDate })}
                     required
                   />
                 </label>

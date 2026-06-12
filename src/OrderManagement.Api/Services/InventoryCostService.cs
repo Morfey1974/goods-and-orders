@@ -256,6 +256,38 @@ public class InventoryCostService(AppDbContext db, WarehouseService warehouse)
         row.UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Undo a sale issue: restore FIFO lots (if any) and stock balance, then remove the movement.</summary>
+    public async Task ReverseIssueAsync(Guid tenantId, Guid movementId, CancellationToken ct)
+    {
+        var movement = await db.StockMovements
+            .FirstOrDefaultAsync(m => m.Id == movementId && m.TenantId == tenantId, ct);
+        if (movement is null || movement.MovementType != StockMovementType.Issue)
+            return;
+
+        var allocations = await db.InventoryLotAllocations
+            .Include(a => a.Lot)
+            .Where(a => a.StockMovementId == movementId && a.TenantId == tenantId)
+            .ToListAsync(ct);
+
+        foreach (var allocation in allocations)
+        {
+            allocation.Lot.QuantityRemaining = StockQuantity.Normalize(
+                allocation.Lot.QuantityRemaining + allocation.Quantity);
+        }
+
+        if (allocations.Count > 0)
+            db.InventoryLotAllocations.RemoveRange(allocations);
+
+        var balance = await warehouse.GetOrCreateBalanceAsync(
+            movement.WarehouseId,
+            movement.ProductId,
+            ct);
+        balance.Quantity = StockQuantity.Normalize(balance.Quantity + movement.Quantity);
+
+        db.StockMovements.Remove(movement);
+        await db.SaveChangesAsync(ct);
+    }
+
     public static decimal ResolveLineUnitCostIls(
         string? receiptCurrency,
         decimal? unitPrice,

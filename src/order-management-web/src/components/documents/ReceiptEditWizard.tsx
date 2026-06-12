@@ -2,10 +2,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type TenantProfile } from '../../api/client';
+import { catalogApi, type Customer } from '../../api/catalog';
 import { documentsApi, type Document, type ReceiptPaymentLine } from '../../api/documents';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { RECEIPT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
+import { normalizeBankCode } from '../../data/israeliBanks';
 import { bidiAutoInput } from '../BidiText';
+import { DateInput } from '../DateInput';
+import { isoToDateInput, todayDateInput } from '../../lib/dateInput';
 import { ISRAELI_BANKS } from '../../data/israeliBanks';
 import {
   RECEIPT_PAYMENT_TABS,
@@ -26,14 +30,7 @@ import {
   type SavedPaymentLine,
 } from './receiptPaymentTypes';
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isoToDateInput(iso: string) {
-  if (!iso) return '';
-  return iso.slice(0, 10);
-}
+const todayIso = todayDateInput;
 
 function formatMoney(n: number) {
   return `₪${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -107,6 +104,7 @@ export function ReceiptEditWizard({
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [version, setVersion] = useState(1);
   const [tenantProfile, setTenantProfile] = useState<TenantProfile | null>(null);
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [parentDocumentId, setParentDocumentId] = useState('');
   const skipTabDraftResetRef = useRef(false);
 
@@ -121,6 +119,7 @@ export function ReceiptEditWizard({
     selectedCharge?.documentNumber.replace(/^[A-Z]+-/, '') ??
     '';
   const customerName = doc?.customerName ?? selectedCharge?.customerName ?? '';
+  const customerId = doc?.customerId ?? selectedCharge?.customerId ?? '';
   const totalPaid = useMemo(() => savedLines.reduce((s, l) => s + l.amount, 0), [savedLines]);
   const openBalance = Math.max(0, roundMoney(chargeTotal - totalPaid));
   const withholdingPercent = tenantProfile?.withholdingTaxPercent ?? null;
@@ -133,9 +132,12 @@ export function ReceiptEditWizard({
       bankCode: tenantProfile?.bankCode ?? '',
       bankBranch: tenantProfile?.bankBranch ?? '',
       bankAccount: tenantProfile?.bankAccountNumber ?? '',
+      customerBankCode: normalizeBankCode(customer?.bankCode ?? '') || (customer?.bankCode ?? ''),
+      customerBankBranch: customer?.bankBranch ?? '',
+      customerBankAccount: customer?.bankAccountNumber ?? '',
       withholdingPercent,
     }),
-    [issueDate, chargeTotal, openBalance, tenantProfile, withholdingPercent]
+    [issueDate, chargeTotal, openBalance, tenantProfile, customer, withholdingPercent]
   );
 
   const detailLabels = useMemo(
@@ -159,6 +161,17 @@ export function ReceiptEditWizard({
     if (!open || !token) return;
     api.getProfile(token).then(setTenantProfile).catch(() => setTenantProfile(null));
   }, [open, token]);
+
+  useEffect(() => {
+    if (!open || !token || !customerId) {
+      setCustomer(null);
+      return;
+    }
+    catalogApi.customers
+      .get(token, customerId)
+      .then(setCustomer)
+      .catch(() => setCustomer(null));
+  }, [open, token, customerId]);
 
   useEffect(() => {
     if (!open || !token) return;
@@ -212,10 +225,6 @@ export function ReceiptEditWizard({
             today: date,
             chargeTotal: loaded.parentChargeAmount ?? 0,
             openBalance: balance,
-            bankCode: '',
-            bankBranch: '',
-            bankAccount: '',
-            withholdingPercent: null,
           })
         );
         setActiveTab('BankTransfer');
@@ -245,15 +254,24 @@ export function ReceiptEditWizard({
       return;
     }
     setEditingLineId(null);
-    setDraft(buildPaymentDraft(activeTab, draftContext));
+    setDraft(
+      openBalance > 0
+        ? buildPaymentDraft(activeTab, draftContext)
+        : emptyPaymentDraft(issueDate || todayIso())
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when payment tab changes
   }, [activeTab]);
 
   useEffect(() => {
-    if (!open || !isDraft || loading || !tenantProfile) return;
-    setDraft(buildPaymentDraft(activeTab, draftContext));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply bank / withholding defaults once profile loads
-  }, [tenantProfile?.id]);
+    if (!open || !isDraft || loading || editingLineId) return;
+    if (!tenantProfile && !customer) return;
+    setDraft(
+      openBalance > 0
+        ? buildPaymentDraft(activeTab, draftContext)
+        : emptyPaymentDraft(issueDate || todayIso())
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh bank defaults when profile/customer loads
+  }, [tenantProfile?.id, customer?.id, loading, open, isDraft]);
 
   const setDraftField = <K extends keyof PaymentDraftFields>(key: K, value: PaymentDraftFields[K]) => {
     setDraft((prev) => {
@@ -273,7 +291,11 @@ export function ReceiptEditWizard({
     const paid = next.reduce((s, l) => s + l.amount, 0);
     const balance = Math.max(0, roundMoney(chargeTotal - paid));
     setSavedLines(next);
-    setDraft(buildPaymentDraft(activeTab, { ...draftContext, openBalance: balance }));
+    setDraft(
+      balance > 0
+        ? buildPaymentDraft(activeTab, { ...draftContext, openBalance: balance })
+        : emptyPaymentDraft(issueDate || todayIso())
+    );
     return next;
   };
 
@@ -310,10 +332,9 @@ export function ReceiptEditWizard({
       generalDetail: draft.generalDetail.trim(),
       details,
     };
-    const baseLines = editingLineId
-      ? savedLines.filter((l) => l.id !== editingLineId)
-      : savedLines;
-    const merged = editingLineId ? baseLines.map((l) => (l.id === editingLineId ? line : l)) : [...baseLines, line];
+    const merged = editingLineId
+      ? savedLines.map((l) => (l.id === editingLineId ? line : l))
+      : [...savedLines, line];
     applySavedLines(merged);
     setEditingLineId(null);
     setDraft(emptyPaymentDraft(issueDate || todayIso()));
@@ -333,7 +354,7 @@ export function ReceiptEditWizard({
   };
 
   const linesForPersist = (): SavedPaymentLine[] | null => {
-    if (hasUncommittedPaymentDraft(activeTab, draft, savedLines, editingLineId)) {
+    if (hasUncommittedPaymentDraft(activeTab, draft, savedLines, editingLineId, openBalance)) {
       setError(t('documents.receiptUnsavedLine'));
       return null;
     }
@@ -460,6 +481,16 @@ export function ReceiptEditWizard({
         return (
           <>
             {renderField(
+              t('documents.receiptLineDate'),
+              <DateInput
+                value={draft.lineDate}
+                onChange={(v) => setDraftField('lineDate', v)}
+                disabled={!isDraft}
+              />,
+              false,
+              'receipt-pay-field--date'
+            )}
+            {renderField(
               t('documents.receiptGeneralDetail'),
               <input
                 type="text"
@@ -504,10 +535,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptDepositDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.depositDate}
-                onChange={(e) => setDraftField('depositDate', e.target.value)}
+                onChange={(v) => setDraftField('depositDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -596,10 +626,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptDueDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.dueDate}
-                onChange={(e) => setDraftField('dueDate', e.target.value)}
+                onChange={(v) => setDraftField('dueDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -699,10 +728,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptLineDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.lineDate}
-                onChange={(e) => setDraftField('lineDate', e.target.value)}
+                onChange={(v) => setDraftField('lineDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -794,10 +822,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptLineDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.lineDate}
-                onChange={(e) => setDraftField('lineDate', e.target.value)}
+                onChange={(v) => setDraftField('lineDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -855,10 +882,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptLineDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.lineDate}
-                onChange={(e) => setDraftField('lineDate', e.target.value)}
+                onChange={(v) => setDraftField('lineDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -912,10 +938,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptLineDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.lineDate}
-                onChange={(e) => setDraftField('lineDate', e.target.value)}
+                onChange={(v) => setDraftField('lineDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -949,10 +974,9 @@ export function ReceiptEditWizard({
           <>
             {renderField(
               t('documents.receiptLineDate'),
-              <input
-                type="date"
+              <DateInput
                 value={draft.lineDate}
-                onChange={(e) => setDraftField('lineDate', e.target.value)}
+                onChange={(v) => setDraftField('lineDate', v)}
                 disabled={!isDraft}
               />,
               false,
@@ -1076,10 +1100,9 @@ export function ReceiptEditWizard({
                 )}
                 <label>
                   <span className="doc-panel-label">{t('documents.colDate')}</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={issueDate}
-                    onChange={(e) => setIssueDate(e.target.value)}
+                    onChange={setIssueDate}
                     disabled={!isDraft}
                   />
                 </label>

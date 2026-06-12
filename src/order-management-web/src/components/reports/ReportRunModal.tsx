@@ -7,6 +7,7 @@ import {
   type ReportDatePresetId,
 } from '../../lib/reportDatePresets';
 import { AppModal } from '../ui/AppModal';
+import { DateInput } from '../DateInput';
 
 const ALL_WAREHOUSES = '';
 
@@ -111,22 +112,20 @@ export function ReportRunModal({
             <div className="reports-date-row">
               <label className="reports-field">
                 <span>{t('reports.dateFrom')}</span>
-                <input
-                  type="date"
+                <DateInput
                   value={from}
-                  onChange={(e) => {
-                    setFrom(e.target.value);
+                  onChange={(v) => {
+                    setFrom(v);
                     setDatePreset('');
                   }}
                 />
               </label>
               <label className="reports-field">
                 <span>{t('reports.dateTo')}</span>
-                <input
-                  type="date"
+                <DateInput
                   value={to}
-                  onChange={(e) => {
-                    setTo(e.target.value);
+                  onChange={(v) => {
+                    setTo(v);
                     setDatePreset('');
                   }}
                 />

@@ -145,9 +145,14 @@ export type DraftDefaultsContext = {
   today: string;
   chargeTotal: number;
   openBalance: number;
+  /** Tenant (company) bank — bank transfer deposit account. */
   bankCode?: string;
   bankBranch?: string;
   bankAccount?: string;
+  /** Customer bank — check drawer details. */
+  customerBankCode?: string;
+  customerBankBranch?: string;
+  customerBankAccount?: string;
   withholdingPercent?: number | null;
 };
 
@@ -207,13 +212,13 @@ export function reconcileBankTransferAmounts(
 export function defaultAmountForTab(tab: ReceiptPaymentTypeKey, ctx: DraftDefaultsContext): string {
   if (tab === 'WithholdingTax') {
     const pct = ctx.withholdingPercent ?? 0;
-    if (pct > 0 && ctx.chargeTotal > 0) {
+    if (pct > 0 && ctx.chargeTotal > 0 && ctx.openBalance > 0) {
       return String(withholdingAmountFromPercent(ctx.chargeTotal, pct));
     }
     return '';
   }
-  const n = ctx.openBalance > 0 ? ctx.openBalance : ctx.chargeTotal;
-  return n > 0 ? String(roundMoney(n)) : '';
+  if (ctx.openBalance <= 0) return '';
+  return String(roundMoney(ctx.openBalance));
 }
 
 export function buildPaymentDraft(
@@ -239,7 +244,18 @@ export function buildPaymentDraft(
     return {
       ...base,
       amount,
-      percent: pct > 0 ? String(pct) : '',
+      percent: pct > 0 && ctx.openBalance > 0 ? String(pct) : '',
+    };
+  }
+
+  if (tab === 'Check') {
+    return {
+      ...base,
+      amount,
+      dueDate: ctx.today,
+      bankNumber: ctx.customerBankCode ?? '',
+      branchNumber: ctx.customerBankBranch ?? '',
+      accountNumber: ctx.customerBankAccount ?? '',
     };
   }
 
@@ -404,7 +420,10 @@ export function draftMatchesSavedLine(
   const d = line.details;
   switch (tab) {
     case 'WithholdingTax':
-      return strEq(draft.percent, d.percent != null ? String(d.percent) : '');
+      return (
+        strEq(draft.percent, d.percent != null ? String(d.percent) : '') &&
+        strEq(draft.lineDate, line.lineDate || '')
+      );
     case 'BankTransfer':
       return (
         strEq(draft.bankNumber, String(d.bankNumber ?? '')) &&
@@ -443,8 +462,11 @@ export function hasUncommittedPaymentDraft(
   tab: ReceiptPaymentTypeKey,
   draft: PaymentDraftFields,
   savedLines: SavedPaymentLine[],
-  editingLineId: string | null
+  editingLineId: string | null,
+  openBalance = 0
 ): boolean {
+  if (openBalance <= 0 && !editingLineId) return false;
+
   if (!draftHasContent(draft)) return false;
 
   if (editingLineId) {

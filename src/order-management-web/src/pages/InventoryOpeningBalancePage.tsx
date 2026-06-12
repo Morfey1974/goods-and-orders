@@ -18,6 +18,7 @@ import {
 } from '../lib/inventoryOpeningDraft';
 import { productTypeCanTrackStock } from '../lib/productInventory';
 import { normalizeStockQuantity } from '../lib/stockQuantity';
+import { DateInput } from '../components/DateInput';
 import { ProductCodeCell } from '../components/products/ProductCodeCell';
 import '../styles/purchase-receipts.css';
 import '../styles/inventory.css';
@@ -271,7 +272,7 @@ export function InventoryOpeningBalancePage() {
           <div className="inventory-meta-grid">
             <label className="pr-field pr-field--date">
               <span>{t('inventory.asOfDate')}</span>
-              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} required />
+              <DateInput value={asOfDate} onChange={setAsOfDate} required />
             </label>
             <label className="pr-field pr-field--notes">
               <span>{t('purchaseReceipts.notes')}</span>

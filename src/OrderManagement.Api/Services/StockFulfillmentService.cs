@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Helpers;
 
 namespace OrderManagement.Api.Services;
 
@@ -102,4 +103,73 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         string? reference,
         CancellationToken ct) =>
         DeductProductSaleAsync(tenantId, productId, quantity, reference, DateTime.UtcNow, ct);
+
+    public async Task<bool> HasStockIssuesForChargeAsync(
+        Guid tenantId,
+        string documentNumber,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(documentNumber))
+            return false;
+
+        return await ChargeStockReference
+            .WhereChargeReference(
+                db.StockMovements.AsNoTracking().Where(m =>
+                    m.TenantId == tenantId && m.MovementType == StockMovementType.Issue),
+                documentNumber)
+            .AnyAsync(ct);
+    }
+
+    public async Task ReverseStockForChargeAsync(
+        Guid tenantId,
+        string documentNumber,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(documentNumber))
+            return;
+
+        var movementIds = await ChargeStockReference
+            .WhereChargeReference(
+                db.StockMovements.Where(m =>
+                    m.TenantId == tenantId && m.MovementType == StockMovementType.Issue),
+                documentNumber)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+
+        foreach (var movementId in movementIds)
+            await inventoryCost.ReverseIssueAsync(tenantId, movementId, ct);
+    }
+
+    /// <summary>
+    /// Removes warehouse issues that belong to draft, deleted, or cancelled charge invoices.
+    /// </summary>
+    public async Task ReconcileInvalidChargeStockAsync(Guid tenantId, CancellationToken ct)
+    {
+        var finalizedChargeNumbers = await db.BusinessDocuments
+            .AsNoTracking()
+            .Where(d =>
+                d.TenantId == tenantId
+                && d.DocumentType == DocumentType.ChargeInvoice
+                && d.Status != DocumentStatus.Draft
+                && d.Status != DocumentStatus.Cancelled)
+            .Select(d => d.DocumentNumber)
+            .ToListAsync(ct);
+
+        var finalizedSet = finalizedChargeNumbers.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var issueMovements = await db.StockMovements
+            .Where(m => m.TenantId == tenantId && m.MovementType == StockMovementType.Issue && m.Notes != null)
+            .Select(m => new { m.Id, m.Notes })
+            .ToListAsync(ct);
+
+        foreach (var movement in issueMovements)
+        {
+            var chargeNumber = ChargeStockReference.TryExtractChargeNumber(movement.Notes);
+            if (chargeNumber is null)
+                continue;
+
+            if (!finalizedSet.Contains(chargeNumber))
+                await inventoryCost.ReverseIssueAsync(tenantId, movement.Id, ct);
+        }
+    }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DateInput } from '../DateInput';
 
 import {
   formatReportRangeLabel,
@@ -140,22 +141,20 @@ export function ReportDateRangePicker({ from, to, presetId, onChange }: Props) {
                 <p className="report-date-range__manual-title">{t('reports.dateRangeManualTitle')}</p>
                 <label className="report-date-range__field">
                   <span>{t('reports.dateFrom')}</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={draftFrom}
-                    onChange={(e) => {
-                      setDraftFrom(e.target.value);
+                    onChange={(v) => {
+                      setDraftFrom(v);
                       setDraftPreset('');
                     }}
                   />
                 </label>
                 <label className="report-date-range__field">
                   <span>{t('reports.dateTo')}</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={draftTo}
-                    onChange={(e) => {
-                      setDraftTo(e.target.value);
+                    onChange={(v) => {
+                      setDraftTo(v);
                       setDraftPreset('');
                     }}
                   />

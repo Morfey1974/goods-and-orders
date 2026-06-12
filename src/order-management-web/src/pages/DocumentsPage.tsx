@@ -209,6 +209,9 @@ export function DocumentsPage() {
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
+      if (!el.closest('.documents-create-wrap')) {
+        setMenuOpen(false);
+      }
       if (
         !el.closest('.row-menu-wrap') &&
         !el.closest('.row-menu--portal') &&
