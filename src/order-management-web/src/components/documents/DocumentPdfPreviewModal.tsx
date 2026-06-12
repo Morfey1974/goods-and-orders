@@ -10,6 +10,9 @@ type Props = {
   error: string | null;
   onClose: () => void;
   onDownload?: () => void;
+  /** When true, show image instead of PDF iframe. */
+  isImage?: boolean;
+  downloadLabel?: string;
 };
 
 export function DocumentPdfPreviewModal({
@@ -20,6 +23,8 @@ export function DocumentPdfPreviewModal({
   error,
   onClose,
   onDownload,
+  isImage = false,
+  downloadLabel,
 }: Props) {
   const { t } = useTranslation();
 
@@ -38,7 +43,7 @@ export function DocumentPdfPreviewModal({
         <div className="doc-pdf-preview-actions">
           {onDownload && pdfUrl && (
             <button type="button" className="btn btn-secondary" onClick={onDownload}>
-              {t('documents.downloadPdf')}
+              {downloadLabel ?? t('documents.downloadPdf')}
             </button>
           )}
           <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
@@ -49,7 +54,10 @@ export function DocumentPdfPreviewModal({
       <div className="doc-pdf-preview-body">
         {loading && <p className="muted">{t('documents.loading')}</p>}
         {error && <div className="error-banner">{error}</div>}
-        {!loading && !error && pdfUrl && (
+        {!loading && !error && pdfUrl && isImage && (
+          <img src={pdfUrl} alt={title} className="doc-pdf-preview-image" />
+        )}
+        {!loading && !error && pdfUrl && !isImage && (
           <iframe title={title} src={pdfUrl} className="doc-pdf-preview-frame" />
         )}
       </div>

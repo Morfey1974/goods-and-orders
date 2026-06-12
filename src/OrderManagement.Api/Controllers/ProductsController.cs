@@ -264,6 +264,7 @@ public class ProductsController(
             CreatedAt = now,
             UpdatedAt = now
         };
+        CatalogMappers.ApplyFixedAssetProductFields(product, request.DepreciationCategory, request.DefaultBusinessUsePercent);
 
         if (request.WarehouseId is { } createWhId)
         {
@@ -313,7 +314,6 @@ public class ProductsController(
         product.UnitPrice = request.UnitPrice;
         product.ShowBomInQuote = request.ShowBomInQuote;
         product.ShowBomInInvoice = request.ShowBomInInvoice;
-        product.TrackInventory = request.TrackInventory && ProductTypePrefixes.TracksStock(product.ProductType);
         product.IsActive = request.IsActive;
 
         if (!string.IsNullOrWhiteSpace(request.ProductType))
@@ -329,6 +329,9 @@ public class ProductsController(
                 if (typeErr is not null) return BadRequest(new { message = typeErr });
             }
         }
+
+        product.TrackInventory = request.TrackInventory && ProductTypePrefixes.TracksStock(product.ProductType);
+        CatalogMappers.ApplyFixedAssetProductFields(product, request.DepreciationCategory, request.DefaultBusinessUsePercent);
 
         if (request.BomLines is not null)
         {
@@ -566,6 +569,13 @@ public class ProductsController(
             product.ArticleCode = await articles.ReserveNextArticleAsync(tenantId, newType, ct);
 
         product.ProductType = newType;
+
+        if (newType == ProductType.FixedAsset)
+        {
+            product.DepreciationCategory ??= DepreciationAssetCategory.OtherEquipment;
+            product.DefaultBusinessUsePercent ??= 100m;
+            product.TrackInventory = false;
+        }
 
         if (newType is not (ProductType.FinishedGood or ProductType.Bundle))
         {

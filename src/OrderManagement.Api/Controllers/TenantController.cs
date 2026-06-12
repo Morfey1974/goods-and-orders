@@ -86,6 +86,22 @@ public class TenantController(AppDbContext db) : ControllerBase
                 _ => tenant.InventoryCostMethod
             };
         }
+        if (!string.IsNullOrWhiteSpace(request.ExpenseLocationMode))
+        {
+            tenant.ExpenseLocationMode = request.ExpenseLocationMode.Trim() switch
+            {
+                "RentedOffice" => Entities.BusinessExpenseLocationMode.RentedOffice,
+                "HomeOffice" => Entities.BusinessExpenseLocationMode.HomeOffice,
+                _ => tenant.ExpenseLocationMode
+            };
+        }
+        if (request.HomeBusinessRoomsUsed is > 0)
+            tenant.HomeBusinessRoomsUsed = request.HomeBusinessRoomsUsed.Value;
+        if (request.HomeBusinessRoomsTotal is > 0)
+            tenant.HomeBusinessRoomsTotal = request.HomeBusinessRoomsTotal.Value;
+        if (tenant.ExpenseLocationMode == Entities.BusinessExpenseLocationMode.HomeOffice
+            && tenant.HomeBusinessRoomsUsed > tenant.HomeBusinessRoomsTotal)
+            return BadRequest(new { message = "Business rooms cannot exceed total rooms." });
         tenant.Version++;
         tenant.UpdatedAt = DateTime.UtcNow;
 

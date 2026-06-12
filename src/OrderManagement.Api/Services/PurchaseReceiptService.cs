@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Helpers;
 
 namespace OrderManagement.Api.Services;
 
@@ -11,7 +12,8 @@ public class PurchaseReceiptService(
     InventoryCostService inventoryCost,
     ExchangeRateService exchangeRates,
     TenantFileService files,
-    ArticleSequenceService sequences)
+    ArticleSequenceService sequences,
+    FixedAssetInstanceService fixedAssetInstances)
 {
     public async Task<PurchaseReceipt> CreateDraftAsync(
         Guid tenantId,
@@ -116,8 +118,21 @@ public class PurchaseReceiptService(
 
         await ValidateReceiptForPostAsync(tenantId, receipt, ct);
 
+        if (ReceiptNeedsUsdRate(receipt))
+            receipt.UsdIlsRate = await ResolveUsdIlsRateAsync(receipt, ct);
+
         var stockLines = receipt.Lines
             .Where(l => ProductInventoryHelper.TracksStock(l.Product))
+            .OrderBy(l => l.SortOrder)
+            .ToList();
+
+        var fixedAssetLines = receipt.Lines
+            .Where(l => ProductTypePrefixes.IsFixedAsset(l.Product.ProductType))
+            .OrderBy(l => l.SortOrder)
+            .ToList();
+
+        var consumableLines = receipt.Lines
+            .Where(l => ProductTypePrefixes.IsConsumable(l.Product.ProductType))
             .OrderBy(l => l.SortOrder)
             .ToList();
 
@@ -129,21 +144,16 @@ public class PurchaseReceiptService(
         }
 
         Dictionary<Guid, decimal>? finalUnitCosts = null;
+        Dictionary<Guid, decimal>? landedShareByLineId = null;
+        decimal totalLandedIls = 0m;
+
         if (receipt.ApplyLandedCosts && receipt.LandedCostLines.Count > 0)
         {
-            if (stockLines.Count == 0)
-                throw new InvalidOperationException(
-                    "Landed costs require at least one stock line to allocate into unit cost.");
-
-            var needsUsdRate = receipt.LandedCostLines.Any(l =>
-                !IsIlsCurrency(l.Currency));
+            var needsUsdRate = receipt.LandedCostLines.Any(l => !IsIlsCurrency(l.Currency));
             decimal usdIlsRate = 1m;
             if (needsUsdRate)
-            {
                 usdIlsRate = await ResolveUsdIlsRateAsync(receipt, ct);
-            }
 
-            decimal totalLandedIls = 0;
             foreach (var landed in receipt.LandedCostLines.OrderBy(l => l.SortOrder))
             {
                 var amountIls = LandedCostAllocation.ResolveAmountIls(
@@ -153,7 +163,37 @@ public class PurchaseReceiptService(
             }
 
             if (totalLandedIls > 0)
-                finalUnitCosts = LandedCostAllocation.ComputeFinalUnitCostsIls(stockLines, totalLandedIls);
+            {
+                if (stockLines.Count == 0 && fixedAssetLines.Count == 0)
+                    throw new InvalidOperationException(
+                        "Landed costs require at least one stock or fixed-asset line to allocate.");
+
+                var stockBaseTotal = stockLines.Sum(l =>
+                    PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
+                var faBaseTotal = fixedAssetLines.Sum(l =>
+                    PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
+                var allocBase = stockBaseTotal + faBaseTotal;
+
+                var stockLandedPool = stockLines.Count == 0
+                    ? 0m
+                    : faBaseTotal <= 0
+                        ? totalLandedIls
+                        : DepreciationCalculator.RoundMoney(totalLandedIls * (stockBaseTotal / allocBase));
+
+                var faLandedPool = DepreciationCalculator.RoundMoney(totalLandedIls - stockLandedPool);
+
+                if (stockLines.Count > 0 && stockLandedPool > 0)
+                    finalUnitCosts = LandedCostAllocation.ComputeFinalUnitCostsIls(stockLines, stockLandedPool);
+
+                if (fixedAssetLines.Count > 0 && faLandedPool > 0)
+                {
+                    var faBases = fixedAssetLines
+                        .Select(l => (l.Id, PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l)))
+                        .ToList();
+                    landedShareByLineId = PurchaseReceiptFixedAssetPosting.AllocateLandedCostToLines(
+                        faBases, faLandedPool);
+                }
+            }
         }
 
         var noteBase = BuildMovementNote(receipt);
@@ -201,11 +241,36 @@ public class PurchaseReceiptService(
                 ct);
         }
 
+        foreach (var line in fixedAssetLines)
+        {
+            var baseIls = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var landed = landedShareByLineId?.GetValueOrDefault(line.Id) ?? 0m;
+            var instance = PurchaseReceiptFixedAssetPosting.CreateInstance(
+                tenantId, receipt, line, line.Product, baseIls + landed);
+            db.FixedAssetInstances.Add(instance);
+        }
+
+        foreach (var line in consumableLines)
+        {
+            var amount = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var expense = PurchaseReceiptFixedAssetPosting.CreateConsumableExpense(
+                tenantId, receipt, line, line.Product, amount);
+            db.BusinessExpenses.Add(expense);
+        }
+
         receipt.Status = PurchaseReceiptStatus.Posted;
         receipt.PostedAt = DateTime.UtcNow;
         receipt.Version++;
         receipt.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        var asOf = DateTime.UtcNow;
+        foreach (var line in fixedAssetLines)
+        {
+            var instance = await db.FixedAssetInstances
+                .FirstAsync(i => i.PurchaseReceiptLineId == line.Id, ct);
+            await fixedAssetInstances.RefreshDepreciationStatusAsync(instance, asOf, ct);
+        }
 
         return await LoadAsync(tenantId, receipt.Id, ct)
             ?? throw new InvalidOperationException("Failed to load purchase receipt.");
@@ -293,6 +358,18 @@ public class PurchaseReceiptService(
                 .ExecuteDeleteAsync(ct);
 
             var receiptId = receipt.Id;
+            var lineIds = receipt.Lines.Select(l => l.Id).ToList();
+
+            await db.FixedAssetInstances
+                .Where(i => i.PurchaseReceiptId == receiptId)
+                .ExecuteDeleteAsync(ct);
+
+            await db.BusinessExpenses
+                .Where(e => e.TenantId == tenantId &&
+                            e.PurchaseReceiptLineId != null &&
+                            lineIds.Contains(e.PurchaseReceiptLineId.Value))
+                .ExecuteDeleteAsync(ct);
+
             db.Entry(receipt).State = EntityState.Detached;
             foreach (var line in receipt.Lines)
                 db.Entry(line).State = EntityState.Detached;
@@ -534,6 +611,10 @@ public class PurchaseReceiptService(
         return c is "ILS" or "NIS";
     }
 
+    private static bool ReceiptNeedsUsdRate(PurchaseReceipt receipt) =>
+        NormalizeCurrency(receipt.Currency) == "USD" ||
+        receipt.LandedCostLines.Any(l => !IsIlsCurrency(l.Currency));
+
     private static List<PurchaseReceiptLine> BuildLineEntities(
         Guid receiptId,
         IReadOnlyList<PurchaseReceiptLineInput> lines)
@@ -666,6 +747,15 @@ public class PurchaseReceiptService(
                 {
                     throw new InvalidOperationException(
                         "Unit cost in ILS is required for stock items when the receipt currency is not ILS.");
+                }
+            }
+            else if (ProductTypePrefixes.IsFixedAsset(product.ProductType))
+            {
+                if (product.DepreciationCategory is null)
+                {
+                    product.DepreciationCategory = DepreciationAssetCategory.OtherEquipment;
+                    product.DefaultBusinessUsePercent ??= 100m;
+                    product.UpdatedAt = DateTime.UtcNow;
                 }
             }
         }

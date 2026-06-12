@@ -162,7 +162,7 @@ export function ExpenseReportPage() {
         toolbar={
           <div className="dt-panel__toolbar-row">
             <DataTablePanelHeading
-              title={t('reports.expenseTitle')}
+              title={t('reports.purchasesGrTitle')}
               count={t('products.results', { count: total })}
             />
             <div className="dt-panel__toolbar-actions">
@@ -189,7 +189,7 @@ export function ExpenseReportPage() {
               onChange={onDateRangeChange}
             />
             <p className="muted dt-panel__hint" style={{ margin: 0, width: '100%' }}>
-              {t('reports.expenseHint')}
+              {t('reports.purchasesGrHint')}
             </p>
           </>
         }
@@ -251,7 +251,7 @@ export function ExpenseReportPage() {
 
       <DocumentPdfPreviewModal
         open={pdfOpen}
-        title={t('reports.expenseTitle')}
+        title={t('reports.purchasesGrTitle')}
         pdfUrl={pdfUrl}
         loading={pdfLoading}
         error={pdfError}

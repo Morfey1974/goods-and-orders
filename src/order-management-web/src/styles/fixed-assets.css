@@ -1,0 +1,143 @@
+.fixed-asset-modal-overlay {
+  cursor: default;
+}
+
+.fixed-asset-modal .app-modal-panel__body {
+  overflow: hidden;
+}
+
+.fixed-asset-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.fixed-asset-form .settings-fields {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.fixed-asset-form__preview {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  flex-shrink: 0;
+  width: 100%;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 35%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 18%, var(--border));
+  border-radius: 8px;
+}
+
+.fixed-asset-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.35rem;
+  margin-top: auto;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.fixed-asset-form .settings-row--asset-details {
+  display: grid;
+  grid-template-columns: minmax(9rem, 11rem) minmax(8rem, 10rem) minmax(10rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  width: 100%;
+}
+
+.fixed-asset-form__supplier-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.fixed-asset-form__supplier-row .settings-field,
+.fixed-asset-form__supplier-row select {
+  width: 100%;
+}
+
+.fixed-asset-form__add-supplier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--palette-turquoise) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 18%, var(--surface));
+}
+
+.fixed-asset-form__add-supplier input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.fixed-asset-form__add-supplier .error-banner {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.fixed-asset-form__add-supplier .btn {
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.fixed-asset-form .settings-row--asset-dates {
+  display: grid;
+  grid-template-columns: minmax(9rem, 11rem) minmax(9rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  width: 100%;
+}
+
+.fixed-asset-form__stretch-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 5rem;
+  min-height: 5rem;
+  min-width: 0;
+  width: 100%;
+  gap: 0.2rem;
+}
+
+.fixed-asset-modal .fixed-asset-form__stretch-field.settings-field > textarea.fixed-asset-form__stretch-input {
+  flex: 1 1 4.5rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.5rem;
+  margin: 0;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.fixed-asset-form .settings-field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fixed-asset-form .settings-field--checkbox input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+.fixed-asset-modal .fixed-asset-form__actions .btn {
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+}

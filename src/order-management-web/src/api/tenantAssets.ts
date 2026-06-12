@@ -61,13 +61,13 @@ function authHeaders(token: string): HeadersInit {
 function mapSummary(raw: Record<string, unknown>): TenantAssetsSummary {
   const docs = (raw.complianceDocuments as Record<string, unknown>[] | undefined) ?? [];
   return {
-    hasLogo: Boolean(raw.hasLogo),
-    hasSignature: Boolean(raw.hasSignature),
+    hasLogo: Boolean(raw.hasLogo ?? raw.HasLogo),
+    hasSignature: Boolean(raw.hasSignature ?? raw.HasSignature),
     complianceDocuments: docs.map((d) => ({
-      kind: d.kind as ComplianceDocumentKind,
-      originalFileName: String(d.originalFileName ?? ''),
-      fileSizeBytes: Number(d.fileSizeBytes ?? 0),
-      uploadedAt: String(d.uploadedAt ?? ''),
+      kind: (d.kind ?? d.Kind) as ComplianceDocumentKind,
+      originalFileName: String(d.originalFileName ?? d.OriginalFileName ?? ''),
+      fileSizeBytes: Number(d.fileSizeBytes ?? d.FileSizeBytes ?? 0),
+      uploadedAt: String(d.uploadedAt ?? d.UploadedAt ?? ''),
     })),
   };
 }

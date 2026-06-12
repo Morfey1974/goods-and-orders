@@ -42,6 +42,12 @@ public class Tenant
     /// <summary>Default withholding tax percent (ניכוי במקור) for receipts.</summary>
     public decimal? WithholdingTaxPercent { get; set; }
     public InventoryCostMethod InventoryCostMethod { get; set; } = InventoryCostMethod.Fifo;
+    /// <summary>Rented office vs home office — controls expense recognition rules.</summary>
+    public BusinessExpenseLocationMode ExpenseLocationMode { get; set; } = BusinessExpenseLocationMode.HomeOffice;
+    /// <summary>Rooms used for business at home (for mixed home expense recognition).</summary>
+    public int HomeBusinessRoomsUsed { get; set; } = 1;
+    /// <summary>Total rooms in home (for mixed home expense recognition).</summary>
+    public int HomeBusinessRoomsTotal { get; set; } = 4;
     public SubscriptionStatus SubscriptionStatus { get; set; } = SubscriptionStatus.Trial;
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
     public DateTime TrialEndsAt { get; set; }

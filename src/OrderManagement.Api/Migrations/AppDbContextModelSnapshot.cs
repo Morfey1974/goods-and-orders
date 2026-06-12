@@ -193,6 +193,104 @@ namespace OrderManagement.Api.Migrations
                     b.ToTable("BusinessDocumentLines");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.BusinessExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("HomeExpenseType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InvoiceReference")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsHomeMixed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("OperatingExpenseType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PurchaseReceiptLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VendorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseReceiptLineId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ExpenseDate");
+
+                    b.ToTable("BusinessExpenses");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.BusinessExpenseDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessExpenseId");
+
+                    b.ToTable("BusinessExpenseDocuments");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -356,6 +454,196 @@ namespace OrderManagement.Api.Migrations
                     b.HasIndex("CustomerId");
 
                     b.ToTable("CustomerContacts");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AnnualDepreciationPercent")
+                        .HasPrecision(8, 4)
+                        .HasColumnType("numeric(8,4)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("CostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("DisposedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvoiceReference")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsDisposed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("PurchaseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VendorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "PurchaseDate");
+
+                    b.ToTable("FixedAssets");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAssetDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("FixedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FixedAssetId");
+
+                    b.ToTable("FixedAssetDocuments");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAssetInstance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AcquisitionDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("AnnualDepreciationPercent")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)");
+
+                    b.Property<decimal>("BusinessUsePercent")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ChangesCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("DisposedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("InServiceDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvoiceReference")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<decimal>("OriginalCostIls")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PurchaseReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PurchaseReceiptLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VendorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PurchaseReceiptId");
+
+                    b.HasIndex("PurchaseReceiptLineId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "AcquisitionDate");
+
+                    b.ToTable("FixedAssetInstances");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.InventoryAverageCost", b =>
@@ -610,6 +898,13 @@ namespace OrderManagement.Api.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("DefaultBusinessUsePercent")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<int?>("DepreciationCategory")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
@@ -1289,9 +1584,18 @@ namespace OrderManagement.Api.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<int>("ExpenseLocationMode")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Fax")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int>("HomeBusinessRoomsTotal")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HomeBusinessRoomsUsed")
+                        .HasColumnType("integer");
 
                     b.Property<int>("InventoryCostMethod")
                         .HasColumnType("integer");
@@ -1552,6 +1856,17 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.BusinessExpenseDocument", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.BusinessExpense", "BusinessExpense")
+                        .WithMany("Documents")
+                        .HasForeignKey("BusinessExpenseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessExpense");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.CustomerContact", b =>
                 {
                     b.HasOne("OrderManagement.Api.Entities.Customer", "Customer")
@@ -1561,6 +1876,41 @@ namespace OrderManagement.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAssetDocument", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.FixedAsset", "FixedAsset")
+                        .WithMany("Documents")
+                        .HasForeignKey("FixedAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FixedAsset");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAssetInstance", b =>
+                {
+                    b.HasOne("OrderManagement.Api.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OrderManagement.Api.Entities.PurchaseReceipt", "PurchaseReceipt")
+                        .WithMany()
+                        .HasForeignKey("PurchaseReceiptId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OrderManagement.Api.Entities.PurchaseReceiptLine", "PurchaseReceiptLine")
+                        .WithMany()
+                        .HasForeignKey("PurchaseReceiptLineId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Product");
+
+                    b.Navigation("PurchaseReceipt");
+
+                    b.Navigation("PurchaseReceiptLine");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.InventoryAverageCost", b =>
@@ -1831,9 +2181,19 @@ namespace OrderManagement.Api.Migrations
                     b.Navigation("PaymentLines");
                 });
 
+            modelBuilder.Entity("OrderManagement.Api.Entities.BusinessExpense", b =>
+                {
+                    b.Navigation("Documents");
+                });
+
             modelBuilder.Entity("OrderManagement.Api.Entities.Customer", b =>
                 {
                     b.Navigation("Contacts");
+                });
+
+            modelBuilder.Entity("OrderManagement.Api.Entities.FixedAsset", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("OrderManagement.Api.Entities.Order", b =>

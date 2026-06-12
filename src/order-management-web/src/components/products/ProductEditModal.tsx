@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppModal } from '../ui/AppModal';
 import { UnsavedLeaveDialog } from '../UnsavedLeaveDialog';
@@ -11,14 +12,15 @@ import { inventoryApi, type InventoryLot } from '../../api/inventory';
 import { productGroupsApi, type ProductGroup } from '../../api/productGroups';
 import { warehouseApi, type Warehouse } from '../../api/warehouse';
 import { defaultWarehouseForProductType, resolveProductWarehouseId } from '../../lib/defaultWarehouse';
-import { formatInventoryLotSource } from '../../lib/inventoryLotLabel';
+import { formatInventoryLotSourceKind } from '../../lib/inventoryLotLabel';
 import { formatStockQuantity } from '../../lib/stockQuantity';
 import { BidiText, bidiAutoInputProps } from '../BidiText';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductGroupsMultiSelect } from './ProductGroupsMultiSelect';
 import { ProductWarehouseSelect } from './ProductWarehouseSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
-import { productTypeCanTrackStock, productTracksStock } from '../../lib/productInventory';
+import { productTypeCanTrackStock, productTracksStock, isFixedAssetProductType } from '../../lib/productInventory';
+import { DEPRECIATION_CATEGORIES } from '../../lib/businessAccountingTypes';
 import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
 
 const PRODUCT_FORM_ID = 'product-card-form';
@@ -37,6 +39,8 @@ type FormSnapshot = {
   bomLines: BomInput[];
   groupIds: string[];
   warehouseId: string;
+  depreciationCategory: string;
+  businessUsePercent: string;
 };
 
 function snapshotFromState(
@@ -50,6 +54,8 @@ function snapshotFromState(
     showBomInInvoice: boolean;
     trackInventory: boolean;
     bomLines: BomInput[];
+    depreciationCategory: string;
+    businessUsePercent: string;
   },
   groupIds: Set<string>,
   warehouseId: string
@@ -69,6 +75,8 @@ function snapshotFromState(
     })),
     groupIds: [...groupIds].sort(),
     warehouseId,
+    depreciationCategory: form.depreciationCategory,
+    businessUsePercent: form.businessUsePercent,
   };
 }
 
@@ -82,7 +90,9 @@ function snapshotsEqual(a: FormSnapshot, b: FormSnapshot): boolean {
     a.showBomInQuote !== b.showBomInQuote ||
     a.showBomInInvoice !== b.showBomInInvoice ||
     a.trackInventory !== b.trackInventory ||
-    a.warehouseId !== b.warehouseId
+    a.warehouseId !== b.warehouseId ||
+    a.depreciationCategory !== b.depreciationCategory ||
+    a.businessUsePercent !== b.businessUsePercent
   ) {
     return false;
   }
@@ -228,6 +238,8 @@ export function ProductEditModal({
     showBomInInvoice: false,
     trackInventory: false,
     bomLines: [] as BomInput[],
+    depreciationCategory: 'PersonalPc',
+    businessUsePercent: '100',
   });
   const [baselineKey, setBaselineKey] = useState(0);
 
@@ -266,6 +278,8 @@ export function ProductEditModal({
           componentProductId: b.componentProductId,
           quantity: normalizeBomQty(b.quantity),
         })),
+        depreciationCategory: product.depreciationCategory ?? 'PersonalPc',
+        businessUsePercent: String(product.defaultBusinessUsePercent ?? 100),
       });
     } else if (duplicateFrom) {
       setForm({
@@ -281,6 +295,8 @@ export function ProductEditModal({
           componentProductId: b.componentProductId,
           quantity: normalizeBomQty(b.quantity),
         })),
+        depreciationCategory: duplicateFrom.depreciationCategory ?? 'PersonalPc',
+        businessUsePercent: String(duplicateFrom.defaultBusinessUsePercent ?? 100),
       });
     } else {
       setForm({
@@ -293,11 +309,14 @@ export function ProductEditModal({
         showBomInInvoice: false,
         trackInventory: false,
         bomLines: [],
+        depreciationCategory: 'PersonalPc',
+        businessUsePercent: '100',
       });
     }
-    const groupSeed = product?.groupIds ?? duplicateFrom?.groupIds ?? [];
-    setSelectedGroupIds(new Set(groupSeed));
-    setInitialGroupIds(new Set(groupSeed));
+    const selectedSeed = product?.groupIds ?? duplicateFrom?.groupIds ?? [];
+    setSelectedGroupIds(new Set(selectedSeed));
+    // New/duplicate draft: no server membership yet — only existing product keeps initial groups.
+    setInitialGroupIds(new Set(product?.groupIds ?? []));
   }, [open, product, duplicateFrom, initialTab]);
 
   useEffect(() => {
@@ -372,6 +391,8 @@ export function ProductEditModal({
       showBomInQuote: showBom ? f.showBomInQuote : false,
       showBomInInvoice: showBom ? f.showBomInInvoice : false,
       trackInventory: productTypeCanTrackStock(productType) ? f.trackInventory : false,
+      depreciationCategory: isFixedAssetProductType(productType) ? f.depreciationCategory || 'PersonalPc' : 'PersonalPc',
+      businessUsePercent: isFixedAssetProductType(productType) ? f.businessUsePercent || '100' : '100',
     }));
     setWarehouseId(defaultWarehouseForProductType(productType, warehouses));
     if (!productTypeCanTrackStock(productType) && (tab === 'movements' || tab === 'lots')) setTab('general');
@@ -424,6 +445,16 @@ export function ProductEditModal({
       const warehousePayload =
         tracksStock && form.trackInventory && warehouseId ? { warehouseId } : { warehouseId: null };
 
+      const faPayload = isFixedAssetProductType(form.productType)
+        ? {
+            depreciationCategory: form.depreciationCategory,
+            defaultBusinessUsePercent: Number(form.businessUsePercent) || 100,
+          }
+        : {
+            depreciationCategory: null,
+            defaultBusinessUsePercent: null,
+          };
+
       if (effectiveProduct) {
         const updated = await catalogApi.products.update(token, effectiveProduct.id, {
           productType: form.productType,
@@ -437,6 +468,7 @@ export function ProductEditModal({
           bomLines: showBom ? bomPayload ?? [] : undefined,
           version: effectiveProduct.version,
           ...warehousePayload,
+          ...faPayload,
         });
         await syncProductGroupMembership(
           token,
@@ -469,6 +501,7 @@ export function ProductEditModal({
           trackInventory: tracksStock && form.trackInventory,
           bomLines: bomPayload,
           ...warehousePayload,
+          ...faPayload,
         });
         if (groupIds.length > 0) {
           await syncProductGroupMembership(
@@ -607,6 +640,34 @@ export function ProductEditModal({
               value={form.productType}
               onChange={onProductTypeChange}
             />
+            {isFixedAssetProductType(form.productType) && (
+              <div className="product-form-grid">
+                <label>
+                  {t('products.depreciationCategory')}
+                  <select
+                    value={form.depreciationCategory}
+                    onChange={(e) => setForm({ ...form, depreciationCategory: e.target.value })}
+                  >
+                    {DEPRECIATION_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {t(`depreciationCategory.${cat}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t('products.businessUsePercent')}
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={form.businessUsePercent}
+                    onChange={(e) => setForm({ ...form, businessUsePercent: e.target.value })}
+                  />
+                </label>
+              </div>
+            )}
             {typeChanged && effectiveProduct?.hasStockMovements && (
               <p className="type-change-note">
                 {t('products.typeChangeArticleKept', { article: effectiveProduct.articleCode })}
@@ -868,6 +929,7 @@ export function ProductEditModal({
                     <th>{t('products.warehouseCol')}</th>
                     <th>{t('inventory.lotReceivedAt')}</th>
                     <th>{t('inventory.lotSource')}</th>
+                    <th>{t('purchaseReceipts.colNumber')}</th>
                     <th>{t('warehouse.qty')}</th>
                     <th>{t('inventory.unitCostIls')}</th>
                     <th>{t('purchaseReceipts.lineSum')}</th>
@@ -878,7 +940,20 @@ export function ProductEditModal({
                     <tr key={lot.id}>
                       <td className="bidi-auto">{lot.warehouseName}</td>
                       <td>{lot.receivedAt}</td>
-                      <td>{formatInventoryLotSource(lot.sourceLabel, t)}</td>
+                      <td>{formatInventoryLotSourceKind(lot, t)}</td>
+                      <td>
+                        {lot.sourceReceiptId && lot.sourceReceiptNumber ? (
+                          <Link
+                            to={`/purchase-receipts/${lot.sourceReceiptId}`}
+                            className="btn-link"
+                            onClick={onClose}
+                          >
+                            {lot.sourceReceiptNumber}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td>{formatStockQuantity(lot.quantityRemaining)}</td>
                       <td>{lot.unitCostIls.toFixed(2)}</td>
                       <td>{lot.totalValueIls.toFixed(2)} ₪</td>

@@ -8,6 +8,7 @@ import {
   type TenantAssetsSummary,
 } from '../../api/tenantAssets';
 import { DocumentPdfPreviewModal } from '../documents/DocumentPdfPreviewModal';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { ComplianceEmailModal } from './ComplianceEmailModal';
 
 type Props = {
@@ -28,6 +29,8 @@ export function TenantComplianceSection({
   const { t } = useTranslation();
   const fileRefs = useRef<Partial<Record<ComplianceDocumentKind, HTMLInputElement | null>>>({});
   const [busyKind, setBusyKind] = useState<ComplianceDocumentKind | null>(null);
+  const [deleteConfirmKind, setDeleteConfirmKind] = useState<ComplianceDocumentKind | null>(null);
+  const [deleteConfirmBusy, setDeleteConfirmBusy] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [previewKind, setPreviewKind] = useState<ComplianceDocumentKind | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -77,16 +80,23 @@ export function TenantComplianceSection({
     }
   };
 
-  const remove = async (kind: ComplianceDocumentKind) => {
-    if (!window.confirm(t('settings.complianceDeleteConfirm'))) return;
-    setBusyKind(kind);
+  const requestRemove = (kind: ComplianceDocumentKind) => {
+    setDeleteConfirmKind(kind);
+  };
+
+  const confirmRemove = async () => {
+    if (!deleteConfirmKind) return;
+    const kind = deleteConfirmKind;
+    setDeleteConfirmBusy(true);
     onError('');
     try {
       const updated = await tenantAssetsApi.deleteCompliance(token, kind);
       onSummaryChange(updated);
+      setDeleteConfirmKind(null);
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Error');
     } finally {
+      setDeleteConfirmBusy(false);
       setBusyKind(null);
     }
   };
@@ -145,7 +155,7 @@ export function TenantComplianceSection({
                         className="settings-compliance-icon-btn settings-compliance-icon-btn--danger"
                         title={t('settings.removeFile')}
                         disabled={busy}
-                        onClick={() => void remove(kind)}
+                        onClick={() => requestRemove(kind)}
                       >
                         ×
                       </button>
@@ -221,6 +231,18 @@ export function TenantComplianceSection({
                 )
             : undefined
         }
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmKind !== null}
+        title={t('settings.complianceDeleteConfirmTitle')}
+        message={t('settings.complianceDeleteConfirm')}
+        confirmLabel={t('products.actionDelete')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        busy={deleteConfirmBusy}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => !deleteConfirmBusy && setDeleteConfirmKind(null)}
       />
     </>
   );

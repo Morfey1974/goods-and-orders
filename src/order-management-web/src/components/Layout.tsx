@@ -13,6 +13,7 @@ const navItems = [
   { to: '/warehouse', key: 'warehouse' },
   { to: '/purchase-receipts', key: 'purchaseReceipts' },
   { to: '/documents', key: 'documents' },
+  { to: '/business-expenses', key: 'businessExpenses' },
   { to: '/reports', key: 'reports' },
   { to: '/settings', key: 'settings' },
 ] as const;

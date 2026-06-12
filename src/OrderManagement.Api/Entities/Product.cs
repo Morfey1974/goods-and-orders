@@ -21,6 +21,12 @@ public class Product
     public Guid? WarehouseId { get; set; }
     public Warehouse? Warehouse { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Depreciation category template for FixedAsset (FA) products.</summary>
+    public DepreciationAssetCategory? DepreciationCategory { get; set; }
+    /// <summary>Default business-use percent (1–100) for FA products.</summary>
+    public decimal? DefaultBusinessUsePercent { get; set; }
+
     public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

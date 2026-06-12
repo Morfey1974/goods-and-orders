@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WAREHOUSE_MANAGE_RESIZE } from '../lib/resizablePanelKeys';
 import { AppModal } from './ui/AppModal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { bidiAutoInputProps } from './BidiText';
 import { warehouseApi, type Warehouse } from '../api/warehouse';
 
@@ -19,6 +20,8 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', isActive: true });
+  const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -74,19 +77,28 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
     }
   };
 
-  const onDelete = async (wh: Warehouse) => {
+  const onDelete = (wh: Warehouse) => {
     if (!token || wh.isSystem) return;
-    if (!window.confirm(t('warehouse.deleteConfirm', { name: wh.name }))) return;
+    setDeleteTarget(wh);
+  };
+
+  const confirmDelete = async () => {
+    if (!token || !deleteTarget) return;
+    setDeleteBusy(true);
     try {
-      await warehouseApi.delete(token, wh.id);
+      await warehouseApi.delete(token, deleteTarget.id);
+      setDeleteTarget(null);
       load();
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
   return (
+    <>
     <AppModal
       open={open}
       onClose={onClose}
@@ -211,5 +223,18 @@ export function WarehouseManageModal({ open, onClose, token, onChanged }: Props)
         )}
       </div>
     </AppModal>
+
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      title={t('warehouse.deleteConfirmTitle')}
+      message={t('warehouse.deleteConfirm', { name: deleteTarget?.name ?? '' })}
+      confirmLabel={t('products.actionDelete')}
+      cancelLabel={t('settings.cancel')}
+      danger
+      busy={deleteBusy}
+      onConfirm={() => void confirmDelete()}
+      onCancel={() => !deleteBusy && setDeleteTarget(null)}
+    />
+    </>
   );
 }

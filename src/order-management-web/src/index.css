@@ -689,6 +689,11 @@ a.btn-ghost-inline {
   height: 640px;
 }
 
+.business-expense-modal {
+  width: 680px;
+  height: 680px;
+}
+
 .warehouse-edit-form {
   margin-top: 1.25rem;
   padding-top: 1rem;

@@ -13,6 +13,11 @@ namespace OrderManagement.Api.Controllers;
 public class FinancialReportsController(
     IncomeReportService incomeReport,
     ExpenseReportService expenseReport,
+    CogsReportService cogsReport,
+    GrossProfitReportService grossProfitReport,
+    OperatingExpensesReportService operatingExpensesReport,
+    Form1342ReportService form1342Report,
+    Form1342PdfService form1342Pdf,
     FinancialReportPdfService financialReportPdf) : ControllerBase
 {
     [HttpGet("income")]
@@ -64,6 +69,81 @@ public class FinancialReportsController(
 
         var pdf = await financialReportPdf.GenerateIncomeAsync(tenantId.Value, from, to, ct);
         return File(pdf, "application/pdf", "income-report.pdf", enableRangeProcessing: true);
+    }
+
+    [HttpGet("cogs")]
+    public async Task<ActionResult<CogsReportDto>> Cogs(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        return Ok(await cogsReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("gross-profit")]
+    public async Task<ActionResult<GrossProfitReportDto>> GrossProfit(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        return Ok(await grossProfitReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("operating-expenses")]
+    public async Task<ActionResult<OperatingExpensesReportDto>> OperatingExpenses(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        return Ok(await operatingExpensesReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("form-1342")]
+    public async Task<ActionResult<Form1342ReportDto>> Form1342(
+        [FromQuery] int taxYear,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+        if (taxYear < 2000 || taxYear > 2100)
+            return BadRequest(new { message = "Invalid tax year." });
+
+        return Ok(await form1342Report.BuildAsync(tenantId.Value, taxYear, ct));
+    }
+
+    [HttpGet("form-1342/pdf")]
+    public async Task<IActionResult> Form1342Pdf(
+        [FromQuery] int taxYear,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+        if (taxYear < 2000 || taxYear > 2100)
+            return BadRequest(new { message = "Invalid tax year." });
+
+        var pdf = await form1342Pdf.GenerateAsync(tenantId.Value, taxYear, ct);
+        return File(pdf, "application/pdf", $"form-1342-{taxYear}.pdf", enableRangeProcessing: true);
     }
 
     [HttpGet("expenses/pdf")]

@@ -238,7 +238,7 @@
   color: var(--text);
 }
 
-.settings-field > input,
+.settings-field > input:not([type='checkbox']):not([type='radio']),
 .settings-field > select,
 .settings-field > textarea {
   grid-row: 2;
@@ -251,7 +251,7 @@
   gap: 0.12rem 0;
 }
 
-.settings-field:has(> .field-hint) > input,
+.settings-field:has(> .field-hint) > input:not([type='checkbox']):not([type='radio']),
 .settings-field:has(> .field-hint) > select,
 .settings-field:has(> .field-hint) > textarea {
   grid-row: 3;
@@ -330,7 +330,7 @@
   width: 100%;
 }
 
-.settings-field input,
+.settings-field input:not([type='checkbox']):not([type='radio']),
 .settings-field select,
 .settings-field textarea {
   width: 100%;
@@ -348,18 +348,96 @@
     background-color 0.2s ease;
 }
 
-.settings-field input:hover:not(:disabled):not([readonly]),
+.settings-field input:not([type='checkbox']):not([type='radio']):hover:not(:disabled):not([readonly]),
 .settings-field select:hover:not(:disabled),
 .settings-field textarea:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--palette-turquoise) 40%, var(--border));
 }
 
-.settings-field input:focus,
+.settings-field input:not([type='checkbox']):not([type='radio']):focus,
 .settings-field select:focus,
 .settings-field textarea:focus {
   outline: none;
   border-color: var(--palette-turquoise);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--palette-turquoise-light) 70%, transparent);
+}
+
+.settings-expense-location-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.settings-expense-location-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.55rem;
+  row-gap: 0.2rem;
+  flex: 1 1 16rem;
+  min-width: min(100%, 16rem);
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  font-size: inherit;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 18%, var(--border));
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.settings-expense-location-option:hover {
+  border-color: color-mix(in srgb, var(--palette-turquoise) 35%, var(--border));
+}
+
+.settings-expense-location-option--active,
+.settings-expense-location-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--palette-turquoise) 55%, var(--border));
+  background: color-mix(in srgb, var(--palette-turquoise-light) 30%, var(--surface));
+}
+
+.settings-expense-location-option input[type='radio'] {
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  background: transparent;
+  accent-color: var(--palette-turquoise);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-expense-location-option input[type='radio']:focus,
+.settings-expense-location-option input[type='radio']:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.settings-expense-location-option__title {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 600;
+}
+
+.settings-expense-location-option__hint {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .settings-field textarea {

@@ -33,8 +33,17 @@ export const RESIZABLE_PANEL_KEYS = {
   purchaseReceiptsPanel: 'ordermgmt.purchase-receipts-panel-size',
   documentsColumns: 'ordermgmt.documents-column-widths',
   documentsPanel: 'ordermgmt.documents-panel-size',
+  businessExpensesColumns: 'ordermgmt.business-expenses-column-widths',
   incomeReportPanel: 'ordermgmt.income-report-panel-size',
   expenseReportPanel: 'ordermgmt.expense-report-panel-size',
+  businessExpensesPanel: 'ordermgmt.business-expenses-panel-size',
+  businessExpenseModal: 'ordermgmt.business-expense-modal-size',
+  fixedAssetsPanel: 'ordermgmt.fixed-assets-panel-size',
+  fixedAssetsColumns: 'ordermgmt.fixed-assets-column-widths',
+  fixedAssetModal: 'ordermgmt.fixed-asset-modal-size',
+  cogsReportPanel: 'ordermgmt.cogs-report-panel-size',
+  operatingExpensesReportPanel: 'ordermgmt.operating-expenses-report-panel-size',
+  form1342ReportPanel: 'ordermgmt.form1342-report-panel-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -205,4 +214,46 @@ export const EXPENSE_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.expenseReportPanel,
   ...LIST_PANEL_DEFAULT,
   defaultSize: { width: 1280, height: 600 },
+};
+
+export const BUSINESS_EXPENSES_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.businessExpensesPanel,
+  ...LIST_PANEL_DEFAULT,
+};
+
+export const BUSINESS_EXPENSE_MODAL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.businessExpenseModal,
+  minWidth: 480,
+  minHeight: 460,
+  defaultSize: { width: 680, height: 680 },
+};
+
+export const FIXED_ASSETS_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.fixedAssetsPanel,
+  ...LIST_PANEL_DEFAULT,
+};
+
+export const FIXED_ASSET_MODAL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.fixedAssetModal,
+  minWidth: 420,
+  minHeight: 420,
+  defaultSize: { width: 560, height: 580 },
+};
+
+export const COGS_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.cogsReportPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 600 },
+};
+
+export const OPERATING_EXPENSES_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.operatingExpensesReportPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 600 },
+};
+
+export const FORM1342_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.form1342ReportPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 640 },
 };

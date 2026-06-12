@@ -41,9 +41,8 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ordermgmt_uploads:/app/uploads
+      - ./data/uploads:/app/uploads
       - ${BACKUP_HOST_PATH:-./backups}:/app/backups
 
 volumes:
   ordermgmt_pgdata:
-  ordermgmt_uploads:

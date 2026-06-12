@@ -195,6 +195,9 @@ export function SettingsPage() {
             ? profile.withholdingTaxPercent
             : null,
         inventoryCostMethod: profile.inventoryCostMethod ?? 'FIFO',
+        expenseLocationMode: profile.expenseLocationMode ?? 'HomeOffice',
+        homeBusinessRoomsUsed: profile.homeBusinessRoomsUsed ?? 1,
+        homeBusinessRoomsTotal: profile.homeBusinessRoomsTotal ?? 4,
         version: profile.version,
       });
       setProfile(updated);
@@ -435,6 +438,84 @@ export function SettingsPage() {
                   </select>
                 </label>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <h2 className="settings-section-title">{t('settings.sectionExpenseLocation')}</h2>
+          </div>
+          <div className="settings-section-body">
+            <p className="muted settings-section-intro">{t('settings.expenseLocationHint')}</p>
+            <div className="settings-fields">
+              <div className="settings-expense-location-options" role="radiogroup" aria-label={t('settings.sectionExpenseLocation')}>
+                <label
+                  className={`settings-expense-location-option${(profile.expenseLocationMode ?? 'HomeOffice') === 'RentedOffice' ? ' settings-expense-location-option--active' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="expenseLocationMode"
+                    checked={(profile.expenseLocationMode ?? 'HomeOffice') === 'RentedOffice'}
+                    onChange={() => setProfile({ ...profile, expenseLocationMode: 'RentedOffice' })}
+                  />
+                  <span className="settings-expense-location-option__title">{t('settings.rentedOffice')}</span>
+                  <span className="settings-expense-location-option__hint">{t('settings.rentedOfficeHint')}</span>
+                </label>
+                <label
+                  className={`settings-expense-location-option${(profile.expenseLocationMode ?? 'HomeOffice') === 'HomeOffice' ? ' settings-expense-location-option--active' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="expenseLocationMode"
+                    checked={(profile.expenseLocationMode ?? 'HomeOffice') === 'HomeOffice'}
+                    onChange={() => setProfile({ ...profile, expenseLocationMode: 'HomeOffice' })}
+                  />
+                  <span className="settings-expense-location-option__title">{t('settings.homeOffice')}</span>
+                  <span className="settings-expense-location-option__hint">{t('settings.homeOfficeHint')}</span>
+                </label>
+              </div>
+              {(profile.expenseLocationMode ?? 'HomeOffice') === 'HomeOffice' && (
+                <div className="settings-row">
+                  <label className="settings-field field-flex-compact">
+                    <span className="settings-field-label-row">{t('settings.homeBusinessRoomsUsed')}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={profile.homeBusinessRoomsUsed ?? 1}
+                      onChange={(e) =>
+                        setProfile({ ...profile, homeBusinessRoomsUsed: Number(e.target.value) || 1 })
+                      }
+                    />
+                  </label>
+                  <label className="settings-field field-flex-compact">
+                    <span className="settings-field-label-row">{t('settings.homeBusinessRoomsTotal')}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={profile.homeBusinessRoomsTotal ?? 4}
+                      onChange={(e) =>
+                        setProfile({ ...profile, homeBusinessRoomsTotal: Number(e.target.value) || 4 })
+                      }
+                    />
+                  </label>
+                  <label className="settings-field field-flex-compact">
+                    <span className="settings-field-label-row">{t('settings.homeExpenseRecognizedPercent')}</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${(
+                        profile.homeExpenseRecognizedPercent ??
+                        (profile.homeBusinessRoomsTotal
+                          ? Math.round((100 * (profile.homeBusinessRoomsUsed ?? 1)) / profile.homeBusinessRoomsTotal)
+                          : 25)
+                      ).toFixed(2)}%`}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
         </section>

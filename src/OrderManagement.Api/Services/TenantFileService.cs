@@ -208,6 +208,78 @@ public class TenantFileService(IWebHostEnvironment env, IConfiguration config)
         return (relative, contentType, safeName);
     }
 
+    public async Task<(string RelativePath, string ContentType, string OriginalFileName)> SaveBusinessExpenseDocumentAsync(
+        Guid tenantId,
+        Guid expenseId,
+        Guid documentId,
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file.Length == 0)
+            throw new InvalidOperationException("File is empty.");
+        if (file.Length > PurchaseDocumentMaxBytes)
+            throw new InvalidOperationException($"File must be at most {PurchaseDocumentMaxBytes / (1024 * 1024)} MB.");
+
+        var ext = Path.GetExtension(file.FileName);
+        var isPdf = string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase);
+        var isImage = ImageExtensions.Contains(ext);
+        if (!isPdf && !isImage)
+            throw new InvalidOperationException("Use PDF, JPG, PNG or WebP.");
+
+        var safeName = Path.GetFileName(file.FileName);
+        var storedExt = isPdf ? ".pdf" : ext.ToLowerInvariant();
+        var relative = $"{tenantId:N}/business-expenses/{expenseId:N}/{documentId:N}{storedExt}";
+        var absolute = GetAbsolutePath(relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+
+        await using (var stream = File.Create(absolute))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var contentType = isPdf
+            ? "application/pdf"
+            : GetImageContentType(relative);
+
+        return (relative, contentType, safeName);
+    }
+
+    public async Task<(string RelativePath, string ContentType, string OriginalFileName)> SaveFixedAssetDocumentAsync(
+        Guid tenantId,
+        Guid assetId,
+        Guid documentId,
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file.Length == 0)
+            throw new InvalidOperationException("File is empty.");
+        if (file.Length > PurchaseDocumentMaxBytes)
+            throw new InvalidOperationException($"File must be at most {PurchaseDocumentMaxBytes / (1024 * 1024)} MB.");
+
+        var ext = Path.GetExtension(file.FileName);
+        var isPdf = string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase);
+        var isImage = ImageExtensions.Contains(ext);
+        if (!isPdf && !isImage)
+            throw new InvalidOperationException("Use PDF, JPG, PNG or WebP.");
+
+        var safeName = Path.GetFileName(file.FileName);
+        var storedExt = isPdf ? ".pdf" : ext.ToLowerInvariant();
+        var relative = $"{tenantId:N}/fixed-assets/{assetId:N}/{documentId:N}{storedExt}";
+        var absolute = GetAbsolutePath(relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+
+        await using (var stream = File.Create(absolute))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var contentType = isPdf
+            ? "application/pdf"
+            : GetImageContentType(relative);
+
+        return (relative, contentType, safeName);
+    }
+
     [Obsolete("Use SavePurchaseReceiptDocumentAsync with documentId for multi-document receipts.")]
     public async Task<(string RelativePath, string ContentType, string OriginalFileName)> SavePurchaseReceiptDocumentAsync(
         Guid tenantId,

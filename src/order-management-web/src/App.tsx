@@ -24,6 +24,11 @@ import { InventoryOpeningBalancePage } from './pages/InventoryOpeningBalancePage
 import { InventoryValuationPage } from './pages/InventoryValuationPage';
 import { IncomeReportPage } from './pages/IncomeReportPage';
 import { ExpenseReportPage } from './pages/ExpenseReportPage';
+import { BusinessExpensesPage } from './pages/BusinessExpensesPage';
+import { CogsReportPage } from './pages/CogsReportPage';
+import { GrossProfitReportPage } from './pages/GrossProfitReportPage';
+import { OperatingExpensesReportPage } from './pages/OperatingExpensesReportPage';
+import { Form1342ReportPage } from './pages/Form1342ReportPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -55,6 +60,11 @@ const router = createBrowserRouter([
       { path: 'reports/inventory-valuation', element: <InventoryValuationPage /> },
       { path: 'reports/income', element: <IncomeReportPage /> },
       { path: 'reports/expenses', element: <ExpenseReportPage /> },
+      { path: 'reports/cogs', element: <CogsReportPage /> },
+      { path: 'reports/gross-profit', element: <GrossProfitReportPage /> },
+      { path: 'reports/operating-expenses', element: <OperatingExpensesReportPage /> },
+      { path: 'reports/form-1342', element: <Form1342ReportPage /> },
+      { path: 'business-expenses', element: <BusinessExpensesPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

@@ -145,6 +145,8 @@ public record ProductDto(
     IReadOnlyList<Guid> GroupIds,
     Guid? WarehouseId,
     string? WarehouseName,
+    string? DepreciationCategory,
+    decimal? DefaultBusinessUsePercent,
     int Version);
 
 public record CreateProductRequest(
@@ -156,6 +158,8 @@ public record CreateProductRequest(
     bool ShowBomInInvoice,
     bool TrackInventory,
     Guid? WarehouseId,
+    string? DepreciationCategory,
+    [Range(1, 100)] decimal? DefaultBusinessUsePercent,
     IReadOnlyList<BomLineInput>? BomLines);
 
 public record UpdateProductRequest(
@@ -168,6 +172,8 @@ public record UpdateProductRequest(
     bool TrackInventory,
     bool IsActive,
     Guid? WarehouseId,
+    string? DepreciationCategory,
+    [Range(1, 100)] decimal? DefaultBusinessUsePercent,
     IReadOnlyList<BomLineInput>? BomLines,
     int Version);
 
@@ -413,6 +419,29 @@ public static class CatalogMappers
     public static ProductType ParseProductType(string value) =>
         Enum.TryParse<ProductType>(value, true, out var t) ? t : throw new ArgumentException("Invalid product type.");
 
+    public static DepreciationAssetCategory? ParseDepreciationCategory(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return Enum.TryParse<DepreciationAssetCategory>(value, true, out var c) ? c : null;
+    }
+
+    public static void ApplyFixedAssetProductFields(Product product, string? depreciationCategory, decimal? businessUsePercent)
+    {
+        if (product.ProductType == ProductType.FixedAsset)
+        {
+            product.DepreciationCategory = ParseDepreciationCategory(depreciationCategory)
+                ?? DepreciationAssetCategory.OtherEquipment;
+            product.DefaultBusinessUsePercent = businessUsePercent is >= 1 and <= 100
+                ? businessUsePercent
+                : 100m;
+        }
+        else
+        {
+            product.DepreciationCategory = null;
+            product.DefaultBusinessUsePercent = null;
+        }
+    }
+
     private static Guid WarehouseIdFor(Product p, Guid componentsWarehouseId, Guid finishedWarehouseId) =>
         ProductTypePrefixes.GetWarehouseKind(p.ProductType) == WarehouseKind.FinishedGoods
             ? finishedWarehouseId
@@ -463,7 +492,8 @@ public static class CatalogMappers
             p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
             !string.IsNullOrEmpty(p.ImagePath),
             p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-            hasMovements, stock, bom, groupIds, p.WarehouseId, warehouseName, p.Version);
+            hasMovements, stock, bom, groupIds, p.WarehouseId, warehouseName,
+            p.DepreciationCategory?.ToString(), p.DefaultBusinessUsePercent, p.Version);
     }
 
     public static async Task<List<ProductDto>> ToDtoListAsync(
@@ -543,7 +573,8 @@ public static class CatalogMappers
                 p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
                 !string.IsNullOrEmpty(p.ImagePath),
                 p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-                movementIds.Contains(p.Id), stock, bom, groupIds, warehouseId, warehouseName, p.Version);
+                movementIds.Contains(p.Id), stock, bom, groupIds, warehouseId, warehouseName,
+                p.DepreciationCategory?.ToString(), p.DefaultBusinessUsePercent, p.Version);
         }).ToList();
     }
 

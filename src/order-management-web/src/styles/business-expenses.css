@@ -1,0 +1,263 @@
+.business-expense-modal-overlay {
+  cursor: default;
+}
+
+.business-expense-modal .app-modal-panel__body {
+  overflow: hidden;
+}
+
+.business-expense-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.business-expense-form .settings-fields {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.business-expense-form__note {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  flex-shrink: 0;
+  width: 100%;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 35%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 18%, var(--border));
+  border-radius: 8px;
+}
+
+.business-expense-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.35rem;
+  margin-top: auto;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.business-expense-modal .business-expense-form__actions .btn,
+.business-expense-modal .business-expense-form__docs-actions .btn,
+.business-expense-modal .business-expense-form__doc-list .btn {
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.business-expense-modal .business-expense-form__doc-list .btn.btn-ghost {
+  background: color-mix(in srgb, var(--palette-turquoise-light) 28%, var(--surface));
+  color: var(--palette-turquoise-dark);
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 22%, var(--border));
+}
+
+.business-expense-modal .business-expense-form__doc-list .btn.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--palette-turquoise-light) 48%, var(--surface));
+  color: var(--palette-turquoise-dark);
+}
+
+.business-expense-form .settings-row--expense-header {
+  display: grid;
+  grid-template-columns: minmax(9rem, 10.5rem) minmax(9.5rem, 1fr) minmax(10.5rem, 1.15fr);
+  gap: 0.75rem;
+  align-items: start;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.business-expense-form .settings-row--expense-header--office {
+  grid-template-columns: minmax(9rem, 10.5rem) minmax(12rem, 1fr);
+}
+
+.business-expense-form__grow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.business-expense-form__compact-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.business-expense-form .settings-row--expense-amount {
+  display: grid;
+  grid-template-columns: minmax(9rem, 11rem) minmax(12rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  width: 100%;
+}
+
+.business-expense-form__stretch-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 6.5rem;
+  min-height: 6.5rem;
+  min-width: 0;
+  width: 100%;
+  gap: 0.2rem;
+}
+
+.business-expense-modal .business-expense-form__stretch-field.settings-field > textarea.business-expense-form__stretch-input {
+  flex: 1 1 6rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 6rem;
+  margin: 0;
+  grid-row: unset;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.business-expense-form__add-supplier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--palette-turquoise) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--palette-turquoise-light) 18%, var(--surface));
+}
+
+.business-expense-form__add-supplier input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.business-expense-form__add-supplier .error-banner {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.business-expense-form__add-supplier .btn {
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.business-expense-form__docs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  width: 100%;
+  padding-top: 0.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--palette-turquoise) 14%, var(--border));
+}
+
+.business-expense-form__docs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.business-expense-form__docs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.business-expense-form__docs-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.business-expense-form__doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.business-expense-form__doc-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.business-expense-form__doc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+}
+
+.business-expense-form__doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  font: inherit;
+}
+
+.business-expense-form__doc-link:hover .business-expense-form__doc-name {
+  text-decoration: underline;
+  color: var(--palette-turquoise-dark);
+}
+
+.business-expense-docs-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.pr-doc-clip-btn {
+  display: inline-flex;
+  padding: 0.1rem 0.15rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.pr-doc-clip-btn:hover {
+  background: color-mix(in srgb, var(--palette-turquoise) 14%, transparent);
+}
+
+.business-expense-form__doc-pending {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .business-expense-form .settings-row--expense-header,
+  .business-expense-form .settings-row--expense-header--office,
+  .business-expense-form .settings-row--expense-amount {
+    grid-template-columns: 1fr;
+  }
+}

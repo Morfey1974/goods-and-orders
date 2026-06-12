@@ -22,6 +22,8 @@ public class ExpenseReportService(AppDbContext db)
             .Where(r => r.TenantId == tenantId && r.Status == PurchaseReceiptStatus.Posted)
             .Include(r => r.Supplier)
             .Include(r => r.Lines)
+            .ThenInclude(l => l.Product)
+            .Include(r => r.LandedCostLines)
             .ToListAsync(ct);
 
         var lines = new List<ExpenseReportLineDto>();
@@ -33,12 +35,12 @@ public class ExpenseReportService(AppDbContext db)
             if (endExclusiveUtc.HasValue && receipt.DocumentDate >= endExclusiveUtc.Value)
                 continue;
 
-            var (amountUsd, amountIls) = PurchaseReceiptMappers.ResolveListAmounts(receipt);
+            var ils = ComputeStockPurchaseAmountIls(receipt);
+            if (ils <= 0) continue;
+
             var currency = NormalizeCurrency(receipt.Currency);
-            var amountOriginal = currency == "USD" ? amountUsd : amountIls;
-            var ils = amountIls ?? 0m;
-            if (ils <= 0 && amountUsd is > 0 && receipt.UsdIlsRate is > 0)
-                ils = Math.Round(amountUsd.Value * receipt.UsdIlsRate.Value, 2);
+            var stockLineCount = receipt.Lines.Count(l =>
+                l.Product != null && ProductInventoryHelper.TracksStock(l.Product));
 
             lines.Add(new ExpenseReportLineDto(
                 receipt.Id,
@@ -47,13 +49,42 @@ public class ExpenseReportService(AppDbContext db)
                 receipt.Supplier.Name,
                 receipt.SupplierInvoiceNumber?.Trim(),
                 currency,
-                amountOriginal is > 0 ? Math.Round(amountOriginal.Value, 2) : null,
-                Math.Round(ils, 2),
-                receipt.Lines.Count));
+                null,
+                ils,
+                stockLineCount));
         }
 
         var grandTotal = Math.Round(lines.Sum(l => l.AmountIls), 2);
         return new ExpenseReportDto(from?.Date, to?.Date, lines, grandTotal, lines.Count);
+    }
+
+    /// <summary>Inventory purchases only — excludes fixed assets and consumables expensed separately.</summary>
+    internal static decimal ComputeStockPurchaseAmountIls(PurchaseReceipt receipt)
+    {
+        var stockLines = receipt.Lines
+            .Where(l => l.Product != null && ProductInventoryHelper.TracksStock(l.Product))
+            .ToList();
+        if (stockLines.Count == 0) return 0m;
+
+        var stockBase = stockLines.Sum(l => PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
+        if (!receipt.ApplyLandedCosts || receipt.LandedCostLines.Count == 0)
+            return DepreciationCalculator.RoundMoney(stockBase);
+
+        var totalLandedIls = receipt.LandedCostLines.Sum(l => l.AmountIls ?? 0m);
+        if (totalLandedIls <= 0) return DepreciationCalculator.RoundMoney(stockBase);
+
+        var faLines = receipt.Lines
+            .Where(l => l.Product != null && ProductTypePrefixes.IsFixedAsset(l.Product.ProductType))
+            .ToList();
+        var faBase = faLines.Sum(l => PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
+        var allocBase = stockBase + faBase;
+        if (allocBase <= 0) return DepreciationCalculator.RoundMoney(stockBase);
+
+        var stockLanded = faBase <= 0
+            ? totalLandedIls
+            : DepreciationCalculator.RoundMoney(totalLandedIls * (stockBase / allocBase));
+
+        return DepreciationCalculator.RoundMoney(stockBase + stockLanded);
     }
 
     private static string NormalizeCurrency(string? currency)

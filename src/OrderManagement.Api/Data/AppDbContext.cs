@@ -33,6 +33,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BusinessDocumentLine> BusinessDocumentLines => Set<BusinessDocumentLine>();
     public DbSet<ReceiptPaymentLine> ReceiptPaymentLines => Set<ReceiptPaymentLine>();
     public DbSet<TenantComplianceDocument> TenantComplianceDocuments => Set<TenantComplianceDocument>();
+    public DbSet<BusinessExpense> BusinessExpenses => Set<BusinessExpense>();
+    public DbSet<BusinessExpenseDocument> BusinessExpenseDocuments => Set<BusinessExpenseDocument>();
+    public DbSet<FixedAssetDocument> FixedAssetDocuments => Set<FixedAssetDocument>();
+    public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
+    public DbSet<FixedAssetInstance> FixedAssetInstances => Set<FixedAssetInstance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -478,6 +483,94 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(d => d.PaymentLines)
                 .HasForeignKey(x => x.DocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BusinessExpense>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Description).HasMaxLength(512);
+            e.Property(x => x.AmountIls).HasPrecision(18, 2);
+            e.Property(x => x.VendorName).HasMaxLength(256);
+            e.Property(x => x.InvoiceReference).HasMaxLength(128);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.TenantId, x.ExpenseDate });
+        });
+
+        modelBuilder.Entity<BusinessExpenseDocument>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FilePath).HasMaxLength(512);
+            e.Property(x => x.FileName).HasMaxLength(256);
+            e.Property(x => x.ContentType).HasMaxLength(128);
+            e.HasIndex(x => x.BusinessExpenseId);
+            e.HasOne(x => x.BusinessExpense)
+                .WithMany(x => x.Documents)
+                .HasForeignKey(x => x.BusinessExpenseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FixedAsset>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(512);
+            e.Property(x => x.CostIls).HasPrecision(18, 2);
+            e.Property(x => x.AnnualDepreciationPercent).HasPrecision(8, 4);
+            e.Property(x => x.VendorName).HasMaxLength(256);
+            e.Property(x => x.InvoiceReference).HasMaxLength(128);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.TenantId, x.PurchaseDate });
+        });
+
+        modelBuilder.Entity<FixedAssetDocument>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FilePath).HasMaxLength(512);
+            e.Property(x => x.FileName).HasMaxLength(256);
+            e.Property(x => x.ContentType).HasMaxLength(128);
+            e.HasIndex(x => x.FixedAssetId);
+            e.HasOne(x => x.FixedAsset)
+                .WithMany(x => x.Documents)
+                .HasForeignKey(x => x.FixedAssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FixedAssetInstance>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(512);
+            e.Property(x => x.OriginalCostIls).HasPrecision(18, 2);
+            e.Property(x => x.ChangesCostIls).HasPrecision(18, 2);
+            e.Property(x => x.AnnualDepreciationPercent).HasPrecision(10, 4);
+            e.Property(x => x.BusinessUsePercent).HasPrecision(8, 2);
+            e.Property(x => x.VendorName).HasMaxLength(256);
+            e.Property(x => x.InvoiceReference).HasMaxLength(128);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.TenantId, x.AcquisitionDate });
+            e.HasIndex(x => x.PurchaseReceiptLineId).IsUnique();
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.PurchaseReceipt)
+                .WithMany()
+                .HasForeignKey(x => x.PurchaseReceiptId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.PurchaseReceiptLine)
+                .WithMany()
+                .HasForeignKey(x => x.PurchaseReceiptLineId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Product>(e =>
+        {
+            e.Property(x => x.DefaultBusinessUsePercent).HasPrecision(8, 2);
+        });
+
+        modelBuilder.Entity<BusinessExpense>(e =>
+        {
+            e.HasIndex(x => x.PurchaseReceiptLineId).IsUnique();
         });
     }
 }

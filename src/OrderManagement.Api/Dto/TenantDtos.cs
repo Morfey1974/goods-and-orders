@@ -70,6 +70,14 @@ public record TenantProfileDto(
 
     string InventoryCostMethod,
 
+    string ExpenseLocationMode,
+
+    int HomeBusinessRoomsUsed,
+
+    int HomeBusinessRoomsTotal,
+
+    decimal HomeExpenseRecognizedPercent,
+
     string SubscriptionStatus,
 
     DateTime RegisteredAt,
@@ -117,6 +125,12 @@ public record UpdateTenantRequest(
     [Range(0, 100)] decimal? WithholdingTaxPercent,
 
     string? InventoryCostMethod,
+
+    string? ExpenseLocationMode,
+
+    [Range(1, 20)] int? HomeBusinessRoomsUsed,
+
+    [Range(1, 20)] int? HomeBusinessRoomsTotal,
 
     int Version);
 
@@ -211,6 +225,14 @@ public static class TenantMapper
         t.WithholdingTaxPercent,
 
         InventoryCostMethodNames.ToApi(t.InventoryCostMethod),
+
+        t.ExpenseLocationMode.ToString(),
+
+        BusinessExpenseMappers.ResolveHomeRooms(t).Used,
+
+        BusinessExpenseMappers.ResolveHomeRooms(t).Total,
+
+        BusinessExpenseMappers.ResolveHomeRecognizedPercent(t),
 
         t.SubscriptionStatus.ToString(),
 

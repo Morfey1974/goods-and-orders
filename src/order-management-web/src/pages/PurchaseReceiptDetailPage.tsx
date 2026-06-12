@@ -44,7 +44,7 @@ import {
   type PurchaseReceiptCurrencyMode,
   visiblePurchaseReceiptLineColumns,
 } from '../lib/purchaseReceiptLinesColumns';
-import { productTracksStock } from '../lib/productInventory';
+import { productTracksStock, isFixedAssetProductType, isConsumableProductType } from '../lib/productInventory';
 import {
   normalizeStockQuantity,
   sanitizeQuantityDraft,
@@ -178,10 +178,39 @@ function resolveManualUsdRateForPayload(
   return parseUsdIlsRateInput(normalizeUsdIlsRateDraft(usdIlsRateManual));
 }
 
+/** Posted receipts before rate fix: derive from stored line costs (display only). */
+function derivePostedUsdRate(receipt: PurchaseReceipt | null | undefined): number | null {
+  if (!receipt || receipt.status !== 'Posted') return null;
+  if (receipt.usdIlsRate != null && receipt.usdIlsRate > 0) return receipt.usdIlsRate;
+  if (!isUsdCurrency(receipt.currency)) return null;
+  let totalUsd = 0;
+  let totalIls = 0;
+  for (const line of receipt.lines) {
+    const qty = normalizeStockQuantity(line.quantity);
+    if (qty <= 0) continue;
+    const lineUsd =
+      line.lineTotal != null && line.lineTotal > 0
+        ? line.lineTotal
+        : line.unitPrice != null && line.unitPrice > 0
+          ? line.unitPrice * qty
+          : 0;
+    const unitIls = line.unitCostIls ?? 0;
+    if (lineUsd > 0 && unitIls > 0) {
+      totalUsd += lineUsd;
+      totalIls += roundMoney(unitIls * qty);
+    }
+  }
+  if (totalUsd <= 0 || totalIls <= 0) return null;
+  return roundMoney(totalIls / totalUsd);
+}
+
 function manualUsdRateFromReceipt(receipt: PurchaseReceipt): {
   useManualUsdRate: boolean;
   usdIlsRateManual: string;
 } {
+  if (receipt.status === 'Posted') {
+    return { useManualUsdRate: false, usdIlsRateManual: '' };
+  }
   const hasManualRate = receipt.usdIlsRate != null && receipt.usdIlsRate > 0;
   return {
     useManualUsdRate: hasManualRate,
@@ -643,6 +672,8 @@ export function PurchaseReceiptDetailPage() {
   const [saveSuccess, setSaveSuccess] = useState('');
   const [saving, setSaving] = useState(false);
   const [postConfirmOpen, setPostConfirmOpen] = useState(false);
+  const [deleteReceiptConfirmOpen, setDeleteReceiptConfirmOpen] = useState(false);
+  const [deleteReceiptBusy, setDeleteReceiptBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState<'starting' | 'scanning' | null>(null);
@@ -679,7 +710,12 @@ export function PurchaseReceiptDetailPage() {
   const manualUsdRateValue = useManualUsdRate
     ? resolveManualUsdRateForPayload(true, usdIlsRateManual)
     : null;
-  const usdRateValue = useManualUsdRate ? manualUsdRateValue : bankUsdRate?.rate ?? null;
+  const postedUsdRate = derivePostedUsdRate(receipt);
+  const usdRateValue = isPosted
+    ? postedUsdRate
+    : useManualUsdRate
+      ? manualUsdRateValue
+      : bankUsdRate?.rate ?? null;
 
   const selectedSavedDoc = selectedDocKey
     ? savedDocuments.find((d) => d.id === selectedDocKey)
@@ -975,13 +1011,19 @@ export function PurchaseReceiptDetailPage() {
   );
 
   useEffect(() => {
-    if (!token || isPosted) return;
+    if (!token || isPosted) {
+      setRateLoading(false);
+      setBankUsdRate(null);
+      setRateError('');
+      return;
+    }
     const needsUsdRate =
       currencyMode === 'USD' ||
       (applyLandedCosts && landedCostRows.some((r) => r.currency === 'USD'));
     if (!needsUsdRate) {
       setBankUsdRate(null);
       setRateError('');
+      setRateLoading(false);
       return;
     }
     let cancelled = false;
@@ -1374,14 +1416,22 @@ export function PurchaseReceiptDetailPage() {
     setPostConfirmOpen(true);
   };
 
-  const onDelete = async () => {
+  const onDelete = () => {
     if (!token || !receipt) return;
-    if (!window.confirm(t('purchaseReceipts.deleteConfirm'))) return;
+    setDeleteReceiptConfirmOpen(true);
+  };
+
+  const confirmDeleteReceipt = async () => {
+    if (!token || !receipt) return;
+    setDeleteReceiptBusy(true);
     try {
       await purchaseReceiptsApi.delete(token, receipt.id);
       navigate('/purchase-receipts');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
+      setDeleteReceiptConfirmOpen(false);
+    } finally {
+      setDeleteReceiptBusy(false);
     }
   };
 
@@ -1838,6 +1888,16 @@ export function PurchaseReceiptDetailPage() {
                       const lineProduct = line.productId ? productById.get(line.productId) : undefined;
                       const warehouseDisabled =
                         isPosted || (lineProduct != null && !productTracksStock(lineProduct));
+                      const warehouseDisabledTitle =
+                        warehouseDisabled && lineProduct && !productTracksStock(lineProduct)
+                          ? isFixedAssetProductType(lineProduct.productType)
+                            ? t('purchaseReceipts.warehouseFixedAsset')
+                            : isConsumableProductType(lineProduct.productType)
+                              ? t('purchaseReceipts.warehouseConsumable')
+                              : t('purchaseReceipts.warehouseNotApplicable')
+                          : line.warehouseId
+                            ? warehouses.find((w) => w.id === line.warehouseId)?.name
+                            : t('purchaseReceipts.warehouseDefault');
                       const displayLineIls = lineTotalIlsValue(line, usdRateValue, currencyMode);
                       const computedUnitCost = lineUnitCostIlsValue(line, usdRateValue, currencyMode);
                       const displayUnitCost =
@@ -1868,13 +1928,7 @@ export function PurchaseReceiptDetailPage() {
                             className="pr-warehouse-select"
                             value={line.warehouseId}
                             disabled={warehouseDisabled}
-                            title={
-                              warehouseDisabled && lineProduct && !productTracksStock(lineProduct)
-                                ? t('purchaseReceipts.warehouseNotApplicable')
-                                : line.warehouseId
-                                  ? warehouses.find((w) => w.id === line.warehouseId)?.name
-                                  : t('purchaseReceipts.warehouseDefault')
-                            }
+                            title={warehouseDisabledTitle}
                             onChange={(e) => updateLine(line.key, { warehouseId: e.target.value })}
                           >
                             <option value="">{t('purchaseReceipts.warehouseDefault')}</option>
@@ -2022,7 +2076,17 @@ export function PurchaseReceiptDetailPage() {
                     </tr>
                   </tfoot>
                 </table>
-                {showUsdRateNotes && (
+                {showUsdRateNotes && isPosted && postedUsdRate !== null && (
+                  <div className="pr-usd-rate-notes">
+                    <p className="pr-usd-rate-note pr-usd-rate-note--disclaimer">
+                      {t('purchaseReceipts.usdRatePostedFixed', {
+                        date: formatDisplayDate(documentDate),
+                        rate: postedUsdRate.toFixed(4),
+                      })}
+                    </p>
+                  </div>
+                )}
+                {showUsdRateNotes && !isPosted && (
                   <div className="pr-usd-rate-notes">
                     <div className="pr-usd-rate-manual">
                       <div className="pr-usd-rate-manual-row">
@@ -2030,7 +2094,6 @@ export function PurchaseReceiptDetailPage() {
                           <input
                             type="checkbox"
                             checked={useManualUsdRate}
-                            disabled={isPosted}
                             onChange={(e) => {
                               const checked = e.target.checked;
                               setUseManualUsdRate(checked);
@@ -2053,7 +2116,6 @@ export function PurchaseReceiptDetailPage() {
                               type="text"
                               inputMode="decimal"
                               autoComplete="off"
-                              disabled={isPosted}
                               value={usdIlsRateManual}
                               onChange={(e) => setUsdIlsRateManual(e.target.value)}
                               onBlur={() =>
@@ -2310,7 +2372,7 @@ export function PurchaseReceiptDetailPage() {
                     type="button"
                     className="btn btn-ghost-inline"
                     disabled={saving || uploading}
-                    onClick={() => void onDelete()}
+                    onClick={onDelete}
                   >
                     {t('purchaseReceipts.delete')}
                   </button>
@@ -2607,6 +2669,18 @@ export function PurchaseReceiptDetailPage() {
           </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={deleteReceiptConfirmOpen}
+        title={t('purchaseReceipts.deleteConfirmTitle')}
+        message={t('purchaseReceipts.deleteConfirm')}
+        confirmLabel={t('products.actionDelete')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        busy={deleteReceiptBusy}
+        onConfirm={() => void confirmDeleteReceipt()}
+        onCancel={() => !deleteReceiptBusy && setDeleteReceiptConfirmOpen(false)}
+      />
 
       <ConfirmDialog
         open={postConfirmOpen}

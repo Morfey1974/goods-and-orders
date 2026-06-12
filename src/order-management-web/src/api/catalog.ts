@@ -140,6 +140,8 @@ export type Product = {
   groupIds: string[];
   warehouseId?: string | null;
   warehouseName?: string | null;
+  depreciationCategory?: string | null;
+  defaultBusinessUsePercent?: number | null;
   version: number;
 };
 
@@ -182,6 +184,11 @@ function mapProduct(raw: Record<string, unknown>): Product {
     })(),
     warehouseId: (raw.warehouseId ?? raw.WarehouseId) as string | null | undefined,
     warehouseName: (raw.warehouseName ?? raw.WarehouseName) as string | null | undefined,
+    depreciationCategory: (raw.depreciationCategory ?? raw.DepreciationCategory) as string | null | undefined,
+    defaultBusinessUsePercent: (() => {
+      const v = raw.defaultBusinessUsePercent ?? raw.DefaultBusinessUsePercent;
+      return v == null ? null : Number(v);
+    })(),
     version: Number(raw.version ?? raw.Version ?? 1),
   };
 }
@@ -216,6 +223,8 @@ export const PRODUCT_TYPES = [
   'Charge',
   'Bundle',
   'Spare',
+  'FixedAsset',
+  'Consumable',
 ] as const;
 
 export const catalogApi = {

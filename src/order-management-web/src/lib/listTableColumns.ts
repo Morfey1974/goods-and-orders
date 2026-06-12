@@ -213,3 +213,75 @@ export const DOCUMENTS_TEXT_START_COLUMNS = new Set<DocumentsColumnKey>([
   'customer',
   'description',
 ]);
+
+export const BUSINESS_EXPENSES_COLUMN_WIDTHS_KEY = RESIZABLE_PANEL_KEYS.businessExpensesColumns;
+export const BUSINESS_EXPENSES_COLUMN_KEYS = [
+  'date',
+  'type',
+  'notes',
+  'vendor',
+  'amount',
+  'recognized',
+  'docs',
+  'actions',
+] as const;
+export type BusinessExpensesColumnKey = (typeof BUSINESS_EXPENSES_COLUMN_KEYS)[number];
+export const BUSINESS_EXPENSES_DEFAULT_WIDTHS: Record<BusinessExpensesColumnKey, number> = {
+  date: 110,
+  type: 140,
+  notes: 180,
+  vendor: 200,
+  amount: 100,
+  recognized: 120,
+  docs: 56,
+  actions: 300,
+};
+export const BUSINESS_EXPENSES_COLUMN_CLASS: Record<BusinessExpensesColumnKey, string> = {
+  date: 'dt-col-date',
+  type: 'dt-col-type',
+  notes: 'dt-col-notes',
+  vendor: 'dt-col-vendor',
+  amount: 'dt-col-amount',
+  recognized: 'dt-col-recognized',
+  docs: 'dt-col-docs',
+  actions: 'dt-col-actions',
+};
+export const BUSINESS_EXPENSES_TEXT_START_COLUMNS = new Set<BusinessExpensesColumnKey>([
+  'type',
+  'notes',
+  'vendor',
+]);
+
+export const FIXED_ASSETS_COLUMN_WIDTHS_KEY = RESIZABLE_PANEL_KEYS.fixedAssetsColumns;
+export const FIXED_ASSETS_COLUMN_KEYS = [
+  'name',
+  'category',
+  'purchaseDate',
+  'cost',
+  'annualRate',
+  'annualDepreciation',
+  'status',
+  'actions',
+] as const;
+export type FixedAssetsColumnKey = (typeof FIXED_ASSETS_COLUMN_KEYS)[number];
+export const FIXED_ASSETS_DEFAULT_WIDTHS: Record<FixedAssetsColumnKey, number> = {
+  name: 180,
+  category: 200,
+  purchaseDate: 110,
+  cost: 100,
+  annualRate: 88,
+  annualDepreciation: 100,
+  status: 120,
+  actions: 200,
+};
+export const FIXED_ASSETS_COLUMN_CLASS: Record<FixedAssetsColumnKey, string> = {
+  name: 'dt-col-name',
+  category: 'dt-col-category',
+  purchaseDate: 'dt-col-date',
+  cost: 'dt-col-amount',
+  annualRate: 'dt-col-rate',
+  annualDepreciation: 'dt-col-amount',
+  status: 'dt-col-status',
+  actions: 'dt-col-actions',
+};
+export const FIXED_ASSETS_TEXT_START_COLUMNS = new Set<FixedAssetsColumnKey>(['name', 'category']);

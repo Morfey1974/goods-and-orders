@@ -551,3 +551,27 @@
   background: color-mix(in srgb, var(--primary) 8%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
 }
+
+/* Row action buttons — .btn-ghost is white-on-dark in headers; readable on table rows */
+.dt-panel .actions-cell,
+.dt-panel .table-actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.dt-panel .actions-cell .btn.btn-ghost,
+.dt-panel .table-actions-cell .btn.btn-ghost {
+  background: color-mix(in srgb, var(--palette-turquoise-light) 28%, var(--surface));
+  color: var(--palette-turquoise-dark);
+  border: 1px solid color-mix(in srgb, var(--palette-turquoise) 22%, var(--border));
+}
+
+.dt-panel .actions-cell .btn.btn-ghost:hover:not(:disabled),
+.dt-panel .table-actions-cell .btn.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--palette-turquoise-light) 48%, var(--surface));
+  color: var(--palette-turquoise-dark);
+}
