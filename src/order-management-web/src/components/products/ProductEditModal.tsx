@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppModal } from '../ui/AppModal';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { UnsavedLeaveDialog } from '../UnsavedLeaveDialog';
+import {
+  PurchaseReceiptProductPickerModal,
+  type PickedReceiptProduct,
+} from '../purchaseReceipts/PurchaseReceiptProductPickerModal';
 import {
   catalogApi,
   type Product,
@@ -21,11 +26,34 @@ import { ProductWarehouseSelect } from './ProductWarehouseSelect';
 import { ProductPhotoEditor } from './ProductPhotoEditor';
 import { productTypeCanTrackStock, productTracksStock, isFixedAssetProductType } from '../../lib/productInventory';
 import { DEPRECIATION_CATEGORIES } from '../../lib/businessAccountingTypes';
-import { PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
+import { BOM_COMPONENT_PICKER_RESIZE, PRODUCT_CARD_RESIZE } from '../../lib/resizablePanelKeys';
 
 const PRODUCT_FORM_ID = 'product-card-form';
 
-type BomInput = { componentProductId: string; quantity: number };
+type BomInput = {
+  componentProductId: string;
+  quantity: number;
+  componentArticleCode?: string;
+  componentName?: string;
+};
+
+function mapBomLineInput(line: {
+  componentProductId: string;
+  quantity: number;
+  componentArticleCode?: string;
+  componentName?: string;
+}): BomInput {
+  return {
+    componentProductId: line.componentProductId,
+    quantity: normalizeBomQty(line.quantity),
+    componentArticleCode: line.componentArticleCode,
+    componentName: line.componentName,
+  };
+}
+
+function isBomComponentProduct(product: Product) {
+  return product.productType === 'ComponentPart' || product.productType === 'Spare';
+}
 
 type FormSnapshot = {
   productType: string;
@@ -242,6 +270,9 @@ export function ProductEditModal({
     businessUsePercent: '100',
   });
   const [baselineKey, setBaselineKey] = useState(0);
+  const [bomPickerOpen, setBomPickerOpen] = useState(false);
+  const [bomRemoveId, setBomRemoveId] = useState<string | null>(null);
+  const [pickerCatalog, setPickerCatalog] = useState<Product[]>([]);
 
   const isDirty = () => {
     if (!baselineRef.current) return false;
@@ -274,10 +305,7 @@ export function ProductEditModal({
         showBomInQuote: product.showBomInQuote,
         showBomInInvoice: product.showBomInInvoice,
         trackInventory: product.trackInventory,
-        bomLines: product.bomLines.map((b) => ({
-          componentProductId: b.componentProductId,
-          quantity: normalizeBomQty(b.quantity),
-        })),
+        bomLines: product.bomLines.map((b) => mapBomLineInput(b)),
         depreciationCategory: product.depreciationCategory ?? 'PersonalPc',
         businessUsePercent: String(product.defaultBusinessUsePercent ?? 100),
       });
@@ -291,10 +319,7 @@ export function ProductEditModal({
         showBomInQuote: duplicateFrom.showBomInQuote,
         showBomInInvoice: duplicateFrom.showBomInInvoice,
         trackInventory: duplicateFrom.trackInventory,
-        bomLines: duplicateFrom.bomLines.map((b) => ({
-          componentProductId: b.componentProductId,
-          quantity: normalizeBomQty(b.quantity),
-        })),
+        bomLines: duplicateFrom.bomLines.map((b) => mapBomLineInput(b)),
         depreciationCategory: duplicateFrom.depreciationCategory ?? 'PersonalPc',
         businessUsePercent: String(duplicateFrom.defaultBusinessUsePercent ?? 100),
       });
@@ -419,6 +444,55 @@ export function ProductEditModal({
   }, [open, tab, effectiveProduct, token]);
 
   const showBom = form.productType === 'FinishedGood' || form.productType === 'Bundle';
+  const bomProductFilter = useCallback((p: Product) => isBomComponentProduct(p), []);
+  const bomExcludeIds = effectiveProduct ? [effectiveProduct.id] : [];
+
+  const resolveBomLineLabel = useCallback(
+    (line: BomInput) => {
+      const fromComponents = components.find((c) => c.id === line.componentProductId);
+      const fromPicker = pickerCatalog.find((c) => c.id === line.componentProductId);
+      const article =
+        line.componentArticleCode ??
+        fromComponents?.articleCode ??
+        fromPicker?.articleCode ??
+        '—';
+      const name = line.componentName ?? fromComponents?.name ?? fromPicker?.name ?? '—';
+      return { article, name };
+    },
+    [components, pickerCatalog]
+  );
+
+  const handleBomPicks = (picks: PickedReceiptProduct[]) => {
+    setForm((f) => {
+      const bomLines = [...f.bomLines];
+      for (const pick of picks) {
+        const idx = bomLines.findIndex((b) => b.componentProductId === pick.product.id);
+        const nextLine: BomInput = {
+          componentProductId: pick.product.id,
+          quantity: normalizeBomQty(pick.quantity),
+          componentArticleCode: pick.product.articleCode,
+          componentName: pick.product.name,
+        };
+        if (idx >= 0) bomLines[idx] = nextLine;
+        else bomLines.push(nextLine);
+      }
+      return { ...f, bomLines };
+    });
+    setPickerCatalog((prev) => {
+      const map = new Map(prev.map((p) => [p.id, p]));
+      for (const pick of picks) map.set(pick.product.id, pick.product);
+      return [...map.values()];
+    });
+  };
+
+  const confirmRemoveBomLine = () => {
+    if (!bomRemoveId) return;
+    setForm((f) => ({
+      ...f,
+      bomLines: f.bomLines.filter((b) => b.componentProductId !== bomRemoveId),
+    }));
+    setBomRemoveId(null);
+  };
   const tracksStock = productTypeCanTrackStock(form.productType);
   const tracksInventory = productTracksStock({
     productType: form.productType,
@@ -796,60 +870,65 @@ export function ProductEditModal({
                     {t('products.showBomInvoice')}
                   </label>
                 </div>
-                {form.bomLines.length > 0 && (
-                  <div className="bom-row bom-row-header">
-                    <span>{t('products.bomComponent')}</span>
-                    <span>{t('products.bomQty')}</span>
-                  </div>
-                )}
-                {form.bomLines.map((line, idx) => (
-                  <div key={idx} className="bom-row">
-                    <select
-                      value={line.componentProductId}
-                      onChange={(e) => {
-                        const bomLines = [...form.bomLines];
-                        bomLines[idx] = { ...line, componentProductId: e.target.value };
-                        setForm({ ...form, bomLines });
-                      }}
-                    >
-                      <option value="">—</option>
-                      {components.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.articleCode} — {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      aria-label={t('products.bomQty')}
-                      title={t('products.bomQty')}
-                      value={line.quantity}
-                      onChange={(e) => {
-                        const bomLines = [...form.bomLines];
-                        const parsed = Number(e.target.value);
-                        bomLines[idx] = {
-                          ...line,
-                          quantity: normalizeBomQty(parsed),
-                        };
-                        setForm({ ...form, bomLines });
-                      }}
-                    />
-                  </div>
-                ))}
+                <div className="bom-lines-panel">
+                  {form.bomLines.length > 0 && (
+                    <div className="bom-lines-table">
+                      <div className="bom-lines-head">
+                        <span>{t('products.bomColArticle')}</span>
+                        <span>{t('products.bomColName')}</span>
+                        <span>{t('products.bomColQty')}</span>
+                        <span aria-hidden />
+                      </div>
+                      {form.bomLines.map((line) => {
+                        const { article, name } = resolveBomLineLabel(line);
+                        return (
+                          <div key={line.componentProductId} className="bom-lines-row">
+                            <code className="bom-lines-article">{article}</code>
+                            <span className="bom-lines-name">
+                              <BidiText as="span">{name}</BidiText>
+                            </span>
+                            <input
+                              type="number"
+                              className="bom-lines-qty"
+                              min={1}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={t('products.bomColQty')}
+                              title={t('products.bomColQty')}
+                              value={line.quantity}
+                              onChange={(e) => {
+                                const parsed = Number(e.target.value);
+                                setForm((f) => ({
+                                  ...f,
+                                  bomLines: f.bomLines.map((b) =>
+                                    b.componentProductId === line.componentProductId
+                                      ? { ...b, quantity: normalizeBomQty(parsed) }
+                                      : b
+                                  ),
+                                }));
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="bom-row-remove"
+                              aria-label={t('products.removeBomComponent')}
+                              title={t('products.removeBomComponent')}
+                              onClick={() => setBomRemoveId(line.componentProductId)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
-                  className="btn btn-ghost-inline"
-                  onClick={() =>
-                    setForm({
-                      ...form,
-                      bomLines: [...form.bomLines, { componentProductId: '', quantity: 1 }],
-                    })
-                  }
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setBomPickerOpen(true)}
                 >
-                  + {t('products.addComponent')}
+                  + {t('products.addComponents')}
                 </button>
               </div>
             )}
@@ -971,6 +1050,41 @@ export function ProductEditModal({
           </div>
           </>
         )}
+
+      <PurchaseReceiptProductPickerModal
+        open={bomPickerOpen}
+        token={token}
+        products={components}
+        groups={productGroups}
+        titleKey="products.bomPickerTitle"
+        excludeProductIds={bomExcludeIds}
+        productFilter={bomProductFilter}
+        initialFilterKind="goods"
+        initialFilterType="ComponentPart"
+        resizeConfig={BOM_COMPONENT_PICKER_RESIZE}
+        overlayZIndex={(zIndex ?? 2000) + 500}
+        nestedProductModalZIndex={(zIndex ?? 2000) + 700}
+        onClose={() => setBomPickerOpen(false)}
+        onSave={handleBomPicks}
+        onProductCreated={(p) => {
+          setPickerCatalog((prev) => {
+            const next = prev.some((x) => x.id === p.id) ? prev : [...prev, p];
+            return next;
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={bomRemoveId !== null}
+        title={t('products.removeBomComponentTitle')}
+        message={t('products.removeBomComponentConfirm')}
+        confirmLabel={t('products.removeBomComponent')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        zIndex={(zIndex ?? 2000) + 400}
+        onConfirm={confirmRemoveBomLine}
+        onCancel={() => setBomRemoveId(null)}
+      />
 
       <UnsavedLeaveDialog
         open={unsavedOpen}

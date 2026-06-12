@@ -13,4 +13,5 @@ public enum OperatingExpenseType
     Rent = 7,
     Other = 8,
     Materials = 9,
+    Logistics = 10,
 }

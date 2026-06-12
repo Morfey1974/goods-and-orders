@@ -16,9 +16,12 @@ public class FinancialReportsController(
     CogsReportService cogsReport,
     GrossProfitReportService grossProfitReport,
     OperatingExpensesReportService operatingExpensesReport,
+    ProfitAndLossReportService profitAndLossReport,
+    VendorServicesReportService vendorServicesReport,
     Form1342ReportService form1342Report,
     Form1342PdfService form1342Pdf,
-    FinancialReportPdfService financialReportPdf) : ControllerBase
+    FinancialReportPdfService financialReportPdf,
+    OperatingExpensesReportPdfService operatingExpensesReportPdf) : ControllerBase
 {
     [HttpGet("income")]
     public async Task<ActionResult<IncomeReportDto>> Income(
@@ -117,6 +120,55 @@ public class FinancialReportsController(
             return BadRequest(new { message = validation });
 
         return Ok(await operatingExpensesReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("operating-expenses/pdf")]
+    public async Task<IActionResult> OperatingExpensesPdf(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        var pdf = await operatingExpensesReportPdf.GenerateAsync(tenantId.Value, from, to, ct);
+        return File(pdf, "application/pdf", "operating-expenses-report.pdf", enableRangeProcessing: true);
+    }
+
+    [HttpGet("profit-and-loss")]
+    public async Task<ActionResult<ProfitAndLossReportDto>> ProfitAndLoss(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        return Ok(await profitAndLossReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("vendor-services")]
+    public async Task<ActionResult<VendorServicesReportDto>> VendorServices(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        return Ok(await vendorServicesReport.BuildAsync(tenantId.Value, from, to, ct));
     }
 
     [HttpGet("form-1342")]

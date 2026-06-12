@@ -35,7 +35,7 @@ public class ExpenseReportService(AppDbContext db)
             if (endExclusiveUtc.HasValue && receipt.DocumentDate >= endExclusiveUtc.Value)
                 continue;
 
-            var ils = ComputeStockPurchaseAmountIls(receipt);
+            var ils = PurchaseReceiptLineAllocation.StockPurchaseAmountIls(receipt);
             if (ils <= 0) continue;
 
             var currency = NormalizeCurrency(receipt.Currency);
@@ -56,35 +56,6 @@ public class ExpenseReportService(AppDbContext db)
 
         var grandTotal = Math.Round(lines.Sum(l => l.AmountIls), 2);
         return new ExpenseReportDto(from?.Date, to?.Date, lines, grandTotal, lines.Count);
-    }
-
-    /// <summary>Inventory purchases only — excludes fixed assets and consumables expensed separately.</summary>
-    internal static decimal ComputeStockPurchaseAmountIls(PurchaseReceipt receipt)
-    {
-        var stockLines = receipt.Lines
-            .Where(l => l.Product != null && ProductInventoryHelper.TracksStock(l.Product))
-            .ToList();
-        if (stockLines.Count == 0) return 0m;
-
-        var stockBase = stockLines.Sum(l => PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
-        if (!receipt.ApplyLandedCosts || receipt.LandedCostLines.Count == 0)
-            return DepreciationCalculator.RoundMoney(stockBase);
-
-        var totalLandedIls = receipt.LandedCostLines.Sum(l => l.AmountIls ?? 0m);
-        if (totalLandedIls <= 0) return DepreciationCalculator.RoundMoney(stockBase);
-
-        var faLines = receipt.Lines
-            .Where(l => l.Product != null && ProductTypePrefixes.IsFixedAsset(l.Product.ProductType))
-            .ToList();
-        var faBase = faLines.Sum(l => PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
-        var allocBase = stockBase + faBase;
-        if (allocBase <= 0) return DepreciationCalculator.RoundMoney(stockBase);
-
-        var stockLanded = faBase <= 0
-            ? totalLandedIls
-            : DepreciationCalculator.RoundMoney(totalLandedIls * (stockBase / allocBase));
-
-        return DepreciationCalculator.RoundMoney(stockBase + stockLanded);
     }
 
     private static string NormalizeCurrency(string? currency)

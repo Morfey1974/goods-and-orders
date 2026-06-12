@@ -10,6 +10,7 @@ import { ReportDateRangePicker } from '../components/reports/ReportDateRangePick
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
 import { INCOME_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
@@ -21,6 +22,7 @@ function formatIls(value: number): string {
 }
 
 export function IncomeReportPage() {
+  usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
 

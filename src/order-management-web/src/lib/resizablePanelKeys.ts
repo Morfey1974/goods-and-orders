@@ -16,6 +16,7 @@ export const RESIZABLE_PANEL_KEYS = {
   productGroups: 'ordermgmt.product-groups-modal-size',
   documentProductPicker: 'ordermgmt.document-product-picker-size',
   purchaseReceiptPicker: 'ordermgmt.purchase-receipt-picker-size',
+  bomComponentPicker: 'ordermgmt.bom-component-picker-size',
   purchaseReceiptLinesColumns: 'ordermgmt.purchase-receipt-lines-column-widths',
   inventoryValuationColumns: 'ordermgmt.inventory-valuation-column-widths',
   inventoryValuationReport: 'ordermgmt.inventory-valuation-report-size',
@@ -44,6 +45,7 @@ export const RESIZABLE_PANEL_KEYS = {
   cogsReportPanel: 'ordermgmt.cogs-report-panel-size',
   operatingExpensesReportPanel: 'ordermgmt.operating-expenses-report-panel-size',
   form1342ReportPanel: 'ordermgmt.form1342-report-panel-size',
+  vendorServicesReportPanel: 'ordermgmt.vendor-services-report-panel-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -134,6 +136,13 @@ export const DOCUMENT_PRODUCT_PICKER_RESIZE: ResizablePanelConfig = {
 
 export const PURCHASE_RECEIPT_PICKER_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.purchaseReceiptPicker,
+  minWidth: 720,
+  minHeight: 480,
+  defaultSize: { width: 1100, height: 760 },
+};
+
+export const BOM_COMPONENT_PICKER_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.bomComponentPicker,
   minWidth: 720,
   minHeight: 480,
   defaultSize: { width: 1100, height: 760 },
@@ -256,4 +265,10 @@ export const FORM1342_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.form1342ReportPanel,
   ...LIST_PANEL_DEFAULT,
   defaultSize: { width: 1280, height: 640 },
+};
+
+export const VENDOR_SERVICES_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.vendorServicesReportPanel,
+  ...LIST_PANEL_DEFAULT,
+  defaultSize: { width: 1280, height: 600 },
 };

@@ -80,6 +80,29 @@ public static class PurchaseReceiptFixedAssetPosting
         Product product,
         decimal amountIls)
     {
+        return CreateAutoExpense(
+            tenantId, receipt, line, product, amountIls, OperatingExpenseType.Materials);
+    }
+
+    public static BusinessExpense CreateVendorServiceExpense(
+        Guid tenantId,
+        PurchaseReceipt receipt,
+        PurchaseReceiptLine line,
+        Product product,
+        decimal amountIls)
+    {
+        return CreateAutoExpense(
+            tenantId, receipt, line, product, amountIls, OperatingExpenseType.Logistics);
+    }
+
+    private static BusinessExpense CreateAutoExpense(
+        Guid tenantId,
+        PurchaseReceipt receipt,
+        PurchaseReceiptLine line,
+        Product product,
+        decimal amountIls,
+        OperatingExpenseType expenseType)
+    {
         var now = DateTime.UtcNow;
         return new BusinessExpense
         {
@@ -87,7 +110,7 @@ public static class PurchaseReceiptFixedAssetPosting
             TenantId = tenantId,
             ExpenseDate = DateTime.SpecifyKind(receipt.DocumentDate.Date, DateTimeKind.Utc),
             IsHomeMixed = false,
-            OperatingExpenseType = OperatingExpenseType.Materials,
+            OperatingExpenseType = expenseType,
             Description = product.Name,
             AmountIls = DepreciationCalculator.RoundMoney(amountIls),
             VendorName = receipt.Supplier?.Name,

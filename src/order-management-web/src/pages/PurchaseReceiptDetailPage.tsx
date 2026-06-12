@@ -45,6 +45,7 @@ import {
   visiblePurchaseReceiptLineColumns,
 } from '../lib/purchaseReceiptLinesColumns';
 import { productTracksStock, isFixedAssetProductType, isConsumableProductType } from '../lib/productInventory';
+import { isServiceProductType } from '../lib/productKind';
 import {
   normalizeStockQuantity,
   sanitizeQuantityDraft,
@@ -995,6 +996,14 @@ export function PurchaseReceiptDetailPage() {
   }, [token]);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const hasServiceLines = useMemo(
+    () =>
+      lines.some((line) => {
+        const product = line.productId ? productById.get(line.productId) : undefined;
+        return product != null && isServiceProductType(product.productType);
+      }),
+    [lines, productById]
+  );
   const formValidation = useMemo(
     () =>
       validateReceiptForm(
@@ -1866,6 +1875,9 @@ export function PurchaseReceiptDetailPage() {
                 </button>
               )}
             </div>
+            {hasServiceLines && (
+              <p className="muted pr-service-lines-hint">{t('purchaseReceipts.serviceLineHint')}</p>
+            )}
             {lines.length === 0 && (
               <p className="muted pr-lines-empty">{t('purchaseReceipts.linesEmpty')}</p>
             )}

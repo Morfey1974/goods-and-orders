@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { financialReportsApi, type OperatingExpensesReport } from '../api/financialReports';
 import { type BusinessExpense } from '../api/businessExpenses';
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { ReportDateRangePicker } from '../components/reports/ReportDateRangePicker';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useAuth } from '../context/AuthContext';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
 import { OPERATING_EXPENSES_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
@@ -24,6 +26,7 @@ function expenseTypeLabel(row: BusinessExpense, t: (key: string) => string) {
 }
 
 export function OperatingExpensesReportPage() {
+  usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
   const defaultRange = useMemo(() => getReportDatePresetRange('thisYear'), []);
@@ -33,6 +36,11 @@ export function OperatingExpensesReportPage() {
   const [report, setReport] = useState<OperatingExpensesReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdfParamsRef = useRef({ from, to });
 
   const lines = report?.expenseLines ?? [];
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(lines, [
@@ -65,6 +73,56 @@ export function OperatingExpensesReportPage() {
     void load();
   }, [load]);
 
+  const revokePdfUrl = useCallback(() => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(null);
+  }, [pdfUrl]);
+
+  const buildPdfParams = useCallback(() => ({ from, to }), [from, to]);
+
+  const closePdf = () => {
+    setPdfOpen(false);
+    revokePdfUrl();
+    setPdfError(null);
+    setPdfLoading(false);
+  };
+
+  const openPdfPreview = async () => {
+    if (!token) return;
+    const params = buildPdfParams();
+    pdfParamsRef.current = params;
+    setPdfOpen(true);
+    setPdfLoading(true);
+    setPdfError(null);
+    revokePdfUrl();
+    try {
+      const blob = await financialReportsApi.fetchOperatingExpensesPdfBlob(
+        token,
+        params.from || undefined,
+        params.to || undefined
+      );
+      setPdfUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const onDownloadPdf = async () => {
+    if (!token) return;
+    const params = pdfParamsRef.current ?? buildPdfParams();
+    try {
+      await financialReportsApi.downloadOperatingExpensesPdf(
+        token,
+        params.from || undefined,
+        params.to || undefined
+      );
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Error');
+    }
+  };
+
   return (
     <div className="page inventory-page">
       <header className="inventory-page-header">
@@ -86,6 +144,14 @@ export function OperatingExpensesReportPage() {
             <div className="dt-panel__toolbar-actions">
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
                 {loading ? t('settings.saving') : t('reports.operatingExpensesRun')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={loading || !report}
+                onClick={() => void openPdfPreview()}
+              >
+                {t('warehouse.viewReportPdf')}
               </button>
             </div>
           </div>
@@ -192,6 +258,16 @@ export function OperatingExpensesReportPage() {
           </>
         )}
       </DataTablePanel>
+
+      <DocumentPdfPreviewModal
+        open={pdfOpen}
+        title={t('reports.operatingExpensesTitle')}
+        pdfUrl={pdfUrl}
+        loading={pdfLoading}
+        error={pdfError}
+        onClose={closePdf}
+        onDownload={() => void onDownloadPdf()}
+      />
     </div>
   );
 }

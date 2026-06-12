@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { financialReportsApi, type GrossProfitReport } from '../api/financialReports';
+import { financialReportsApi, type ProfitAndLossReport } from '../api/financialReports';
 import { ReportDateRangePicker } from '../components/reports/ReportDateRangePicker';
 import { useAuth } from '../context/AuthContext';
 import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
@@ -13,7 +13,7 @@ function formatIls(value: number): string {
   return `${value.toFixed(2)} ₪`;
 }
 
-export function GrossProfitReportPage() {
+export function ProfitAndLossReportPage() {
   usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -21,7 +21,7 @@ export function GrossProfitReportPage() {
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [datePreset, setDatePreset] = useState<ReportDatePresetId | ''>('thisYear');
-  const [report, setReport] = useState<GrossProfitReport | null>(null);
+  const [report, setReport] = useState<ProfitAndLossReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +35,7 @@ export function GrossProfitReportPage() {
     setLoading(true);
     setError('');
     try {
-      const r = await financialReportsApi.grossProfit(token, from || undefined, to || undefined);
+      const r = await financialReportsApi.profitAndLoss(token, from || undefined, to || undefined);
       setReport(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -61,9 +61,9 @@ export function GrossProfitReportPage() {
 
       <section className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
-          <h1 style={{ margin: 0, flex: '1 1 auto' }}>{t('reports.grossProfitTitle')}</h1>
+          <h1 style={{ margin: 0, flex: '1 1 auto' }}>{t('reports.plTitle')}</h1>
           <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
-            {loading ? t('settings.saving') : t('reports.grossProfitRun')}
+            {loading ? t('settings.saving') : t('reports.plRun')}
           </button>
         </div>
 
@@ -78,19 +78,12 @@ export function GrossProfitReportPage() {
           }}
         />
         <p className="muted" style={{ marginTop: '0.75rem' }}>
-          {t('reports.grossProfitHint')}
+          {t('reports.plHint')}
         </p>
 
         {report && (
           <div className="inventory-valuation-summary" style={{ marginTop: '1.5rem' }}>
-            <p>
-              {t('reports.grossProfitSummary', {
-                from: report.from ?? (from || t('reports.datePresetAll')),
-                to: report.to ?? (to || t('reports.datePresetAll')),
-                invoices: report.chargeInvoiceCount,
-              })}
-            </p>
-            <table className="data-table data-table--compact" style={{ maxWidth: 480, marginTop: '1rem' }}>
+            <table className="data-table data-table--compact" style={{ maxWidth: 560 }}>
               <tbody>
                 <tr>
                   <td>{t('reports.grossProfitRevenue')}</td>
@@ -98,14 +91,55 @@ export function GrossProfitReportPage() {
                 </tr>
                 <tr>
                   <td>{t('reports.cogsTitle')}</td>
-                  <td className="num">{formatIls(report.cogsIls)}</td>
+                  <td className="num">− {formatIls(report.cogsIls)}</td>
                 </tr>
                 <tr className="data-table__total-row">
                   <td>{t('reports.grossProfitTotal')}</td>
                   <td className="num">{formatIls(report.grossProfitIls)}</td>
                 </tr>
+                <tr>
+                  <td colSpan={2}><strong>{t('reports.plRecognizedExpenses')}</strong></td>
+                </tr>
+                <tr>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExHomeMixed')}</td>
+                  <td className="num">− {formatIls(report.homeMixedRecognizedIls)}</td>
+                </tr>
+                <tr>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExDirect')}</td>
+                  <td className="num">− {formatIls(report.operatingDirectRecognizedIls)}</td>
+                </tr>
+                <tr>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExDepreciation')}</td>
+                  <td className="num">− {formatIls(report.depreciationIls)}</td>
+                </tr>
+                <tr className="data-table__total-row">
+                  <td>{t('reports.plNetProfit')}</td>
+                  <td className="num">{formatIls(report.netProfitIls)}</td>
+                </tr>
               </tbody>
             </table>
+
+            {report.operatingByCategory.length > 0 && (
+              <>
+                <h3 style={{ marginTop: '1.5rem' }}>{t('reports.plByCategory')}</h3>
+                <table className="data-table data-table--compact" style={{ maxWidth: 560 }}>
+                  <thead>
+                    <tr>
+                      <th>{t('businessExpenses.expenseKind')}</th>
+                      <th className="num">{t('reports.expenseColAmount')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.operatingByCategory.map((row) => (
+                      <tr key={row.category}>
+                        <td>{t(`operatingExpenseType.${row.category}`, { defaultValue: row.category })}</td>
+                        <td className="num">{formatIls(row.amountIls)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         )}
       </section>

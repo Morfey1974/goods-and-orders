@@ -8,6 +8,7 @@ type Props = {
   cancelLabel: string;
   danger?: boolean;
   busy?: boolean;
+  zIndex?: number;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   cancelLabel,
   danger = false,
   busy = false,
+  zIndex = 2600,
   onConfirm,
   onCancel,
 }: Props) {
@@ -29,7 +31,7 @@ export function ConfirmDialog({
       onClose={onCancel}
       preventClose={busy}
       size="sm"
-      zIndex={2600}
+      zIndex={zIndex}
       overlayClassName="confirm-dialog-overlay"
       className="confirm-dialog"
       labelledBy="confirm-dialog-title"

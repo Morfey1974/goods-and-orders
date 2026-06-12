@@ -6,9 +6,12 @@ import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPrev
 import { ReportCard } from '../components/reports/ReportCard';
 import { ReportRunModal, type ReportRunKind } from '../components/reports/ReportRunModal';
 import { useAuth } from '../context/AuthContext';
+import {
+  readReportsCategory,
+  writeReportsCategory,
+  type ReportCategoryId,
+} from '../lib/reportsCategory';
 import '../styles/reports.css';
-
-type ReportCategoryId = 'warehouse' | 'financial';
 
 type ReportDef = {
   id: string;
@@ -79,6 +82,18 @@ const REPORT_CATEGORIES: { id: ReportCategoryId; labelKey: string; reports: Repo
         href: '/reports/operating-expenses',
       },
       {
+        id: 'profit-and-loss',
+        titleKey: 'reports.plTitle',
+        descKey: 'reports.plDesc',
+        href: '/reports/profit-and-loss',
+      },
+      {
+        id: 'vendor-services',
+        titleKey: 'reports.vendorServicesTitle',
+        descKey: 'reports.vendorServicesDesc',
+        href: '/reports/vendor-services',
+      },
+      {
         id: 'form-1342',
         titleKey: 'reports.form1342Title',
         descKey: 'reports.form1342Desc',
@@ -92,7 +107,11 @@ export function ReportsPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const [activeCategory, setActiveCategory] = useState<ReportCategoryId>('warehouse');
+  const [activeCategory, setActiveCategoryState] = useState<ReportCategoryId>(readReportsCategory);
+  const setActiveCategory = (category: ReportCategoryId) => {
+    writeReportsCategory(category);
+    setActiveCategoryState(category);
+  };
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState('');
 
@@ -205,6 +224,7 @@ export function ReportsPage() {
               title={t(report.titleKey)}
               description={t(report.descKey)}
               onOpen={() => {
+                writeReportsCategory(activeCategory);
                 if (report.href) navigate(report.href);
                 else if (report.kind) openReport(report.kind);
               }}

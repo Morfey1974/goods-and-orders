@@ -17,6 +17,7 @@ import {
   sanitizeQuantityDraft,
 } from '../../lib/stockQuantity';
 import { PURCHASE_RECEIPT_PICKER_RESIZE } from '../../lib/resizablePanelKeys';
+import type { ResizablePanelConfig } from '../../lib/modalSize';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { ModalResizeHandles } from '../ui/ModalResizeHandles';
 import '../../styles/documents.css';
@@ -35,6 +36,14 @@ type Props = {
   groups: ProductGroup[];
   replaceMode?: boolean;
   initialSelectedProductId?: string | null;
+  titleKey?: string;
+  excludeProductIds?: readonly string[];
+  productFilter?: (product: Product) => boolean;
+  initialFilterKind?: ProductKindFilter;
+  initialFilterType?: string;
+  resizeConfig?: ResizablePanelConfig;
+  overlayZIndex?: number;
+  nestedProductModalZIndex?: number;
   onClose: () => void;
   onSave: (picks: PickedReceiptProduct[]) => void;
   onProductCreated: (product: Product) => void;
@@ -51,6 +60,14 @@ export function PurchaseReceiptProductPickerModal({
   groups,
   replaceMode = false,
   initialSelectedProductId = null,
+  titleKey = 'purchaseReceipts.pickerTitle',
+  excludeProductIds = [],
+  productFilter,
+  initialFilterKind = '',
+  initialFilterType = '',
+  resizeConfig = PURCHASE_RECEIPT_PICKER_RESIZE,
+  overlayZIndex,
+  nestedProductModalZIndex = 2700,
   onClose,
   onSave,
   onProductCreated,
@@ -58,7 +75,7 @@ export function PurchaseReceiptProductPickerModal({
   const { t } = useTranslation();
   const { panelRef, resizable, persistSize, onResizeHandleMouseDown } = useResizablePanel(
     open,
-    PURCHASE_RECEIPT_PICKER_RESIZE
+    resizeConfig
   );
   const [search, setSearch] = useState('');
   const [filterKind, setFilterKind] = useState<ProductKindFilter>('');
@@ -78,12 +95,12 @@ export function PurchaseReceiptProductPickerModal({
   useEffect(() => {
     if (!open || !token) return;
     setSearch('');
-    setFilterKind('');
-    setFilterType('');
+    setFilterKind(initialFilterKind);
+    setFilterType(initialFilterType);
     setFilterGroupId('');
     setProductModalMsg('');
     setSelectedIds(initialSelectedProductId ? new Set([initialSelectedProductId]) : new Set());
-  }, [open, token, initialSelectedProductId]);
+  }, [open, token, initialSelectedProductId, initialFilterKind, initialFilterType]);
 
   useEffect(() => {
     if (!open || !token) return;
@@ -118,9 +135,13 @@ export function PurchaseReceiptProductPickerModal({
     });
   }, [open, catalogProducts]);
 
+  const excludedIds = useMemo(() => new Set(excludeProductIds), [excludeProductIds]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return catalogProducts.filter((p) => {
+      if (excludedIds.has(p.id)) return false;
+      if (productFilter && !productFilter(p)) return false;
       if (filterType && p.productType !== filterType) return false;
       if (!matchesProductKindFilter(p.productType, filterKind)) return false;
       if (filterGroupId && !p.groupIds.includes(filterGroupId)) return false;
@@ -131,7 +152,7 @@ export function PurchaseReceiptProductPickerModal({
         (p.legacySku?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [catalogProducts, search, filterKind, filterType, filterGroupId]);
+  }, [catalogProducts, search, filterKind, filterType, filterGroupId, excludedIds, productFilter]);
 
   const updateDraft = (id: string, patch: Partial<RowDraft>) => {
     setRowDrafts((prev) => ({
@@ -222,7 +243,11 @@ export function PurchaseReceiptProductPickerModal({
 
   return createPortal(
     <>
-      <div className="doc-picker-overlay pr-picker-overlay" role="presentation">
+      <div
+        className="doc-picker-overlay pr-picker-overlay"
+        style={overlayZIndex !== undefined ? { zIndex: overlayZIndex } : undefined}
+        role="presentation"
+      >
         <div
           ref={panelRef}
           className={`doc-picker-modal doc-picker-modal--wide pr-picker-modal${resizable ? ' doc-picker-modal--resizable' : ''}`}
@@ -235,7 +260,7 @@ export function PurchaseReceiptProductPickerModal({
             <button type="button" className="doc-picker-close" onClick={handleClose} aria-label={t('products.close')}>
               ×
             </button>
-            <h2 id="pr-picker-title">{t('purchaseReceipts.pickerTitle')}</h2>
+            <h2 id="pr-picker-title">{t(titleKey)}</h2>
           </header>
 
           <div className="doc-picker-toolbar pr-picker-toolbar">
@@ -426,7 +451,7 @@ export function PurchaseReceiptProductPickerModal({
         product={null}
         nextArticle={nextArticle}
         components={components}
-        zIndex={2700}
+        zIndex={nestedProductModalZIndex}
         onClose={() => setNewProductOpen(false)}
         onSaved={(msg) => setProductModalMsg(msg)}
         onError={() => {}}

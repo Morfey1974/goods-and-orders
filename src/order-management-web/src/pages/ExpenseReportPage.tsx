@@ -10,6 +10,7 @@ import { ReportDateRangePicker } from '../components/reports/ReportDateRangePick
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
 import { EXPENSE_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
@@ -28,6 +29,7 @@ function formatOriginalAmount(line: ExpenseReportLine): string {
 }
 
 export function ExpenseReportPage() {
+  usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
 

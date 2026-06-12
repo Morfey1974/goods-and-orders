@@ -72,6 +72,42 @@ export type GrossProfitReport = {
   chargeInvoiceCount: number;
 };
 
+export type OperatingExpenseCategoryLine = {
+  category: string;
+  amountIls: number;
+};
+
+export type ProfitAndLossReport = {
+  from?: string | null;
+  to?: string | null;
+  revenueIls: number;
+  cogsIls: number;
+  grossProfitIls: number;
+  homeMixedRecognizedIls: number;
+  operatingDirectRecognizedIls: number;
+  depreciationIls: number;
+  totalRecognizedExpensesIls: number;
+  netProfitIls: number;
+  operatingByCategory: OperatingExpenseCategoryLine[];
+};
+
+export type VendorServiceLine = {
+  serviceDate: string;
+  sourceKind: string;
+  receiptNumber?: string | null;
+  vendorName: string;
+  category: string;
+  description?: string | null;
+  amountIls: number;
+};
+
+export type VendorServicesReport = {
+  from?: string | null;
+  to?: string | null;
+  lines: VendorServiceLine[];
+  grandTotalIls: number;
+};
+
 export type FixedAssetDepreciationLine = {
   assetId: string;
   name: string;
@@ -317,6 +353,33 @@ export const financialReportsApi = {
       token
     ).then(mapOperatingExpensesReport);
   },
+  fetchOperatingExpensesPdfBlob(token: string, from?: string, to?: string) {
+    return fetchPdfBlob(token, '/api/reports/operating-expenses/pdf', from, to);
+  },
+  downloadOperatingExpensesPdf(token: string, from?: string, to?: string) {
+    return fetchPdfBlob(token, '/api/reports/operating-expenses/pdf', from, to).then((blob) =>
+      downloadBlob(
+        blob,
+        `operating-expenses-report${from ? `-${from}` : ''}${to ? `-to-${to}` : ''}.pdf`
+      )
+    );
+  },
+
+  profitAndLoss(token: string, from?: string, to?: string): Promise<ProfitAndLossReport> {
+    return request<Record<string, unknown>>(
+      `/api/reports/profit-and-loss${buildQuery(from, to)}`,
+      {},
+      token
+    ).then(mapProfitAndLossReport);
+  },
+
+  vendorServices(token: string, from?: string, to?: string): Promise<VendorServicesReport> {
+    return request<Record<string, unknown>>(
+      `/api/reports/vendor-services${buildQuery(from, to)}`,
+      {},
+      token
+    ).then(mapVendorServicesReport);
+  },
 
   form1342(token: string, taxYear: number): Promise<Form1342Report> {
     return request<Record<string, unknown>>(`/api/reports/form-1342?taxYear=${taxYear}`, {}, token).then(
@@ -410,5 +473,50 @@ function mapForm1342Report(raw: Record<string, unknown>): Form1342Report {
     totalCurrentYearDepreciationIls: Number(
       raw.totalCurrentYearDepreciationIls ?? raw.TotalCurrentYearDepreciationIls ?? 0
     ),
+  };
+}
+
+function mapProfitAndLossReport(raw: Record<string, unknown>): ProfitAndLossReport {
+  const from = raw.from ?? raw.From;
+  const to = raw.to ?? raw.To;
+  const catRaw = (raw.operatingByCategory ?? raw.OperatingByCategory ?? []) as Record<string, unknown>[];
+  return {
+    from: from ? String(from).slice(0, 10) : null,
+    to: to ? String(to).slice(0, 10) : null,
+    revenueIls: Number(raw.revenueIls ?? raw.RevenueIls ?? 0),
+    cogsIls: Number(raw.cogsIls ?? raw.CogsIls ?? 0),
+    grossProfitIls: Number(raw.grossProfitIls ?? raw.GrossProfitIls ?? 0),
+    homeMixedRecognizedIls: Number(raw.homeMixedRecognizedIls ?? raw.HomeMixedRecognizedIls ?? 0),
+    operatingDirectRecognizedIls: Number(raw.operatingDirectRecognizedIls ?? raw.OperatingDirectRecognizedIls ?? 0),
+    depreciationIls: Number(raw.depreciationIls ?? raw.DepreciationIls ?? 0),
+    totalRecognizedExpensesIls: Number(raw.totalRecognizedExpensesIls ?? raw.TotalRecognizedExpensesIls ?? 0),
+    netProfitIls: Number(raw.netProfitIls ?? raw.NetProfitIls ?? 0),
+    operatingByCategory: catRaw.map((c) => ({
+      category: String(c.category ?? c.Category ?? ''),
+      amountIls: Number(c.amountIls ?? c.AmountIls ?? 0),
+    })),
+  };
+}
+
+function mapVendorServicesReport(raw: Record<string, unknown>): VendorServicesReport {
+  const from = raw.from ?? raw.From;
+  const to = raw.to ?? raw.To;
+  const linesRaw = (raw.lines ?? raw.Lines ?? []) as Record<string, unknown>[];
+  return {
+    from: from ? String(from).slice(0, 10) : null,
+    to: to ? String(to).slice(0, 10) : null,
+    lines: linesRaw.map((l) => {
+      const serviceDate = l.serviceDate ?? l.ServiceDate;
+      return {
+        serviceDate: serviceDate ? String(serviceDate).slice(0, 10) : '',
+        sourceKind: String(l.sourceKind ?? l.SourceKind ?? ''),
+        receiptNumber: (l.receiptNumber ?? l.ReceiptNumber) as string | null | undefined,
+        vendorName: String(l.vendorName ?? l.VendorName ?? ''),
+        category: String(l.category ?? l.Category ?? ''),
+        description: (l.description ?? l.Description) as string | null | undefined,
+        amountIls: Number(l.amountIls ?? l.AmountIls ?? 0),
+      };
+    }),
+    grandTotalIls: Number(raw.grandTotalIls ?? raw.GrandTotalIls ?? 0),
   };
 }

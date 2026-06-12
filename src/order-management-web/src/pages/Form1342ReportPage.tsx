@@ -7,6 +7,7 @@ import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useAuth } from '../context/AuthContext';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { FORM1342_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
 import '../styles/inventory.css';
@@ -20,6 +21,7 @@ function formatRate(value: number): string {
 }
 
 export function Form1342ReportPage() {
+  usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
   const [taxYear, setTaxYear] = useState(new Date().getFullYear());

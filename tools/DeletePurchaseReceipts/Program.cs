@@ -1,5 +1,9 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Services;
 
@@ -129,14 +133,36 @@ if (dryRun)
     return 0;
 }
 
+var services = new ServiceCollection();
+services.AddMemoryCache();
+services.AddHttpClient(nameof(ExchangeRateService));
+var sp = services.BuildServiceProvider();
+
+var env = new ToolWebHostEnvironment { ContentRootPath = apiDir };
+var files = new TenantFileService(env, config);
+var warehouse = new WarehouseService(db);
+var inventoryCost = new InventoryCostService(db, warehouse);
+var exchangeRates = new ExchangeRateService(
+    sp.GetRequiredService<IHttpClientFactory>(),
+    sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>());
+var sequences = new ArticleSequenceService(db);
+var fixedAssets = new FixedAssetInstanceService(db);
+
 var service = new PurchaseReceiptService(
-    db,
-    new WarehouseService(db),
-    new InventoryCostService(db, new WarehouseService(db)),
-    new ArticleSequenceService(db));
+    db, warehouse, inventoryCost, exchangeRates, files, sequences, fixedAssets);
 
 var deleted = await service.DeletePostedByNumbersAsync(tenantId, receiptNumbers, CancellationToken.None);
 
 Console.WriteLine();
 Console.WriteLine($"Deleted {deleted} receipt(s) with stock reversal.");
 return 0;
+
+internal sealed class ToolWebHostEnvironment : IWebHostEnvironment
+{
+    public string EnvironmentName { get; set; } = Environments.Development;
+    public string ApplicationName { get; set; } = "DeletePurchaseReceipts";
+    public string WebRootPath { get; set; } = Path.GetTempPath();
+    public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+    public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+}

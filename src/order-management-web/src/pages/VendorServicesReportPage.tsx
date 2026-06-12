@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { financialReportsApi, type CogsReport, type CogsIssueLine } from '../api/financialReports';
-import { BidiText } from '../components/BidiText';
+import { financialReportsApi, type VendorServicesReport } from '../api/financialReports';
 import { ReportDateRangePicker } from '../components/reports/ReportDateRangePicker';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
@@ -10,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
 import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
-import { COGS_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
+import { VENDOR_SERVICES_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
 
 import '../styles/inventory.css';
 
@@ -18,7 +17,7 @@ function formatIls(value: number): string {
   return `${value.toFixed(2)} ₪`;
 }
 
-export function CogsReportPage() {
+export function VendorServicesReportPage() {
   usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -26,11 +25,11 @@ export function CogsReportPage() {
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [datePreset, setDatePreset] = useState<ReportDatePresetId | ''>('thisYear');
-  const [report, setReport] = useState<CogsReport | null>(null);
+  const [report, setReport] = useState<VendorServicesReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const lines = report?.issueLines ?? [];
+  const lines = report?.lines ?? [];
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(lines, [
     from,
     to,
@@ -46,7 +45,7 @@ export function CogsReportPage() {
     setLoading(true);
     setError('');
     try {
-      const r = await financialReportsApi.cogs(token, from || undefined, to || undefined);
+      const r = await financialReportsApi.vendorServices(token, from || undefined, to || undefined);
       setReport(r);
       setPage(0);
     } catch (e) {
@@ -61,19 +60,6 @@ export function CogsReportPage() {
     void load();
   }, [load]);
 
-  const renderRow = (line: CogsIssueLine) => (
-    <tr key={line.movementId}>
-      <td>{line.movementDate}</td>
-      <td>{line.articleCode}</td>
-      <td>
-        <BidiText>{line.productName}</BidiText>
-      </td>
-      <td className="num">{line.quantity}</td>
-      <td className="num">{formatIls(line.totalCostIls)}</td>
-      <td>{line.notes ?? '—'}</td>
-    </tr>
-  );
-
   return (
     <div className="page inventory-page">
       <header className="inventory-page-header">
@@ -85,44 +71,34 @@ export function CogsReportPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <DataTablePanel
-        resize={COGS_REPORT_PANEL_RESIZE}
+        resize={VENDOR_SERVICES_REPORT_PANEL_RESIZE}
         toolbar={
           <div className="dt-panel__toolbar-row">
-            <DataTablePanelHeading title={t('reports.cogsTitle')} count={t('products.results', { count: total })} />
+            <DataTablePanelHeading
+              title={t('reports.vendorServicesTitle')}
+              count={t('products.results', { count: total })}
+            />
             <div className="dt-panel__toolbar-actions">
+              <ReportDateRangePicker
+                from={from}
+                to={to}
+                presetId={datePreset}
+                onChange={(nextFrom, nextTo, preset) => {
+                  setFrom(nextFrom);
+                  setTo(nextTo);
+                  setDatePreset(preset);
+                }}
+              />
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
-                {loading ? t('settings.saving') : t('reports.cogsRun')}
+                {loading ? t('settings.saving') : t('reports.vendorServicesRun')}
               </button>
             </div>
           </div>
         }
         toolbarSecondary={
-          <>
-            <ReportDateRangePicker
-              from={from}
-              to={to}
-              presetId={datePreset}
-              onChange={(nextFrom, nextTo, preset) => {
-                setFrom(nextFrom);
-                setTo(nextTo);
-                setDatePreset(preset);
-              }}
-            />
-            <p className="muted dt-panel__hint" style={{ margin: 0, width: '100%' }}>
-              {t('reports.cogsHint')}
-            </p>
-          </>
-        }
-        summary={
-          report ? (
-            <div className="inventory-valuation-summary" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-              <span>{t('reports.cogsOpening')}: {formatIls(report.openingInventoryIls)}</span>
-              <span>{t('reports.cogsPurchases')}: {formatIls(report.purchasesToInventoryIls)}</span>
-              <span>{t('reports.cogsClosing')}: {formatIls(report.closingInventoryIls)}</span>
-              <strong>{t('reports.cogsFormula')}: {formatIls(report.cogsByFormulaIls)}</strong>
-              <span>{t('reports.cogsFromIssues')}: {formatIls(report.cogsFromIssuesIls)}</span>
-            </div>
-          ) : undefined
+          <p className="muted dt-panel__hint" style={{ margin: 0, width: '100%' }}>
+            {t('reports.vendorServicesHint')}
+          </p>
         }
         pagination={{
           page,
@@ -133,26 +109,44 @@ export function CogsReportPage() {
           onPageSizeChange: setPageSize,
         }}
       >
+        {report && (
+          <p className="muted" style={{ margin: '0 0 0.75rem' }}>
+            {t('reports.vendorServicesSummary', { total: formatIls(report.grandTotalIls) })}
+          </p>
+        )}
         <table className="data-table data-table--compact">
           <thead>
             <tr>
-              <th>{t('reports.cogsColDate')}</th>
-              <th>{t('products.article')}</th>
-              <th>{t('products.name')}</th>
-              <th className="num">{t('warehouse.quantity')}</th>
-              <th className="num">{t('reports.cogsColCost')}</th>
-              <th>{t('businessExpenses.notes')}</th>
+              <th>{t('reports.vendorServicesColDate')}</th>
+              <th>{t('reports.vendorServicesColVendor')}</th>
+              <th>{t('reports.vendorServicesColSource')}</th>
+              <th>{t('reports.vendorServicesColCategory')}</th>
+              <th>{t('reports.vendorServicesColDesc')}</th>
+              <th className="num">{t('reports.expenseColAmount')}</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.length === 0 && !loading ? (
               <tr>
                 <td colSpan={6} className="muted">
-                  {t('reports.cogsEmpty')}
+                  {t('reports.vendorServicesEmpty')}
                 </td>
               </tr>
             ) : (
-              pageItems.map(renderRow)
+              pageItems.map((row, idx) => (
+                <tr key={`${row.serviceDate}-${row.vendorName}-${idx}`}>
+                  <td>{row.serviceDate}</td>
+                  <td>{row.vendorName}</td>
+                  <td>
+                    {row.receiptNumber
+                      ? `${t(`reports.vendorServicesSource.${row.sourceKind}`)} ${row.receiptNumber}`
+                      : t(`reports.vendorServicesSource.${row.sourceKind}`)}
+                  </td>
+                  <td>{row.category}</td>
+                  <td>{row.description ?? '—'}</td>
+                  <td className="num">{formatIls(row.amountIls)}</td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>

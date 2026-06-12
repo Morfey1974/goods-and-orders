@@ -137,6 +137,38 @@ public record GrossProfitReportDto(
     decimal GrossProfitIls,
     int ChargeInvoiceCount);
 
+public record OperatingExpenseCategoryLineDto(
+    string Category,
+    decimal AmountIls);
+
+public record ProfitAndLossReportDto(
+    DateTime? From,
+    DateTime? To,
+    decimal RevenueIls,
+    decimal CogsIls,
+    decimal GrossProfitIls,
+    decimal HomeMixedRecognizedIls,
+    decimal OperatingDirectRecognizedIls,
+    decimal DepreciationIls,
+    decimal TotalRecognizedExpensesIls,
+    decimal NetProfitIls,
+    IReadOnlyList<OperatingExpenseCategoryLineDto> OperatingByCategory);
+
+public record VendorServiceLineDto(
+    DateTime ServiceDate,
+    string SourceKind,
+    string? ReceiptNumber,
+    string VendorName,
+    string Category,
+    string? Description,
+    decimal AmountIls);
+
+public record VendorServicesReportDto(
+    DateTime? From,
+    DateTime? To,
+    IReadOnlyList<VendorServiceLineDto> Lines,
+    decimal GrandTotalIls);
+
 public static class BusinessExpenseMappers
 {
     public static (int Used, int Total) ResolveHomeRooms(Tenant tenant)

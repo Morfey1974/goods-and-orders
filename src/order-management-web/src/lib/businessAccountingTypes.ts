@@ -21,6 +21,7 @@ export const OPERATING_EXPENSE_TYPES = [
   'SoftwareSubscription',
   'Rent',
   'Materials',
+  'Logistics',
   'Other',
 ] as const;
 

@@ -10,6 +10,7 @@ import { BidiText } from '../components/BidiText';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
+import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { useResizableTableColumns } from '../hooks/useResizableTableColumns';
 import { formatInventoryLotSource } from '../lib/inventoryLotLabel';
 import {
@@ -27,6 +28,7 @@ import '../styles/purchase-receipts.css';
 import '../styles/inventory.css';
 
 export function InventoryValuationPage() {
+  usePersistReportsCategory();
   const { t } = useTranslation();
   const { token } = useAuth();
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));

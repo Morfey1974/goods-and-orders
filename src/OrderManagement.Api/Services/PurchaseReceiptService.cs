@@ -136,6 +136,11 @@ public class PurchaseReceiptService(
             .OrderBy(l => l.SortOrder)
             .ToList();
 
+        var serviceLines = receipt.Lines
+            .Where(l => PurchaseReceiptLineAllocation.IsVendorService(l.Product))
+            .OrderBy(l => l.SortOrder)
+            .ToList();
+
         foreach (var line in receipt.Lines.OrderBy(l => l.SortOrder))
         {
             var unitCostIls = InventoryCostService.ResolveLineUnitCostIls(
@@ -143,9 +148,7 @@ public class PurchaseReceiptService(
             line.UnitCostIls = unitCostIls;
         }
 
-        Dictionary<Guid, decimal>? finalUnitCosts = null;
         Dictionary<Guid, decimal>? landedShareByLineId = null;
-        decimal totalLandedIls = 0m;
 
         if (receipt.ApplyLandedCosts && receipt.LandedCostLines.Count > 0)
         {
@@ -159,51 +162,24 @@ public class PurchaseReceiptService(
                 var amountIls = LandedCostAllocation.ResolveAmountIls(
                     landed.Amount, landed.Currency, usdIlsRate);
                 landed.AmountIls = amountIls;
-                totalLandedIls += amountIls;
             }
 
+            var totalLandedIls = receipt.LandedCostLines.Sum(l => l.AmountIls ?? 0m);
             if (totalLandedIls > 0)
             {
-                if (stockLines.Count == 0 && fixedAssetLines.Count == 0)
+                if (PurchaseReceiptLineAllocation.AllocatableLines(receipt).Count == 0)
                     throw new InvalidOperationException(
-                        "Landed costs require at least one stock or fixed-asset line to allocate.");
+                        "Landed costs require at least one stock, fixed-asset, consumable, or service line.");
 
-                var stockBaseTotal = stockLines.Sum(l =>
-                    PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
-                var faBaseTotal = fixedAssetLines.Sum(l =>
-                    PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l));
-                var allocBase = stockBaseTotal + faBaseTotal;
-
-                var stockLandedPool = stockLines.Count == 0
-                    ? 0m
-                    : faBaseTotal <= 0
-                        ? totalLandedIls
-                        : DepreciationCalculator.RoundMoney(totalLandedIls * (stockBaseTotal / allocBase));
-
-                var faLandedPool = DepreciationCalculator.RoundMoney(totalLandedIls - stockLandedPool);
-
-                if (stockLines.Count > 0 && stockLandedPool > 0)
-                    finalUnitCosts = LandedCostAllocation.ComputeFinalUnitCostsIls(stockLines, stockLandedPool);
-
-                if (fixedAssetLines.Count > 0 && faLandedPool > 0)
-                {
-                    var faBases = fixedAssetLines
-                        .Select(l => (l.Id, PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, l)))
-                        .ToList();
-                    landedShareByLineId = PurchaseReceiptFixedAssetPosting.AllocateLandedCostToLines(
-                        faBases, faLandedPool);
-                }
+                landedShareByLineId = PurchaseReceiptLineAllocation.ComputeLandedShares(receipt, totalLandedIls);
             }
         }
 
         var noteBase = BuildMovementNote(receipt);
 
-        foreach (var line in receipt.Lines.OrderBy(l => l.SortOrder))
+        foreach (var line in stockLines)
         {
             var product = line.Product;
-            if (!ProductInventoryHelper.TracksStock(product))
-                continue;
-
             Warehouse wh;
             if (line.WarehouseId is { } wid)
             {
@@ -221,10 +197,9 @@ public class PurchaseReceiptService(
             if (qty <= 0)
                 throw new InvalidOperationException("Line quantity must be positive.");
 
-            var unitCostIls = finalUnitCosts?.GetValueOrDefault(line.Id)
-                ?? line.UnitCostIls
-                ?? InventoryCostService.ResolveLineUnitCostIls(
-                    receipt.Currency, line.UnitPrice, line.UnitCostIls);
+            var baseIls = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var landed = landedShareByLineId?.GetValueOrDefault(line.Id) ?? 0m;
+            var unitCostIls = DepreciationCalculator.RoundMoney((baseIls + landed) / qty);
 
             line.UnitCostIls = unitCostIls;
 
@@ -252,9 +227,19 @@ public class PurchaseReceiptService(
 
         foreach (var line in consumableLines)
         {
-            var amount = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var baseIls = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var landed = landedShareByLineId?.GetValueOrDefault(line.Id) ?? 0m;
             var expense = PurchaseReceiptFixedAssetPosting.CreateConsumableExpense(
-                tenantId, receipt, line, line.Product, amount);
+                tenantId, receipt, line, line.Product, baseIls + landed);
+            db.BusinessExpenses.Add(expense);
+        }
+
+        foreach (var line in serviceLines)
+        {
+            var baseIls = PurchaseReceiptFixedAssetPosting.ResolveLineTotalIls(receipt, line);
+            var landed = landedShareByLineId?.GetValueOrDefault(line.Id) ?? 0m;
+            var expense = PurchaseReceiptFixedAssetPosting.CreateVendorServiceExpense(
+                tenantId, receipt, line, line.Product, baseIls + landed);
             db.BusinessExpenses.Add(expense);
         }
 
@@ -291,6 +276,44 @@ public class PurchaseReceiptService(
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Reverses posted accounting entries and returns the receipt to draft for re-posting.</summary>
+    public async Task<PurchaseReceipt> RevertPostedToDraftAsync(Guid tenantId, Guid id, CancellationToken ct)
+    {
+        var receipt = await db.PurchaseReceipts
+            .Include(r => r.Lines)
+            .ThenInclude(l => l.Product)
+            .Include(r => r.LandedCostLines)
+            .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId, ct)
+            ?? throw new InvalidOperationException("Purchase receipt not found.");
+
+        if (receipt.Status != PurchaseReceiptStatus.Posted)
+            throw new InvalidOperationException("Only posted receipts can be reverted to draft.");
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await ReversePostedAccountingAsync(tenantId, receipt, ct);
+
+            foreach (var landed in receipt.LandedCostLines)
+                landed.AmountIls = null;
+
+            receipt.Status = PurchaseReceiptStatus.Draft;
+            receipt.PostedAt = null;
+            receipt.Version++;
+            receipt.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+
+        return await LoadAsync(tenantId, receipt.Id, ct)
+            ?? throw new InvalidOperationException("Failed to load purchase receipt.");
+    }
+
     /// <summary>Removes a posted receipt and reverses unconsumed FIFO layers / stock balance.</summary>
     public async Task DeletePostedWithReversalAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
@@ -305,70 +328,12 @@ public class PurchaseReceiptService(
         if (receipt.Status != PurchaseReceiptStatus.Posted)
             throw new InvalidOperationException("Only posted receipts can be reversed with this method.");
 
-        var noteMarker = $"GR {receipt.ReceiptNumber}";
-
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
-            foreach (var line in receipt.Lines)
-            {
-                if (!ProductInventoryHelper.TracksStock(line.Product))
-                    continue;
-
-                var lot = await db.InventoryLots.FirstOrDefaultAsync(
-                    l => l.TenantId == tenantId &&
-                         l.SourceType == InventoryLotSource.PurchaseReceipt &&
-                         l.SourceId == line.Id,
-                    ct);
-
-                if (lot is null)
-                    continue;
-
-                var allocatedQty = await db.InventoryLotAllocations
-                    .Where(a => a.InventoryLotId == lot.Id)
-                    .SumAsync(a => a.Quantity, ct);
-
-                var originalQty = StockQuantity.Normalize(line.Quantity);
-                if (allocatedQty > 0 && lot.QuantityRemaining < originalQty)
-                {
-                    throw new InvalidOperationException(
-                        $"Cannot delete {receipt.ReceiptNumber}: stock from line was already sold " +
-                        $"(product {line.Product.ArticleCode}, remaining {lot.QuantityRemaining} of {originalQty}).");
-                }
-
-                if (lot.QuantityRemaining > 0)
-                {
-                    var balance = await warehouse.GetOrCreateBalanceAsync(lot.WarehouseId, lot.ProductId, ct);
-                    balance.Quantity = StockQuantity.Normalize(balance.Quantity - lot.QuantityRemaining);
-                    if (balance.Quantity < 0)
-                    {
-                        throw new InvalidOperationException(
-                            $"Cannot delete {receipt.ReceiptNumber}: stock would go negative for {line.Product.ArticleCode}.");
-                    }
-                }
-
-                await db.InventoryLotAllocations
-                    .Where(a => a.InventoryLotId == lot.Id)
-                    .ExecuteDeleteAsync(ct);
-                db.InventoryLots.Remove(lot);
-            }
-
-            await db.StockMovements
-                .Where(m => m.TenantId == tenantId && m.Notes != null && m.Notes.Contains(noteMarker))
-                .ExecuteDeleteAsync(ct);
+            await ReversePostedAccountingAsync(tenantId, receipt, ct);
 
             var receiptId = receipt.Id;
-            var lineIds = receipt.Lines.Select(l => l.Id).ToList();
-
-            await db.FixedAssetInstances
-                .Where(i => i.PurchaseReceiptId == receiptId)
-                .ExecuteDeleteAsync(ct);
-
-            await db.BusinessExpenses
-                .Where(e => e.TenantId == tenantId &&
-                            e.PurchaseReceiptLineId != null &&
-                            lineIds.Contains(e.PurchaseReceiptLineId.Value))
-                .ExecuteDeleteAsync(ct);
 
             db.Entry(receipt).State = EntityState.Detached;
             foreach (var line in receipt.Lines)
@@ -400,6 +365,74 @@ public class PurchaseReceiptService(
             await tx.RollbackAsync(ct);
             throw;
         }
+    }
+
+    private async Task ReversePostedAccountingAsync(
+        Guid tenantId,
+        PurchaseReceipt receipt,
+        CancellationToken ct)
+    {
+        var noteMarker = $"GR {receipt.ReceiptNumber}";
+
+        foreach (var line in receipt.Lines)
+        {
+            if (!ProductInventoryHelper.TracksStock(line.Product))
+                continue;
+
+            var lot = await db.InventoryLots.FirstOrDefaultAsync(
+                l => l.TenantId == tenantId &&
+                     l.SourceType == InventoryLotSource.PurchaseReceipt &&
+                     l.SourceId == line.Id,
+                ct);
+
+            if (lot is null)
+                continue;
+
+            var allocatedQty = await db.InventoryLotAllocations
+                .Where(a => a.InventoryLotId == lot.Id)
+                .SumAsync(a => a.Quantity, ct);
+
+            var originalQty = StockQuantity.Normalize(line.Quantity);
+            if (allocatedQty > 0 && lot.QuantityRemaining < originalQty)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot reverse {receipt.ReceiptNumber}: stock from line was already sold " +
+                    $"(product {line.Product.ArticleCode}, remaining {lot.QuantityRemaining} of {originalQty}).");
+            }
+
+            if (lot.QuantityRemaining > 0)
+            {
+                var balance = await warehouse.GetOrCreateBalanceAsync(lot.WarehouseId, lot.ProductId, ct);
+                balance.Quantity = StockQuantity.Normalize(balance.Quantity - lot.QuantityRemaining);
+                if (balance.Quantity < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot reverse {receipt.ReceiptNumber}: stock would go negative for {line.Product.ArticleCode}.");
+                }
+            }
+
+            await db.InventoryLotAllocations
+                .Where(a => a.InventoryLotId == lot.Id)
+                .ExecuteDeleteAsync(ct);
+            db.InventoryLots.Remove(lot);
+        }
+
+        await db.StockMovements
+            .Where(m => m.TenantId == tenantId && m.Notes != null && m.Notes.Contains(noteMarker))
+            .ExecuteDeleteAsync(ct);
+
+        var receiptId = receipt.Id;
+        var lineIds = receipt.Lines.Select(l => l.Id).ToList();
+
+        await db.FixedAssetInstances
+            .Where(i => i.PurchaseReceiptId == receiptId)
+            .ExecuteDeleteAsync(ct);
+
+        await db.BusinessExpenses
+            .Where(e => e.TenantId == tenantId &&
+                        e.PurchaseReceiptLineId != null &&
+                        lineIds.Contains(e.PurchaseReceiptLineId.Value))
+            .ExecuteDeleteAsync(ct);
     }
 
     public async Task<int> DeletePostedByNumbersAsync(

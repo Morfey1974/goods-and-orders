@@ -29,6 +29,8 @@ import { CogsReportPage } from './pages/CogsReportPage';
 import { GrossProfitReportPage } from './pages/GrossProfitReportPage';
 import { OperatingExpensesReportPage } from './pages/OperatingExpensesReportPage';
 import { Form1342ReportPage } from './pages/Form1342ReportPage';
+import { ProfitAndLossReportPage } from './pages/ProfitAndLossReportPage';
+import { VendorServicesReportPage } from './pages/VendorServicesReportPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -64,6 +66,8 @@ const router = createBrowserRouter([
       { path: 'reports/gross-profit', element: <GrossProfitReportPage /> },
       { path: 'reports/operating-expenses', element: <OperatingExpensesReportPage /> },
       { path: 'reports/form-1342', element: <Form1342ReportPage /> },
+      { path: 'reports/profit-and-loss', element: <ProfitAndLossReportPage /> },
+      { path: 'reports/vendor-services', element: <VendorServicesReportPage /> },
       { path: 'business-expenses', element: <BusinessExpensesPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
