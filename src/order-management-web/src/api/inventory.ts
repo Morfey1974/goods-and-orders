@@ -31,8 +31,10 @@ export type InventoryLot = {
   productName: string;
   warehouseId: string;
   warehouseName: string;
+  quantityReceived: number;
   quantityRemaining: number;
   unitCostIls: number;
+  totalReceivedIls: number;
   totalValueIls: number;
   receivedAt: string;
   sourceType: string;
@@ -80,8 +82,10 @@ function mapLot(raw: Record<string, unknown>): InventoryLot {
     productName: String(raw.productName ?? raw.ProductName ?? ''),
     warehouseId: String(raw.warehouseId ?? raw.WarehouseId),
     warehouseName: String(raw.warehouseName ?? raw.WarehouseName ?? ''),
+    quantityReceived: Number(raw.quantityReceived ?? raw.QuantityReceived ?? raw.quantityRemaining ?? raw.QuantityRemaining ?? 0),
     quantityRemaining: Number(raw.quantityRemaining ?? raw.QuantityRemaining ?? 0),
     unitCostIls: Number(raw.unitCostIls ?? raw.UnitCostIls ?? 0),
+    totalReceivedIls: Number(raw.totalReceivedIls ?? raw.TotalReceivedIls ?? 0),
     totalValueIls: Number(raw.totalValueIls ?? raw.TotalValueIls ?? 0),
     receivedAt: String(raw.receivedAt ?? raw.ReceivedAt ?? '').slice(0, 10),
     sourceType: String(raw.sourceType ?? raw.SourceType ?? ''),
@@ -169,11 +173,12 @@ export const inventoryApi = {
     );
   },
 
-  lots: (token: string, opts?: { asOf?: string; productId?: string; warehouseId?: string }) => {
+  lots: (token: string, opts?: { asOf?: string; productId?: string; warehouseId?: string; includeDepleted?: boolean }) => {
     const q = new URLSearchParams();
     if (opts?.asOf) q.set('asOf', opts.asOf);
     if (opts?.productId) q.set('productId', opts.productId);
     if (opts?.warehouseId) q.set('warehouseId', opts.warehouseId);
+    if (opts?.includeDepleted) q.set('includeDepleted', 'true');
     const qs = q.toString();
     return request<Record<string, unknown>[]>(`/api/inventory/lots${qs ? `?${qs}` : ''}`, {}, token).then(
       (rows) => rows.map(mapLot)

@@ -286,6 +286,8 @@ public class WarehouseService(AppDbContext db)
 
         db.StockMovements.Add(movement);
         await db.SaveChangesAsync(ct);
+        await StockMovementBalanceRepairService.RepairProductWarehouseAsync(
+            db, tenantId, warehouseId, productId, ct);
         return movement;
     }
 }

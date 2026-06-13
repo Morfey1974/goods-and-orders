@@ -204,6 +204,13 @@ function formatMovementCost(value?: number | null): string {
   return `${value.toFixed(2)} ₪`;
 }
 
+function formatMovementDate(iso: string): string {
+  const d = iso.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return iso;
+  const [y, m, day] = d.split('-');
+  return `${day}.${m}.${y}`;
+}
+
 async function syncProductGroupMembership(
   token: string,
   productId: string,
@@ -481,7 +488,7 @@ export function ProductEditModal({
     if (!open || tab !== 'lots' || !effectiveProduct || !token) return;
     setLoadingLots(true);
     inventoryApi
-      .lots(token, { productId: effectiveProduct.id })
+      .lots(token, { productId: effectiveProduct.id, includeDepleted: true })
       .then(setLots)
       .catch(() => setLots([]))
       .finally(() => setLoadingLots(false));
@@ -1173,7 +1180,7 @@ export function ProductEditModal({
                       <td className="bidi-auto" title={m.notes ?? undefined}>
                         {formatStockMovementDocument(m.notes)}
                       </td>
-                      <td>{new Date(m.createdAt).toLocaleString()}</td>
+                      <td>{formatMovementDate(m.movementDate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1206,9 +1213,10 @@ export function ProductEditModal({
                     <th>{t('inventory.lotReceivedAt')}</th>
                     <th>{t('inventory.lotSource')}</th>
                     <th>{t('purchaseReceipts.colNumber')}</th>
-                    <th>{t('warehouse.qty')}</th>
+                    <th>{t('products.lotQtyReceived')}</th>
+                    <th>{t('products.lotQtyRemaining')}</th>
                     <th>{t('inventory.unitCostIls')}</th>
-                    <th>{t('purchaseReceipts.lineSum')}</th>
+                    <th>{t('products.lotSumReceived')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1238,9 +1246,10 @@ export function ProductEditModal({
                           '—'
                         )}
                       </td>
+                      <td>{formatStockQuantity(lot.quantityReceived)}</td>
                       <td>{formatStockQuantity(lot.quantityRemaining)}</td>
                       <td>{lot.unitCostIls.toFixed(2)}</td>
-                      <td>{lot.totalValueIls.toFixed(2)} ₪</td>
+                      <td>{lot.totalReceivedIls.toFixed(2)} ₪</td>
                     </tr>
                   ))}
                 </tbody>

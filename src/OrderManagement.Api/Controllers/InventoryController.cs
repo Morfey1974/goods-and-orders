@@ -126,12 +126,14 @@ public class InventoryController(
         [FromQuery] DateTime? asOf,
         [FromQuery] Guid? productId = null,
         [FromQuery] Guid? warehouseId = null,
+        [FromQuery] bool includeDepleted = false,
         CancellationToken ct = default)
     {
         var tenantId = User.GetTenantId();
         if (tenantId is null) return Unauthorized();
 
-        var lots = await valuation.ListLotsAsync(tenantId.Value, asOf, productId, warehouseId, ct);
+        var lots = await valuation.ListLotsAsync(
+            tenantId.Value, asOf, productId, warehouseId, includeDepleted, ct);
         return Ok(lots);
     }
 

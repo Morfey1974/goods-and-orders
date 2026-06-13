@@ -203,7 +203,7 @@ public class CogsReportService(
 
     private async Task<decimal> SumInventoryValueAsync(Guid tenantId, DateTime asOf, CancellationToken ct)
     {
-        var lots = await valuation.ListLotsAsync(tenantId, asOf, null, null, ct);
+        var lots = await valuation.ListLotsAsync(tenantId, asOf, null, null, includeDepleted: false, ct);
         return Math.Round(lots.Sum(l => l.TotalValueIls), 2);
     }
 

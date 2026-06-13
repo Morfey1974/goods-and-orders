@@ -12,10 +12,11 @@ public class InventoryValuationService(AppDbContext db)
         DateTime? asOf,
         Guid? productId,
         Guid? warehouseId,
+        bool includeDepleted,
         CancellationToken ct)
     {
         var effectiveDate = NormalizeAsOf(asOf);
-        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, productId, warehouseId, ct);
+        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, productId, warehouseId, includeDepleted, ct);
         return rows.Select(ToLotDto).ToList();
     }
 
@@ -48,7 +49,7 @@ public class InventoryValuationService(AppDbContext db)
         InventoryCostMethod method,
         CancellationToken ct)
     {
-        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, null, null, ct);
+        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, null, null, includeDepleted: false, ct);
         var lines = rows
             .Select(r =>
             {
@@ -87,7 +88,7 @@ public class InventoryValuationService(AppDbContext db)
         InventoryCostMethod method,
         CancellationToken ct)
     {
-        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, null, null, ct);
+        var rows = await QueryOpenLotsAsync(tenantId, effectiveDate, null, null, includeDepleted: false, ct);
 
         var lines = rows
             .GroupBy(x => new { x.ProductId, x.ArticleCode, x.LegacySku, x.ProductName, x.WarehouseId, x.WarehouseName })
@@ -170,6 +171,7 @@ public class InventoryValuationService(AppDbContext db)
         DateTime effectiveDate,
         Guid? productId,
         Guid? warehouseId,
+        bool includeDepleted,
         CancellationToken ct)
     {
         var historical = IsHistoricalAsOf(effectiveDate);
@@ -238,6 +240,15 @@ public class InventoryValuationService(AppDbContext db)
                 .Where(a => assemblyIds.Contains(a.Id) && a.TenantId == tenantId)
                 .ToDictionaryAsync(a => a.Id, a => new AssemblyInfo(a.Id, a.AssemblyNumber), ct);
 
+        var lotIds = raw.Select(x => x.Id).ToList();
+        var issuedByLot = lotIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await db.InventoryLotAllocations.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && lotIds.Contains(a.InventoryLotId))
+                .GroupBy(a => a.InventoryLotId)
+                .Select(g => new { LotId = g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.LotId, x => x.Qty, ct);
+
         return raw
             .Select(x =>
             {
@@ -245,9 +256,12 @@ public class InventoryValuationService(AppDbContext db)
                 if (historical && restoredQtyByLot!.TryGetValue(x.Id, out var restored))
                     qty = StockQuantity.Normalize(qty + restored);
 
-                return new { x, qty };
+                var issued = issuedByLot.GetValueOrDefault(x.Id);
+                var received = StockQuantity.Normalize(x.QuantityRemaining + issued);
+
+                return new { x, qty, received };
             })
-            .Where(x => x.qty > 0)
+            .Where(x => includeDepleted || x.qty > 0)
             .Select(x =>
             {
                 ReceiptLineInfo? receiptInfo = null;
@@ -268,6 +282,7 @@ public class InventoryValuationService(AppDbContext db)
                     x.x.ProductName,
                     x.x.WarehouseId,
                     x.x.WarehouseName,
+                    x.received,
                     x.qty,
                     x.x.UnitCostIls,
                     x.x.ReceivedAt,
@@ -334,8 +349,10 @@ public class InventoryValuationService(AppDbContext db)
             r.ProductName,
             r.WarehouseId,
             r.WarehouseName,
+            r.QuantityReceived,
             r.QuantityRemaining,
             r.UnitCostIls,
+            InventoryCostService.RoundIls(r.QuantityReceived * r.UnitCostIls),
             InventoryCostService.RoundIls(r.QuantityRemaining * r.UnitCostIls),
             r.ReceivedAt,
             r.SourceType,
@@ -363,6 +380,7 @@ public class InventoryValuationService(AppDbContext db)
         string ProductName,
         Guid WarehouseId,
         string WarehouseName,
+        decimal QuantityReceived,
         decimal QuantityRemaining,
         decimal UnitCostIls,
         DateTime ReceivedAt,

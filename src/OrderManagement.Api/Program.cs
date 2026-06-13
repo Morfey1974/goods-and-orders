@@ -140,6 +140,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
     await WarehouseDataMigration.ApplyAsync(db);
     await StockBalanceRepairService.RepairAllAsync(db);
+    await StockMovementBalanceRepairService.RepairAllAsync(db);
 }
 
 if (app.Environment.IsDevelopment())

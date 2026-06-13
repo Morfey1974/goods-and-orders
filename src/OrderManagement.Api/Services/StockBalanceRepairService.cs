@@ -4,7 +4,7 @@ using OrderManagement.Api.Entities;
 
 namespace OrderManagement.Api.Services;
 
-/// <summary>Moves stock rows to the system warehouse matching product type (CP/SP vs FG/BD).</summary>
+/// <summary>Moves stock rows and FIFO lots to the system warehouse matching product type (CP/SP vs FG/BD).</summary>
 public static class StockBalanceRepairService
 {
     public static async Task RepairTenantAsync(AppDbContext db, Guid tenantId, CancellationToken ct = default)
@@ -23,9 +23,7 @@ public static class StockBalanceRepairService
 
         foreach (var row in balances)
         {
-            var targetId = ProductTypePrefixes.GetWarehouseKind(row.ProductType) == WarehouseKind.FinishedGoods
-                ? finished.Id
-                : components.Id;
+            var targetId = TargetWarehouseId(row.ProductType, components.Id, finished.Id);
 
             if (row.Balance.WarehouseId == targetId) continue;
 
@@ -43,9 +41,53 @@ public static class StockBalanceRepairService
             }
         }
 
+        var lots = await (
+            from l in db.InventoryLots
+            join p in db.Products on l.ProductId equals p.Id
+            where p.TenantId == tenantId
+            select new { Lot = l, p.ProductType }
+        ).ToListAsync(ct);
+
+        foreach (var row in lots)
+        {
+            var targetId = TargetWarehouseId(row.ProductType, components.Id, finished.Id);
+            if (row.Lot.WarehouseId != targetId)
+                row.Lot.WarehouseId = targetId;
+        }
+
+        var avgCosts = await (
+            from c in db.InventoryAverageCosts
+            join p in db.Products on c.ProductId equals p.Id
+            where p.TenantId == tenantId
+            select new { Cost = c, p.ProductType, p.Id }
+        ).ToListAsync(ct);
+
+        foreach (var row in avgCosts)
+        {
+            var targetId = TargetWarehouseId(row.ProductType, components.Id, finished.Id);
+            if (row.Cost.WarehouseId == targetId) continue;
+
+            var existing = await db.InventoryAverageCosts.FirstOrDefaultAsync(
+                c => c.TenantId == tenantId && c.ProductId == row.Id && c.WarehouseId == targetId, ct);
+
+            if (existing is not null)
+            {
+                db.InventoryAverageCosts.Remove(row.Cost);
+            }
+            else
+            {
+                row.Cost.WarehouseId = targetId;
+            }
+        }
+
         if (db.ChangeTracker.HasChanges())
             await db.SaveChangesAsync(ct);
     }
+
+    private static Guid TargetWarehouseId(ProductType productType, Guid componentsId, Guid finishedId) =>
+        ProductTypePrefixes.GetWarehouseKind(productType) == WarehouseKind.FinishedGoods
+            ? finishedId
+            : componentsId;
 
     public static async Task RepairAllAsync(AppDbContext db, CancellationToken ct = default)
     {

@@ -233,6 +233,7 @@ export type StockMovement = {
   unitCostIls?: number | null;
   totalCostIls?: number | null;
   notes?: string;
+  movementDate: string;
   createdAt: string;
 };
 
@@ -484,6 +485,7 @@ export const catalogApi = {
             ? Number(m.totalCostIls ?? m.TotalCostIls)
             : null,
         notes: (m.notes ?? m.Notes) as string | undefined,
+        movementDate: String(m.movementDate ?? m.MovementDate ?? m.createdAt ?? m.CreatedAt ?? ''),
         createdAt: String(m.createdAt ?? m.CreatedAt ?? ''),
       })) as StockMovement[];
     },
