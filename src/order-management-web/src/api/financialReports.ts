@@ -341,6 +341,14 @@ export const financialReportsApi = {
       mapCogsReport
     );
   },
+  fetchCogsPdfBlob(token: string, from?: string, to?: string) {
+    return fetchPdfBlob(token, '/api/reports/cogs/pdf', from, to);
+  },
+  downloadCogsPdf(token: string, from?: string, to?: string) {
+    return fetchPdfBlob(token, '/api/reports/cogs/pdf', from, to).then((blob) =>
+      downloadBlob(blob, `cogs-report${from ? `-${from}` : ''}${to ? `-to-${to}` : ''}.pdf`)
+    );
+  },
   grossProfit(token: string, from?: string, to?: string): Promise<GrossProfitReport> {
     return request<Record<string, unknown>>(`/api/reports/gross-profit${buildQuery(from, to)}`, {}, token).then(
       mapGrossProfitReport

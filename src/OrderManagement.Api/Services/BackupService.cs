@@ -8,6 +8,7 @@ using OrderManagement.Api.Configuration;
 using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Helpers;
 
 namespace OrderManagement.Api.Services;
 
@@ -61,7 +62,7 @@ public class BackupService(
         try
         {
             var createdUtc = DateTime.UtcNow;
-            var createdLocal = createdUtc.ToLocalTime();
+            var createdLocal = BusinessTimeZone.ToLocal(createdUtc);
             var sessionFolder = BuildSessionFolderName(createdLocal);
             var stamp = createdLocal.ToString("yyyy-MM-dd_HHmmss");
             var safeBusiness = SanitizeFileName(tenant.BusinessName);

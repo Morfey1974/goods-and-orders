@@ -21,7 +21,8 @@ public class FinancialReportsController(
     Form1342ReportService form1342Report,
     Form1342PdfService form1342Pdf,
     FinancialReportPdfService financialReportPdf,
-    OperatingExpensesReportPdfService operatingExpensesReportPdf) : ControllerBase
+    OperatingExpensesReportPdfService operatingExpensesReportPdf,
+    CogsReportPdfService cogsReportPdf) : ControllerBase
 {
     [HttpGet("income")]
     public async Task<ActionResult<IncomeReportDto>> Income(
@@ -88,6 +89,23 @@ public class FinancialReportsController(
             return BadRequest(new { message = validation });
 
         return Ok(await cogsReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("cogs/pdf")]
+    public async Task<IActionResult> CogsPdf(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        var pdf = await cogsReportPdf.GenerateAsync(tenantId.Value, from, to, ct);
+        return File(pdf, "application/pdf", "cogs-report.pdf", enableRangeProcessing: true);
     }
 
     [HttpGet("gross-profit")]

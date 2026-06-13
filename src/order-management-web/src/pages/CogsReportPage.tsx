@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { financialReportsApi, type CogsReport, type CogsIssueLine } from '../api/financialReports';
 import { BidiText } from '../components/BidiText';
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { ReportDateRangePicker } from '../components/reports/ReportDateRangePicker';
 import { DataTablePanel } from '../components/ui/DataTablePanel';
 import { DataTablePanelHeading } from '../components/ui/DataTablePanelHeading';
@@ -29,6 +30,11 @@ export function CogsReportPage() {
   const [report, setReport] = useState<CogsReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdfParamsRef = useRef({ from, to });
 
   const lines = report?.issueLines ?? [];
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(lines, [
@@ -61,6 +67,52 @@ export function CogsReportPage() {
     void load();
   }, [load]);
 
+  const revokePdfUrl = useCallback(() => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(null);
+  }, [pdfUrl]);
+
+  const buildPdfParams = useCallback(() => ({ from, to }), [from, to]);
+
+  const closePdf = () => {
+    setPdfOpen(false);
+    revokePdfUrl();
+    setPdfError(null);
+    setPdfLoading(false);
+  };
+
+  const openPdfPreview = async () => {
+    if (!token) return;
+    const params = buildPdfParams();
+    pdfParamsRef.current = params;
+    setPdfOpen(true);
+    setPdfLoading(true);
+    setPdfError(null);
+    revokePdfUrl();
+    try {
+      const blob = await financialReportsApi.fetchCogsPdfBlob(
+        token,
+        params.from || undefined,
+        params.to || undefined
+      );
+      setPdfUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const onDownloadPdf = async () => {
+    if (!token) return;
+    const params = pdfParamsRef.current ?? buildPdfParams();
+    try {
+      await financialReportsApi.downloadCogsPdf(token, params.from || undefined, params.to || undefined);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Error');
+    }
+  };
+
   const renderRow = (line: CogsIssueLine) => (
     <tr key={line.movementId}>
       <td>{line.movementDate}</td>
@@ -92,6 +144,14 @@ export function CogsReportPage() {
             <div className="dt-panel__toolbar-actions">
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
                 {loading ? t('settings.saving') : t('reports.cogsRun')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={loading || !report}
+                onClick={() => void openPdfPreview()}
+              >
+                {t('warehouse.viewReportPdf')}
               </button>
             </div>
           </div>
@@ -155,8 +215,26 @@ export function CogsReportPage() {
               pageItems.map(renderRow)
             )}
           </tbody>
+          {report && lines.length > 0 && (
+            <tfoot>
+              <tr className="data-table__total-row">
+                <td colSpan={5}>{t('reports.cogsFromIssues')}</td>
+                <td className="num">{formatIls(report.cogsFromIssuesIls)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </DataTablePanel>
+
+      <DocumentPdfPreviewModal
+        open={pdfOpen}
+        title={t('reports.cogsTitle')}
+        pdfUrl={pdfUrl}
+        loading={pdfLoading}
+        error={pdfError}
+        onClose={closePdf}
+        onDownload={() => void onDownloadPdf()}
+      />
     </div>
   );
 }

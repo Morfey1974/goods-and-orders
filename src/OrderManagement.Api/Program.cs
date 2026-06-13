@@ -51,6 +51,7 @@ builder.Services.AddScoped<CogsReportService>();
 builder.Services.AddScoped<GrossProfitReportService>();
 builder.Services.AddScoped<OperatingExpensesReportService>();
 builder.Services.AddScoped<OperatingExpensesReportPdfService>();
+builder.Services.AddScoped<CogsReportPdfService>();
 builder.Services.AddScoped<ProfitAndLossReportService>();
 builder.Services.AddScoped<VendorServicesReportService>();
 builder.Services.AddScoped<Form1342ReportService>();

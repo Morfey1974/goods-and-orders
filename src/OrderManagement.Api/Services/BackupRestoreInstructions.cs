@@ -1,5 +1,7 @@
 namespace OrderManagement.Api.Services;
 
+using OrderManagement.Api.Helpers;
+
 public static class BackupRestoreInstructions
 {
     public const string FileName = "KAK_VOSSTANOVIT.txt";
@@ -10,7 +12,7 @@ public static class BackupRestoreInstructions
         string archiveFileName,
         string? hostBackupFolderHint)
     {
-        var createdLocal = createdUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        var createdLocal = BusinessTimeZone.ToLocal(createdUtc).ToString("dd.MM.yyyy HH:mm");
         var folderHint = string.IsNullOrWhiteSpace(hostBackupFolderHint)
             ? "папка backups в каталоге проекта (см. docker-compose.yml)"
             : hostBackupFolderHint.Trim();
