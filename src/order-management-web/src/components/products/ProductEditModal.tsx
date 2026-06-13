@@ -19,6 +19,7 @@ import { warehouseApi, type Warehouse } from '../../api/warehouse';
 import { defaultWarehouseForProductType, resolveProductWarehouseId } from '../../lib/defaultWarehouse';
 import { formatInventoryLotSourceKind } from '../../lib/inventoryLotLabel';
 import { formatStockQuantity } from '../../lib/stockQuantity';
+import { formatStockMovementDocument } from '../../lib/stockMovementDocument';
 import { BidiText, bidiAutoInputProps } from '../BidiText';
 import { ProductTypeSelect } from './ProductTypeSelect';
 import { ProductGroupsMultiSelect } from './ProductGroupsMultiSelect';
@@ -37,12 +38,33 @@ type BomInput = {
   componentName?: string;
 };
 
+type AssemblyRecipeInput = {
+  componentProductId: string;
+  quantity: number;
+  componentArticleCode?: string;
+  componentName?: string;
+};
+
 function mapBomLineInput(line: {
   componentProductId: string;
   quantity: number;
   componentArticleCode?: string;
   componentName?: string;
 }): BomInput {
+  return {
+    componentProductId: line.componentProductId,
+    quantity: normalizeBomQty(line.quantity),
+    componentArticleCode: line.componentArticleCode,
+    componentName: line.componentName,
+  };
+}
+
+function mapAssemblyRecipeLineInput(line: {
+  componentProductId: string;
+  quantity: number;
+  componentArticleCode?: string;
+  componentName?: string;
+}): AssemblyRecipeInput {
   return {
     componentProductId: line.componentProductId,
     quantity: normalizeBomQty(line.quantity),
@@ -65,6 +87,7 @@ type FormSnapshot = {
   showBomInInvoice: boolean;
   trackInventory: boolean;
   bomLines: BomInput[];
+  assemblyRecipeLines: AssemblyRecipeInput[];
   groupIds: string[];
   warehouseId: string;
   depreciationCategory: string;
@@ -82,6 +105,7 @@ function snapshotFromState(
     showBomInInvoice: boolean;
     trackInventory: boolean;
     bomLines: BomInput[];
+    assemblyRecipeLines: AssemblyRecipeInput[];
     depreciationCategory: string;
     businessUsePercent: string;
   },
@@ -98,6 +122,10 @@ function snapshotFromState(
     showBomInInvoice: form.showBomInInvoice,
     trackInventory: form.trackInventory,
     bomLines: form.bomLines.map((b) => ({
+      componentProductId: b.componentProductId,
+      quantity: normalizeBomQty(b.quantity),
+    })),
+    assemblyRecipeLines: form.assemblyRecipeLines.map((b) => ({
       componentProductId: b.componentProductId,
       quantity: normalizeBomQty(b.quantity),
     })),
@@ -133,6 +161,15 @@ function snapshotsEqual(a: FormSnapshot, b: FormSnapshot): boolean {
     if (
       a.bomLines[i].componentProductId !== b.bomLines[i].componentProductId ||
       a.bomLines[i].quantity !== b.bomLines[i].quantity
+    ) {
+      return false;
+    }
+  }
+  if (a.assemblyRecipeLines.length !== b.assemblyRecipeLines.length) return false;
+  for (let i = 0; i < a.assemblyRecipeLines.length; i++) {
+    if (
+      a.assemblyRecipeLines[i].componentProductId !== b.assemblyRecipeLines[i].componentProductId ||
+      a.assemblyRecipeLines[i].quantity !== b.assemblyRecipeLines[i].quantity
     ) {
       return false;
     }
@@ -266,12 +303,15 @@ export function ProductEditModal({
     showBomInInvoice: false,
     trackInventory: false,
     bomLines: [] as BomInput[],
+    assemblyRecipeLines: [] as AssemblyRecipeInput[],
     depreciationCategory: 'PersonalPc',
     businessUsePercent: '100',
   });
   const [baselineKey, setBaselineKey] = useState(0);
   const [bomPickerOpen, setBomPickerOpen] = useState(false);
   const [bomRemoveId, setBomRemoveId] = useState<string | null>(null);
+  const [recipePickerOpen, setRecipePickerOpen] = useState(false);
+  const [recipeRemoveId, setRecipeRemoveId] = useState<string | null>(null);
   const [pickerCatalog, setPickerCatalog] = useState<Product[]>([]);
 
   const isDirty = () => {
@@ -306,6 +346,7 @@ export function ProductEditModal({
         showBomInInvoice: product.showBomInInvoice,
         trackInventory: product.trackInventory,
         bomLines: product.bomLines.map((b) => mapBomLineInput(b)),
+        assemblyRecipeLines: product.assemblyRecipeLines.map((b) => mapAssemblyRecipeLineInput(b)),
         depreciationCategory: product.depreciationCategory ?? 'PersonalPc',
         businessUsePercent: String(product.defaultBusinessUsePercent ?? 100),
       });
@@ -320,6 +361,7 @@ export function ProductEditModal({
         showBomInInvoice: duplicateFrom.showBomInInvoice,
         trackInventory: duplicateFrom.trackInventory,
         bomLines: duplicateFrom.bomLines.map((b) => mapBomLineInput(b)),
+        assemblyRecipeLines: duplicateFrom.assemblyRecipeLines.map((b) => mapAssemblyRecipeLineInput(b)),
         depreciationCategory: duplicateFrom.depreciationCategory ?? 'PersonalPc',
         businessUsePercent: String(duplicateFrom.defaultBusinessUsePercent ?? 100),
       });
@@ -334,6 +376,7 @@ export function ProductEditModal({
         showBomInInvoice: false,
         trackInventory: false,
         bomLines: [],
+        assemblyRecipeLines: [],
         depreciationCategory: 'PersonalPc',
         businessUsePercent: '100',
       });
@@ -416,6 +459,7 @@ export function ProductEditModal({
       showBomInQuote: showBom ? f.showBomInQuote : false,
       showBomInInvoice: showBom ? f.showBomInInvoice : false,
       trackInventory: productTypeCanTrackStock(productType) ? f.trackInventory : false,
+      assemblyRecipeLines: productTypeCanTrackStock(productType) && f.trackInventory ? f.assemblyRecipeLines : [],
       depreciationCategory: isFixedAssetProductType(productType) ? f.depreciationCategory || 'PersonalPc' : 'PersonalPc',
       businessUsePercent: isFixedAssetProductType(productType) ? f.businessUsePercent || '100' : '100',
     }));
@@ -501,6 +545,65 @@ export function ProductEditModal({
     }));
     setBomRemoveId(null);
   };
+
+  const recipeProductFilter = useCallback((p: Product) => productTracksStock(p), []);
+  const recipeExcludeIds = effectiveProduct ? [effectiveProduct.id] : [];
+  const recipeExistingPicks = useMemo(
+    () =>
+      form.assemblyRecipeLines.map((b) => ({
+        productId: b.componentProductId,
+        quantity: b.quantity,
+      })),
+    [form.assemblyRecipeLines]
+  );
+
+  const resolveRecipeLineLabel = useCallback(
+    (line: AssemblyRecipeInput) => {
+      const fromComponents = components.find((c) => c.id === line.componentProductId);
+      const fromPicker = pickerCatalog.find((c) => c.id === line.componentProductId);
+      const article =
+        line.componentArticleCode ??
+        fromComponents?.articleCode ??
+        fromPicker?.articleCode ??
+        '—';
+      const name = line.componentName ?? fromComponents?.name ?? fromPicker?.name ?? '—';
+      return { article, name };
+    },
+    [components, pickerCatalog]
+  );
+
+  const handleRecipePicks = (picks: PickedReceiptProduct[]) => {
+    setForm((f) => {
+      const assemblyRecipeLines = [...f.assemblyRecipeLines];
+      for (const pick of picks) {
+        const idx = assemblyRecipeLines.findIndex((b) => b.componentProductId === pick.product.id);
+        const nextLine: AssemblyRecipeInput = {
+          componentProductId: pick.product.id,
+          quantity: normalizeBomQty(pick.quantity),
+          componentArticleCode: pick.product.articleCode,
+          componentName: pick.product.name,
+        };
+        if (idx >= 0) assemblyRecipeLines[idx] = nextLine;
+        else assemblyRecipeLines.push(nextLine);
+      }
+      return { ...f, assemblyRecipeLines };
+    });
+    setPickerCatalog((prev) => {
+      const map = new Map(prev.map((p) => [p.id, p]));
+      for (const pick of picks) map.set(pick.product.id, pick.product);
+      return [...map.values()];
+    });
+  };
+
+  const confirmRemoveRecipeLine = () => {
+    if (!recipeRemoveId) return;
+    setForm((f) => ({
+      ...f,
+      assemblyRecipeLines: f.assemblyRecipeLines.filter((b) => b.componentProductId !== recipeRemoveId),
+    }));
+    setRecipeRemoveId(null);
+  };
+
   const tracksStock = productTypeCanTrackStock(form.productType);
   const tracksInventory = productTracksStock({
     productType: form.productType,
@@ -522,6 +625,15 @@ export function ProductEditModal({
                 quantity: normalizeBomQty(b.quantity),
               }))
           : undefined;
+
+      const recipePayload = tracksInventory
+        ? form.assemblyRecipeLines
+            .filter((b) => b.componentProductId)
+            .map((b) => ({
+              componentProductId: b.componentProductId,
+              quantity: normalizeBomQty(b.quantity),
+            }))
+        : undefined;
 
       const groupIds = [...selectedGroupIds];
       const warehousePayload =
@@ -548,6 +660,7 @@ export function ProductEditModal({
           trackInventory: tracksStock && form.trackInventory,
           isActive: form.isActive,
           bomLines: showBom ? bomPayload ?? [] : undefined,
+          assemblyRecipeLines: recipePayload,
           version: effectiveProduct.version,
           ...warehousePayload,
           ...faPayload,
@@ -582,6 +695,7 @@ export function ProductEditModal({
           showBomInInvoice: form.showBomInInvoice,
           trackInventory: tracksStock && form.trackInventory,
           bomLines: bomPayload,
+          assemblyRecipeLines: recipePayload,
           ...warehousePayload,
           ...faPayload,
         });
@@ -816,7 +930,11 @@ export function ProductEditModal({
                   checked={form.trackInventory}
                   onChange={(e) => {
                     const checked = e.target.checked;
-                    setForm({ ...form, trackInventory: checked });
+                    setForm({
+                      ...form,
+                      trackInventory: checked,
+                      assemblyRecipeLines: checked ? form.assemblyRecipeLines : [],
+                    });
                     if (checked && !warehouseId) {
                       setWarehouseId(defaultWarehouseForProductType(form.productType, warehouses));
                     }
@@ -941,6 +1059,73 @@ export function ProductEditModal({
               </div>
             )}
 
+            {tracksInventory && (
+              <div className="bom-block">
+                <strong className="bom-block-title">{t('products.assemblyRecipe')}</strong>
+                <p className="muted bom-block-hint">{t('products.assemblyRecipeHint')}</p>
+                <div className="bom-lines-panel">
+                  {form.assemblyRecipeLines.length > 0 && (
+                    <div className="bom-lines-table">
+                      <div className="bom-lines-head">
+                        <span>{t('products.bomColArticle')}</span>
+                        <span>{t('products.bomColName')}</span>
+                        <span>{t('products.assemblyRecipeQtyPerUnit')}</span>
+                        <span aria-hidden />
+                      </div>
+                      {form.assemblyRecipeLines.map((line) => {
+                        const { article, name } = resolveRecipeLineLabel(line);
+                        return (
+                          <div key={line.componentProductId} className="bom-lines-row">
+                            <code className="bom-lines-article">{article}</code>
+                            <span className="bom-lines-name">
+                              <BidiText as="span">{name}</BidiText>
+                            </span>
+                            <input
+                              type="number"
+                              className="bom-lines-qty"
+                              min={1}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={t('products.assemblyRecipeQtyPerUnit')}
+                              title={t('products.assemblyRecipeQtyPerUnit')}
+                              value={line.quantity}
+                              onChange={(e) => {
+                                const parsed = Number(e.target.value);
+                                setForm((f) => ({
+                                  ...f,
+                                  assemblyRecipeLines: f.assemblyRecipeLines.map((b) =>
+                                    b.componentProductId === line.componentProductId
+                                      ? { ...b, quantity: normalizeBomQty(parsed) }
+                                      : b
+                                  ),
+                                }));
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="bom-row-remove"
+                              aria-label={t('products.removeRecipeComponent')}
+                              title={t('products.removeRecipeComponent')}
+                              onClick={() => setRecipeRemoveId(line.componentProductId)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setRecipePickerOpen(true)}
+                >
+                  + {t('products.addRecipeComponents')}
+                </button>
+              </div>
+            )}
+
           </form>
           </div>
           <div className="product-card-footer">
@@ -970,6 +1155,7 @@ export function ProductEditModal({
                     <th>{t('warehouse.qty')}</th>
                     <th>{t('products.movementUnitCost')}</th>
                     <th>{t('warehouse.after')}</th>
+                    <th>{t('products.movementDocument')}</th>
                     <th>{t('warehouse.date')}</th>
                   </tr>
                 </thead>
@@ -984,6 +1170,9 @@ export function ProductEditModal({
                       <td>{formatStockQuantity(m.quantity)}</td>
                       <td>{formatMovementCost(m.unitCostIls)}</td>
                       <td>{formatStockQuantity(m.balanceAfter)}</td>
+                      <td className="bidi-auto" title={m.notes ?? undefined}>
+                        {formatStockMovementDocument(m.notes)}
+                      </td>
                       <td>{new Date(m.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
@@ -1036,6 +1225,14 @@ export function ProductEditModal({
                             onClick={onClose}
                           >
                             {lot.sourceReceiptNumber}
+                          </Link>
+                        ) : lot.sourceAssemblyId && lot.sourceAssemblyNumber ? (
+                          <Link
+                            to={`/assemblies/${lot.sourceAssemblyId}`}
+                            className="btn-link"
+                            onClick={onClose}
+                          >
+                            {lot.sourceAssemblyNumber}
                           </Link>
                         ) : (
                           '—'
@@ -1093,6 +1290,40 @@ export function ProductEditModal({
         zIndex={(zIndex ?? 2000) + 400}
         onConfirm={confirmRemoveBomLine}
         onCancel={() => setBomRemoveId(null)}
+      />
+
+      <PurchaseReceiptProductPickerModal
+        open={recipePickerOpen}
+        token={token}
+        products={components}
+        groups={productGroups}
+        titleKey="products.recipePickerTitle"
+        excludeProductIds={recipeExcludeIds}
+        productFilter={recipeProductFilter}
+        existingPicks={recipeExistingPicks}
+        resizeConfig={BOM_COMPONENT_PICKER_RESIZE}
+        overlayZIndex={(zIndex ?? 2000) + 500}
+        nestedProductModalZIndex={(zIndex ?? 2000) + 700}
+        onClose={() => setRecipePickerOpen(false)}
+        onSave={handleRecipePicks}
+        onProductCreated={(p) => {
+          setPickerCatalog((prev) => {
+            const next = prev.some((x) => x.id === p.id) ? prev : [...prev, p];
+            return next;
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={recipeRemoveId !== null}
+        title={t('products.removeRecipeComponentTitle')}
+        message={t('products.removeRecipeComponentConfirm')}
+        confirmLabel={t('products.removeRecipeComponent')}
+        cancelLabel={t('settings.cancel')}
+        danger
+        zIndex={(zIndex ?? 2000) + 400}
+        onConfirm={confirmRemoveRecipeLine}
+        onCancel={() => setRecipeRemoveId(null)}
       />
 
       <UnsavedLeaveDialog

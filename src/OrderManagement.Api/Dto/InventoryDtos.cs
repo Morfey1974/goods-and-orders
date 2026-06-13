@@ -49,7 +49,9 @@ public record InventoryLotDto(
     Guid? SourceId,
     string? SourceLabel,
     Guid? SourceReceiptId = null,
-    string? SourceReceiptNumber = null);
+    string? SourceReceiptNumber = null,
+    Guid? SourceAssemblyId = null,
+    string? SourceAssemblyNumber = null);
 
 public record InventoryValuationReportDto(
     DateTime AsOfDate,

@@ -12,6 +12,12 @@ export function formatInventoryLotSource(
       ? t('inventory.lotSourceReceipt', { number })
       : t('inventory.lotSourceReceiptUnknown');
   }
+  if (sourceLabel.startsWith('assembly:')) {
+    const number = sourceLabel.slice('assembly:'.length);
+    return number
+      ? t('inventory.lotSourceAssembly', { number })
+      : t('inventory.lotSourceAssemblyUnknown');
+  }
   return sourceLabel;
 }
 
@@ -28,6 +34,9 @@ export function formatInventoryLotSourceKind(
   }
   if (lot.sourceType === 'PurchaseReceipt' || lot.sourceLabel?.startsWith('receipt:')) {
     return t('inventory.lotSourceReceiptUnknown');
+  }
+  if (lot.sourceType === 'Assembly' || lot.sourceLabel?.startsWith('assembly:')) {
+    return t('inventory.lotSourceAssemblyUnknown');
   }
   return formatInventoryLotSource(lot.sourceLabel, t);
 }

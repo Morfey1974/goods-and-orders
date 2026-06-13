@@ -21,6 +21,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
     public DbSet<ProductGroupMember> ProductGroupMembers => Set<ProductGroupMember>();
     public DbSet<BomLine> BomLines => Set<BomLine>();
+    public DbSet<AssemblyRecipeLine> AssemblyRecipeLines => Set<AssemblyRecipeLine>();
+    public DbSet<StockAssembly> StockAssemblies => Set<StockAssembly>();
+    public DbSet<StockAssemblyLine> StockAssemblyLines => Set<StockAssemblyLine>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<StockBalance> StockBalances => Set<StockBalance>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
@@ -324,6 +327,52 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.ComponentProduct)
                 .WithMany()
                 .HasForeignKey(x => x.ComponentProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssemblyRecipeLine>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Quantity).HasPrecision(18, 4);
+            e.HasOne(x => x.ParentProduct)
+                .WithMany(p => p.AssemblyRecipeLines)
+                .HasForeignKey(x => x.ParentProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ComponentProduct)
+                .WithMany()
+                .HasForeignKey(x => x.ComponentProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockAssembly>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AssemblyNumber).HasMaxLength(32);
+            e.Property(x => x.OutputQuantity).HasPrecision(18, 4);
+            e.Property(x => x.AdditionalCostIls).HasPrecision(18, 2);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.TenantId, x.AssemblyNumber }).IsUnique();
+            e.HasOne(x => x.OutputProduct)
+                .WithMany()
+                .HasForeignKey(x => x.OutputProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.OutputWarehouse)
+                .WithMany()
+                .HasForeignKey(x => x.OutputWarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockAssemblyLine>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Quantity).HasPrecision(18, 4);
+            e.HasOne(x => x.StockAssembly)
+                .WithMany(a => a.Lines)
+                .HasForeignKey(x => x.StockAssemblyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

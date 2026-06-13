@@ -156,15 +156,77 @@ public static class BusinessDocumentPdfBuilder
 
     private static string? BuildChargeInvoiceBanner(BusinessDocument charge, BusinessDocument? sourceQuote)
     {
+        var project = ResolveProjectBannerText(charge, sourceQuote);
+
         if (sourceQuote is null)
-            return FormatProjectLine(charge.Description);
+            return project;
 
         var quoteNum = StripDocumentPrefix(sourceQuote.DocumentNumber);
+        // Source quote first (RTL line start), then project description.
         var parts = new List<string> { $"יצא מתוך הצעת מחיר מס׳ {quoteNum}" };
-        var project = FormatProjectLine(sourceQuote.Description);
         if (!string.IsNullOrWhiteSpace(project))
             parts.Add(project);
         return string.Join(" | ", parts);
+    }
+
+    /// <summary>Charge description wins (may include PO / updates); then quote; append client order ref only if absent.</summary>
+    private static string? ResolveProjectBannerText(BusinessDocument charge, BusinessDocument? sourceQuote)
+    {
+        var project = FormatProjectLine(charge.Description);
+        if (string.IsNullOrWhiteSpace(project))
+            project = FormatProjectLine(sourceQuote?.Description);
+
+        var rawRef = charge.ClientOrderReference?.Trim();
+        if (string.IsNullOrWhiteSpace(rawRef))
+            rawRef = sourceQuote?.ClientOrderReference?.Trim();
+
+        if (string.IsNullOrWhiteSpace(rawRef))
+            return project;
+
+        if (!string.IsNullOrWhiteSpace(project) && BannerAlreadyContainsClientOrder(project, rawRef))
+            return project;
+
+        var orderRef = FormatClientOrderBannerPart(rawRef);
+        if (string.IsNullOrWhiteSpace(project))
+            return orderRef;
+
+        return $"{project} {orderRef}";
+    }
+
+    private static bool BannerAlreadyContainsClientOrder(string project, string clientOrderReference)
+    {
+        if (project.Contains(clientOrderReference, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var normalizedProject = NormalizeBannerTextForCompare(project);
+        var normalizedRef = NormalizeBannerTextForCompare(clientOrderReference);
+        if (normalizedProject.Contains(normalizedRef, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var formattedRef = FormatClientOrderBannerPart(clientOrderReference);
+        if (!string.IsNullOrWhiteSpace(formattedRef) &&
+            normalizedProject.Contains(NormalizeBannerTextForCompare(formattedRef), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private static string NormalizeBannerTextForCompare(string value) =>
+        value
+            .Replace('\u05F3', '\'')
+            .Replace('׳', '\'')
+            .Replace("מס׳", "מס'", StringComparison.Ordinal);
+
+    private static string? FormatClientOrderBannerPart(string? clientOrderReference)
+    {
+        if (string.IsNullOrWhiteSpace(clientOrderReference))
+            return null;
+
+        var reference = clientOrderReference.Trim();
+        if (reference.Contains("הזמנה", StringComparison.Ordinal))
+            return reference;
+
+        return $"מס׳ הזמנה {reference}";
     }
 
     private static string? BuildReceiptBanner(BusinessDocument? sourceCharge, BusinessDocument? sourceQuote)
@@ -173,8 +235,8 @@ public static class BusinessDocumentPdfBuilder
             return null;
 
         var chargeNum = StripDocumentPrefix(sourceCharge.DocumentNumber);
+        var project = ResolveProjectBannerText(sourceCharge, sourceQuote);
         var parts = new List<string> { $"קבלה זו הוצאה על בסיס חשבון חיוב מס׳ {chargeNum}" };
-        var project = FormatProjectLine(sourceQuote?.Description ?? sourceCharge.Description);
         if (!string.IsNullOrWhiteSpace(project))
             parts.Add(project);
         return string.Join(" | ", parts);

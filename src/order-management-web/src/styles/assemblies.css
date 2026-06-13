@@ -1,0 +1,178 @@
+.assemblies-page .asm-list-filters {
+  align-items: flex-start;
+  gap: 0.55rem 0.75rem;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter > span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.assemblies-page .asm-list-filters .dt-panel-search {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter--search {
+  width: 13.5rem;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter--status {
+  width: 10rem;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter--date {
+  width: 8.75rem;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter input,
+.assemblies-page .asm-list-filters .asm-list-filter select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.24rem;
+  height: 2.24rem;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit,
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit-fields-wrapper,
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit-text,
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit-month-field,
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit-day-field,
+.assemblies-page .asm-list-filters .asm-list-filter input[type='date']::-webkit-datetime-edit-year-field {
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.assemblies-page .asm-list-table code {
+  font-size: 0.85em;
+}
+
+.assemblies-page .asm-list-col-actions {
+  width: 3rem;
+  text-align: end;
+  padding-inline-end: 0.65rem;
+}
+
+.assembly-detail-page.purchase-receipt-detail-page {
+  padding-bottom: 1rem;
+}
+
+.assembly-detail-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 420px;
+}
+
+.assembly-detail-panel__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.assembly-detail-panel .purchase-receipt-detail-header {
+  padding: 0.85rem 1.15rem 0;
+  margin-bottom: 0;
+}
+
+.assembly-detail-panel .error-banner {
+  margin: 0.65rem 1.15rem 0;
+}
+
+.assembly-detail-panel .purchase-receipt-main {
+  padding: 0.85rem 1.15rem 2.75rem;
+}
+
+.assembly-detail-page .asm-header-grid {
+  grid-template-columns: 9rem 9rem minmax(11rem, 1.35fr) minmax(8.5rem, 1fr);
+}
+
+.assembly-detail-page .pr-field--span-full {
+  grid-column: 1 / -1;
+}
+
+.assembly-detail-page .pr-field--asm-warehouse {
+  grid-column: span 2;
+}
+
+.assembly-detail-page .asm-output-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  min-height: 2.24rem;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.88rem;
+}
+
+.assembly-detail-page .asm-output-label code {
+  margin-inline-end: 0.35rem;
+}
+
+.assembly-detail-page .asm-posted-cost {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.assembly-detail-page .pr-lines-table.asm-lines-table col.asm-col-article {
+  width: 8.5rem;
+}
+
+.assembly-detail-page .pr-lines-table.asm-lines-table col.asm-col-qty {
+  width: 6.5rem;
+}
+
+.assembly-detail-page .pr-lines-table.asm-lines-table col.asm-col-actions {
+  width: 3rem;
+}
+
+.assembly-detail-page .pr-lines-table.asm-lines-table td.asm-col-article code {
+  font-size: 0.84rem;
+}
+
+.assembly-detail-page .pr-lines-table.asm-lines-table td.asm-col-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asm-lines-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 720px) {
+  .assembly-detail-page .asm-header-grid {
+    grid-template-columns: 9rem 1fr;
+  }
+
+  .assembly-detail-page .pr-field--span-full,
+  .assembly-detail-page .pr-field--asm-warehouse {
+    grid-column: 1 / -1;
+  }
+}

@@ -32,6 +32,8 @@ export const RESIZABLE_PANEL_KEYS = {
   productsPanel: 'ordermgmt.products-panel-size',
   purchaseReceiptsColumns: 'ordermgmt.purchase-receipts-column-widths',
   purchaseReceiptsPanel: 'ordermgmt.purchase-receipts-panel-size',
+  assembliesPanel: 'ordermgmt.assemblies-panel-size',
+  assemblyDetailPanel: 'ordermgmt.assembly-detail-panel-size',
   documentsColumns: 'ordermgmt.documents-column-widths',
   documentsPanel: 'ordermgmt.documents-panel-size',
   businessExpensesColumns: 'ordermgmt.business-expenses-column-widths',
@@ -205,6 +207,20 @@ export const PRODUCTS_PANEL_RESIZE: ResizablePanelConfig = {
 export const PURCHASE_RECEIPTS_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.purchaseReceiptsPanel,
   ...LIST_PANEL_DEFAULT,
+};
+
+export const ASSEMBLIES_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.assembliesPanel,
+  ...LIST_PANEL_DEFAULT,
+};
+
+export const ASSEMBLY_DETAIL_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.assemblyDetailPanel,
+  minWidth: 640,
+  minHeight: 420,
+  defaultSize: { width: 1120, height: 720 },
+  expandToParent: true,
+  resizeWidthFromCenter: true,
 };
 
 export const DOCUMENTS_PANEL_RESIZE: ResizablePanelConfig = {

@@ -40,6 +40,8 @@ export type InventoryLot = {
   sourceLabel?: string | null;
   sourceReceiptId?: string | null;
   sourceReceiptNumber?: string | null;
+  sourceAssemblyId?: string | null;
+  sourceAssemblyNumber?: string | null;
 };
 
 export type InventoryValuationReport = {
@@ -87,6 +89,8 @@ function mapLot(raw: Record<string, unknown>): InventoryLot {
     sourceLabel: (raw.sourceLabel ?? raw.SourceLabel) as string | null | undefined,
     sourceReceiptId: (raw.sourceReceiptId ?? raw.SourceReceiptId) as string | null | undefined,
     sourceReceiptNumber: (raw.sourceReceiptNumber ?? raw.SourceReceiptNumber) as string | null | undefined,
+    sourceAssemblyId: (raw.sourceAssemblyId ?? raw.SourceAssemblyId) as string | null | undefined,
+    sourceAssemblyNumber: (raw.sourceAssemblyNumber ?? raw.SourceAssemblyNumber) as string | null | undefined,
   };
 }
 

@@ -61,6 +61,7 @@ builder.Services.AddScoped<BusinessExpenseService>();
 builder.Services.AddScoped<BusinessExpenseJournalPdfService>();
 builder.Services.AddScoped<FinancialReportPdfService>();
 builder.Services.AddScoped<PurchaseReceiptService>();
+builder.Services.AddScoped<AssemblyService>();
 builder.Services.AddScoped<ExchangeRateService>();
 builder.Services.AddScoped<SupplierImportService>();
 builder.Services.AddMemoryCache();

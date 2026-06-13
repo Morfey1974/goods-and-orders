@@ -32,4 +32,5 @@ public class Product
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<BomLine> BomLines { get; set; } = new List<BomLine>();
+    public ICollection<AssemblyRecipeLine> AssemblyRecipeLines { get; set; } = new List<AssemblyRecipeLine>();
 }

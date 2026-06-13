@@ -106,6 +106,13 @@ export type BomLine = {
   quantity: number;
 };
 
+export type AssemblyRecipeLine = {
+  componentProductId: string;
+  componentArticleCode: string;
+  componentName: string;
+  quantity: number;
+};
+
 export type ProductImportResult = {
   importedCount: number;
   skippedCount: number;
@@ -137,6 +144,7 @@ export type Product = {
   hasStockMovements: boolean;
   stockQuantity?: number | null;
   bomLines: BomLine[];
+  assemblyRecipeLines: AssemblyRecipeLine[];
   groupIds: string[];
   warehouseId?: string | null;
   warehouseName?: string | null;
@@ -154,10 +162,21 @@ function mapBomLine(raw: Record<string, unknown>): BomLine {
   };
 }
 
+function mapAssemblyRecipeLine(raw: Record<string, unknown>): AssemblyRecipeLine {
+  return {
+    componentProductId: String(raw.componentProductId ?? raw.ComponentProductId ?? ''),
+    componentArticleCode: String(raw.componentArticleCode ?? raw.ComponentArticleCode ?? ''),
+    componentName: String(raw.componentName ?? raw.ComponentName ?? ''),
+    quantity: Number(raw.quantity ?? raw.Quantity ?? 0),
+  };
+}
+
 /** API may return camelCase or PascalCase depending on proxy/version */
 function mapProduct(raw: Record<string, unknown>): Product {
   const bomRaw = (raw.bomLines ?? raw.BomLines ?? []) as Record<string, unknown>[];
   const bom = Array.isArray(bomRaw) ? bomRaw.map((b) => mapBomLine(b)) : [];
+  const recipeRaw = (raw.assemblyRecipeLines ?? raw.AssemblyRecipeLines ?? []) as Record<string, unknown>[];
+  const assemblyRecipe = Array.isArray(recipeRaw) ? recipeRaw.map((r) => mapAssemblyRecipeLine(r)) : [];
   return {
     id: String(raw.id ?? raw.Id),
     articleCode: String(raw.articleCode ?? raw.ArticleCode ?? ''),
@@ -178,6 +197,7 @@ function mapProduct(raw: Record<string, unknown>): Product {
       return normalizeStockQuantity(Number(v));
     })(),
     bomLines: bom,
+    assemblyRecipeLines: assemblyRecipe,
     groupIds: (() => {
       const g = raw.groupIds ?? raw.GroupIds;
       return Array.isArray(g) ? g.map(String) : [];

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -8,6 +9,21 @@ namespace OrderManagement.Api.Services.Pdf;
 /// <summary>Mixed user text in PDF via QuestPDF/HarfBuzz bidi + Hebrew/Sans font fallback.</summary>
 public static class PdfMixedScriptText
 {
+    private const string BannerSegmentSeparator = " | ";
+
+    private static readonly Regex LatinLetterToken = new(
+        @"[A-Za-z][A-Za-z0-9_\-\.]*",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>Keep Latin words / PO codes in reading order inside Hebrew RTL runs (LRM, not LRI).</summary>
+    public static string EmbedLatinForRtl(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text ?? "";
+
+        return LatinLetterToken.Replace(text, static m => $"\u200E{m.Value}\u200E");
+    }
+
     public static void Render(
         IContainer container,
         string? value,
@@ -22,15 +38,26 @@ public static class PdfMixedScriptText
         target.Text(text).Style(UserTextStyle(fontSize, bold));
     }
 
-    /// <summary>Dark banner above document line tables — Hebrew + Latin in logical order.</summary>
+    /// <summary>Dark banner above document line tables — mixed Hebrew + Latin, wraps on long lines.</summary>
     public static void RenderDocumentTableBanner(IContainer container, string? value, float fontSize)
     {
-        var text = value ?? "";
+        var style = UserTextStyle(fontSize, bold: true).FontColor(Colors.White);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            container.AlignRight().Text("").Style(style);
+            return;
+        }
+
+        var text = value.Contains(BannerSegmentSeparator, StringComparison.Ordinal)
+            ? string.Join(BannerSegmentSeparator, value.Split(BannerSegmentSeparator, StringSplitOptions.None)
+                .Select(p => p.Trim()))
+            : value;
+
         container
-            .ContentFromRightToLeft()
             .AlignRight()
-            .Text(text)
-            .Style(UserTextStyle(fontSize, bold: true).FontColor(Colors.White));
+            .ContentFromRightToLeft()
+            .Text(EmbedLatinForRtl(text))
+            .Style(style);
     }
 
     /// <summary>Legacy hook for inline <see cref="TextDescriptor"/> callbacks — prefer <see cref="Render"/>.</summary>

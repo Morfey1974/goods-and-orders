@@ -149,6 +149,10 @@ public class DocumentsController(
             .FirstOrDefaultAsync(d => d.Id == id && d.TenantId == tenantId, ct);
         if (doc is null) return NotFound();
 
+        await documents.SyncDraftChargeFromParentQuoteAsync(doc, ct);
+        if (doc.Lines.Count == 0)
+            await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
+
         BusinessDocument? parentCharge = null;
         if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
         {

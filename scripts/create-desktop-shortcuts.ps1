@@ -15,8 +15,10 @@ function New-Shortcut($Name, $Target, $WorkingDir, $Description) {
 
 $startBat = Join-Path $PSScriptRoot 'start-app.bat'
 $stopBat = Join-Path $PSScriptRoot 'stop-app.bat'
+$restartApiBat = Join-Path $PSScriptRoot 'restart-api.bat'
 
 New-Shortcut 'Start Order Management.lnk' $startBat $PSScriptRoot 'Start order management app'
 New-Shortcut 'Stop Order Management.lnk' $stopBat $PSScriptRoot 'Stop Docker services'
+New-Shortcut 'Restart API.lnk' $restartApiBat $PSScriptRoot 'Rebuild and restart API in Docker only'
 
 Write-Host "Desktop shortcuts created."

@@ -19,6 +19,8 @@ import { SuppliersPage } from './pages/SuppliersPage';
 import { SupplierDetailPage } from './pages/SupplierDetailPage';
 import { PurchaseReceiptsPage } from './pages/PurchaseReceiptsPage';
 import { PurchaseReceiptDetailRoute } from './pages/PurchaseReceiptDetailPage';
+import { AssembliesPage } from './pages/AssembliesPage';
+import { AssemblyDetailRoute } from './pages/AssemblyDetailPage';
 import { InventoryOpeningBalancePage } from './pages/InventoryOpeningBalancePage';
 import { InventoryValuationPage } from './pages/InventoryValuationPage';
 import { IncomeReportPage } from './pages/IncomeReportPage';
@@ -54,6 +56,8 @@ const router = createBrowserRouter([
       { path: 'suppliers/:id', element: <SupplierDetailPage /> },
       { path: 'purchase-receipts', element: <PurchaseReceiptsPage /> },
       { path: 'purchase-receipts/:id', element: <PurchaseReceiptDetailRoute /> },
+      { path: 'assemblies', element: <AssembliesPage /> },
+      { path: 'assemblies/:id', element: <AssemblyDetailRoute /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'warehouse/opening-balance', element: <InventoryOpeningBalancePage /> },

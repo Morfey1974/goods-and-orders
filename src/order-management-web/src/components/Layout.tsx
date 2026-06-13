@@ -11,6 +11,7 @@ const navItems = [
   { to: '/products', key: 'products' },
   { to: '/warehouse', key: 'warehouse' },
   { to: '/purchase-receipts', key: 'purchaseReceipts' },
+  { to: '/assemblies', key: 'assemblies' },
   { to: '/documents', key: 'documents' },
   { to: '/business-expenses', key: 'businessExpenses' },
   { to: '/reports', key: 'reports' },

@@ -298,6 +298,104 @@ public class DocumentService(
         return doc;
     }
 
+    /// <summary>
+    /// While a charge invoice is still a draft, keep its product lines aligned with the parent quote.
+    /// Does not bump <see cref="BusinessDocument.Version"/> — passive refresh when opening the document.
+    /// </summary>
+    public async Task<bool> SyncDraftChargeFromParentQuoteAsync(
+        BusinessDocument charge,
+        CancellationToken ct = default)
+    {
+        if (charge.DocumentType != DocumentType.ChargeInvoice ||
+            charge.Status != DocumentStatus.Draft ||
+            charge.ParentDocumentId is not { } quoteId)
+        {
+            return false;
+        }
+
+        var quote = await db.BusinessDocuments
+            .AsNoTracking()
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.Id == quoteId && d.TenantId == charge.TenantId, ct);
+
+        if (quote is not { DocumentType: DocumentType.Quote } || quote.Lines.Count == 0)
+            return false;
+
+        var quoteLines = quote.Lines.OrderBy(l => l.SortOrder).ToList();
+        if (charge.Lines.Count == 0)
+            await db.Entry(charge).Collection(c => c.Lines).LoadAsync(ct);
+
+        var chargeLines = charge.Lines.OrderBy(l => l.SortOrder).ToList();
+        if (ChargeLinesMatchQuote(chargeLines, quoteLines) &&
+            charge.DiscountPercent == quote.DiscountPercent &&
+            charge.DiscountAmount == quote.DiscountAmount)
+        {
+            return false;
+        }
+
+        await db.BusinessDocumentLines.Where(l => l.DocumentId == charge.Id).ExecuteDeleteAsync(ct);
+
+        var sort = 0;
+        var newLines = new List<BusinessDocumentLine>();
+        foreach (var line in quoteLines)
+        {
+            var total = Math.Round(line.UnitPrice * line.Quantity, 2);
+            newLines.Add(new BusinessDocumentLine
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = charge.Id,
+                ProductId = line.ProductId,
+                Description = line.Description.Trim(),
+                Quantity = line.Quantity,
+                UnitPrice = line.UnitPrice,
+                LineTotal = total,
+                SortOrder = sort++
+            });
+        }
+
+        db.BusinessDocumentLines.AddRange(newLines);
+        charge.Lines = newLines;
+
+        var subtotal = newLines.Sum(l => l.LineTotal);
+        charge.DiscountPercent = quote.DiscountPercent is > 0 ? quote.DiscountPercent : null;
+        charge.DiscountAmount = quote.DiscountAmount is > 0 && quote.DiscountPercent is null or <= 0
+            ? quote.DiscountAmount
+            : null;
+        var discountValue = 0m;
+        if (charge.DiscountPercent is { } pct)
+            discountValue = Math.Round(subtotal * pct / 100m, 2);
+        else if (charge.DiscountAmount is { } amt)
+            discountValue = amt;
+        charge.TotalAmount = Math.Max(0, subtotal - discountValue);
+        charge.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private static bool ChargeLinesMatchQuote(
+        IReadOnlyList<BusinessDocumentLine> chargeLines,
+        IReadOnlyList<BusinessDocumentLine> quoteLines)
+    {
+        if (chargeLines.Count != quoteLines.Count)
+            return false;
+
+        for (var i = 0; i < chargeLines.Count; i++)
+        {
+            var chargeLine = chargeLines[i];
+            var quoteLine = quoteLines[i];
+            if (chargeLine.ProductId != quoteLine.ProductId ||
+                !string.Equals(chargeLine.Description.Trim(), quoteLine.Description.Trim(), StringComparison.Ordinal) ||
+                chargeLine.Quantity != quoteLine.Quantity ||
+                chargeLine.UnitPrice != quoteLine.UnitPrice)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public async Task DeleteAsync(Guid tenantId, Guid documentId, CancellationToken ct)
     {
         var doc = await db.BusinessDocuments
@@ -421,22 +519,35 @@ public class DocumentService(
     public async Task DeductStockForChargeAsync(
         Guid tenantId,
         BusinessDocument charge,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool validate = true)
     {
         if (charge.DocumentType != DocumentType.ChargeInvoice)
             throw new InvalidOperationException("Stock is deducted only for charge invoices.");
 
-        await stock.ValidateChargeStockAsync(tenantId, charge, ct);
+        if (validate)
+            await stock.ValidateChargeStockAsync(tenantId, charge, ct);
 
-        foreach (var line in charge.Lines.Where(l => l.ProductId.HasValue))
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        try
         {
-            await stock.DeductProductSaleAsync(
-                tenantId,
-                line.ProductId!.Value,
-                line.Quantity,
-                charge.DocumentNumber,
-                charge.IssueDate,
-                ct);
+            foreach (var line in charge.Lines.Where(l => l.ProductId.HasValue))
+            {
+                await stock.DeductProductSaleAsync(
+                    tenantId,
+                    line.ProductId!.Value,
+                    line.Quantity,
+                    charge.DocumentNumber,
+                    charge.IssueDate,
+                    ct);
+            }
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
         }
     }
 
@@ -448,19 +559,22 @@ public class DocumentService(
         if (charge.DocumentType != DocumentType.ChargeInvoice)
             return;
 
-        if (charge.Status == DocumentStatus.Draft)
-        {
-            if (charge.Lines.Count == 0)
-                await db.Entry(charge).Collection(c => c.Lines).LoadAsync(ct);
+        var wasDraft = charge.Status == DocumentStatus.Draft;
 
-            if (!await ChargeStockAlreadyDeductedAsync(tenantId, charge.DocumentNumber, ct))
-                await DeductStockForChargeAsync(tenantId, charge, ct);
-        }
+        if (charge.Lines.Count == 0)
+            await db.Entry(charge).Collection(c => c.Lines).LoadAsync(ct);
+
+        await stock.ValidateChargeStockAsync(tenantId, charge, ct);
+
+        if (await ChargeStockAlreadyDeductedAsync(tenantId, charge.DocumentNumber, ct))
+            await stock.ReverseStockForChargeAsync(tenantId, charge.DocumentNumber, ct);
+
+        await DeductStockForChargeAsync(tenantId, charge, ct, validate: false);
 
         charge.Status = DocumentStatus.Open;
         charge.UpdatedAt = DateTime.UtcNow;
 
-        if (charge.ParentDocumentId is not { } quoteId)
+        if (!wasDraft || charge.ParentDocumentId is not { } quoteId)
             return;
 
         var quote = await db.BusinessDocuments.FirstOrDefaultAsync(

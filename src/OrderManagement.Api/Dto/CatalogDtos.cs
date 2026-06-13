@@ -142,6 +142,7 @@ public record ProductDto(
     bool HasStockMovements,
     decimal? StockQuantity,
     IReadOnlyList<BomLineDto> BomLines,
+    IReadOnlyList<AssemblyRecipeLineDto> AssemblyRecipeLines,
     IReadOnlyList<Guid> GroupIds,
     Guid? WarehouseId,
     string? WarehouseName,
@@ -160,7 +161,8 @@ public record CreateProductRequest(
     Guid? WarehouseId,
     string? DepreciationCategory,
     [Range(1, 100)] decimal? DefaultBusinessUsePercent,
-    IReadOnlyList<BomLineInput>? BomLines);
+    IReadOnlyList<BomLineInput>? BomLines,
+    IReadOnlyList<AssemblyRecipeLineInput>? AssemblyRecipeLines);
 
 public record UpdateProductRequest(
     string? ProductType,
@@ -175,6 +177,7 @@ public record UpdateProductRequest(
     string? DepreciationCategory,
     [Range(1, 100)] decimal? DefaultBusinessUsePercent,
     IReadOnlyList<BomLineInput>? BomLines,
+    IReadOnlyList<AssemblyRecipeLineInput>? AssemblyRecipeLines,
     int Version);
 
 public record QuickUpdateProductRequest(
@@ -483,6 +486,16 @@ public static class CatalogMappers
                 b.Quantity))
             .ToListAsync(ct);
 
+        var assemblyRecipe = await db.AssemblyRecipeLines
+            .Where(r => r.ParentProductId == p.Id)
+            .Include(r => r.ComponentProduct)
+            .Select(r => new AssemblyRecipeLineDto(
+                r.ComponentProductId,
+                r.ComponentProduct.ArticleCode,
+                r.ComponentProduct.Name,
+                r.Quantity))
+            .ToListAsync(ct);
+
         var groupIds = await db.ProductGroupMembers
             .Where(m => m.ProductId == p.Id)
             .Select(m => m.ProductGroupId)
@@ -492,7 +505,7 @@ public static class CatalogMappers
             p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
             !string.IsNullOrEmpty(p.ImagePath),
             p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-            hasMovements, stock, bom, groupIds, p.WarehouseId, warehouseName,
+            hasMovements, stock, bom, assemblyRecipe, groupIds, p.WarehouseId, warehouseName,
             p.DepreciationCategory?.ToString(), p.DefaultBusinessUsePercent, p.Version);
     }
 
@@ -540,6 +553,13 @@ public static class CatalogMappers
 
         var bomByParent = bomAll.GroupBy(b => b.ParentProductId).ToDictionary(g => g.Key, g => g.ToList());
 
+        var recipeAll = await db.AssemblyRecipeLines
+            .Where(r => ids.Contains(r.ParentProductId))
+            .Include(r => r.ComponentProduct)
+            .ToListAsync(ct);
+
+        var recipeByParent = recipeAll.GroupBy(r => r.ParentProductId).ToDictionary(g => g.Key, g => g.ToList());
+
         var groupsByProduct = await db.ProductGroupMembers
             .Where(m => ids.Contains(m.ProductId))
             .GroupBy(m => m.ProductId)
@@ -559,6 +579,14 @@ public static class CatalogMappers
                     b.Quantity)).ToList()
                 : [];
 
+            var assemblyRecipe = recipeByParent.TryGetValue(p.Id, out var recipeLines)
+                ? recipeLines.Select(r => new AssemblyRecipeLineDto(
+                    r.ComponentProductId,
+                    r.ComponentProduct.ArticleCode,
+                    r.ComponentProduct.Name,
+                    r.Quantity)).ToList()
+                : [];
+
             var groupIds = groupsByProduct.GetValueOrDefault(p.Id, []);
             Guid? warehouseId = null;
             string? warehouseName = null;
@@ -573,7 +601,7 @@ public static class CatalogMappers
                 p.Id, p.ArticleCode, p.LegacySku, p.ProductType.ToString(), p.Name, p.Description,
                 !string.IsNullOrEmpty(p.ImagePath),
                 p.UnitPrice, p.ShowBomInQuote, p.ShowBomInInvoice, p.TrackInventory, p.IsActive,
-                movementIds.Contains(p.Id), stock, bom, groupIds, warehouseId, warehouseName,
+                movementIds.Contains(p.Id), stock, bom, assemblyRecipe, groupIds, warehouseId, warehouseName,
                 p.DepreciationCategory?.ToString(), p.DefaultBusinessUsePercent, p.Version);
         }).ToList();
     }

@@ -226,6 +226,18 @@ public class InventoryValuationService(AppDbContext db)
                 select new { LineId = line.Id, receipt.Id, receipt.ReceiptNumber }
             ).ToDictionaryAsync(x => x.LineId, x => new ReceiptLineInfo(x.Id, x.ReceiptNumber), ct);
 
+        var assemblyIds = raw
+            .Where(x => x.SourceType == InventoryLotSource.Assembly && x.SourceId.HasValue)
+            .Select(x => x.SourceId!.Value)
+            .Distinct()
+            .ToList();
+
+        var assemblyById = assemblyIds.Count == 0
+            ? new Dictionary<Guid, AssemblyInfo>()
+            : await db.StockAssemblies.AsNoTracking()
+                .Where(a => assemblyIds.Contains(a.Id) && a.TenantId == tenantId)
+                .ToDictionaryAsync(a => a.Id, a => new AssemblyInfo(a.Id, a.AssemblyNumber), ct);
+
         return raw
             .Select(x =>
             {
@@ -242,6 +254,12 @@ public class InventoryValuationService(AppDbContext db)
                 if (x.x.SourceType == InventoryLotSource.PurchaseReceipt && x.x.SourceId is { } lineId)
                     receiptByLineId.TryGetValue(lineId, out receiptInfo);
 
+                AssemblyInfo? assemblyInfo = null;
+                if (x.x.SourceType == InventoryLotSource.Assembly && x.x.SourceId is { } assemblyId)
+                    assemblyById.TryGetValue(assemblyId, out assemblyInfo);
+
+                var docNumber = receiptInfo?.ReceiptNumber ?? assemblyInfo?.AssemblyNumber;
+
                 return new OpenLotRow(
                     x.x.Id,
                     x.x.ProductId,
@@ -257,7 +275,9 @@ public class InventoryValuationService(AppDbContext db)
                     x.x.SourceId,
                     receiptInfo?.ReceiptId,
                     receiptInfo?.ReceiptNumber,
-                    ResolveSourceLabel(x.x.SourceType, x.x.ReceivedAt, receiptInfo?.ReceiptNumber));
+                    assemblyInfo?.AssemblyId,
+                    assemblyInfo?.AssemblyNumber,
+                    ResolveSourceLabel(x.x.SourceType, x.x.ReceivedAt, docNumber));
             })
             .ToList();
     }
@@ -298,6 +318,9 @@ public class InventoryValuationService(AppDbContext db)
             InventoryLotSource.PurchaseReceipt when !string.IsNullOrWhiteSpace(receiptNumber)
                 => $"receipt:{receiptNumber}",
             InventoryLotSource.PurchaseReceipt => "receipt:",
+            InventoryLotSource.Assembly when !string.IsNullOrWhiteSpace(receiptNumber)
+                => $"assembly:{receiptNumber}",
+            InventoryLotSource.Assembly => "assembly:",
             _ => sourceType.ToString(),
         };
     }
@@ -319,9 +342,13 @@ public class InventoryValuationService(AppDbContext db)
             r.SourceId,
             r.SourceLabel,
             r.SourceReceiptId,
-            r.SourceReceiptNumber);
+            r.SourceReceiptNumber,
+            r.SourceAssemblyId,
+            r.SourceAssemblyNumber);
 
     private sealed record ReceiptLineInfo(Guid ReceiptId, string ReceiptNumber);
+
+    private sealed record AssemblyInfo(Guid AssemblyId, string AssemblyNumber);
 
     private static DateTime NormalizeAsOf(DateTime? asOf) =>
         asOf.HasValue
@@ -343,5 +370,7 @@ public class InventoryValuationService(AppDbContext db)
         Guid? SourceId,
         Guid? SourceReceiptId,
         string? SourceReceiptNumber,
+        Guid? SourceAssemblyId,
+        string? SourceAssemblyNumber,
         string? SourceLabel);
 }

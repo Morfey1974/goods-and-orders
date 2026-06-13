@@ -46,6 +46,8 @@ type Props = {
   editDocumentId?: string | null;
   /** When set, prefill form from this document and create on save (duplicate draft). */
   duplicateFromDocumentId?: string | null;
+  /** When set, prefill form from this quote and link parent on first save (no server draft until save). */
+  chargeFromQuoteId?: string | null;
   onClose: () => void;
   onSuccess: (message: string) => void;
   onDraftSaved?: () => void;
@@ -179,8 +181,27 @@ function snapshotFromLoaded(
   };
 }
 
+function isEmptyFormSnapshot(snapshot: FormSnapshot): boolean {
+  return (
+    !snapshot.customerId &&
+    !snapshot.description.trim() &&
+    !snapshot.notes.trim() &&
+    snapshot.lines.length === 0 &&
+    !snapshot.showDiscount &&
+    snapshot.discountValue <= 0 &&
+    !snapshot.clientOrderReceivedAt &&
+    !snapshot.clientOrderReference.trim() &&
+    !snapshot.clientOrderFileName &&
+    !snapshot.pendingClientOrderFileName
+  );
+}
+
 function serializeSnapshot(snapshot: FormSnapshot): string {
   return JSON.stringify(snapshot);
+}
+
+function parseSnapshot(json: string): FormSnapshot {
+  return JSON.parse(json) as FormSnapshot;
 }
 
 function draftFromPicked(p: PickedReceiptProduct): DraftLine {
@@ -247,6 +268,7 @@ export function DocumentCreateWizard({
   products,
   editDocumentId = null,
   duplicateFromDocumentId = null,
+  chargeFromQuoteId = null,
   onClose,
   onSuccess,
   onDraftSaved,
@@ -269,6 +291,7 @@ export function DocumentCreateWizard({
   const [infoMessage, setInfoMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [persistedDocId, setPersistedDocId] = useState<string | null>(null);
+  const [parentQuoteId, setParentQuoteId] = useState<string | null>(null);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const [issueDate, setIssueDate] = useState(todayIso);
@@ -392,6 +415,7 @@ export function DocumentCreateWizard({
     setError('');
     if (editDocumentId && token) {
       setLoadingEdit(true);
+      setParentQuoteId(null);
       documentsApi
         .get(token, editDocumentId)
         .then((doc) => {
@@ -407,6 +431,7 @@ export function DocumentCreateWizard({
     }
     if (duplicateFromDocumentId && token) {
       setLoadingEdit(true);
+      setParentQuoteId(null);
       documentsApi
         .get(token, duplicateFromDocumentId)
         .then((doc) => {
@@ -423,7 +448,29 @@ export function DocumentCreateWizard({
         .finally(() => setLoadingEdit(false));
       return;
     }
+    if (chargeFromQuoteId && token) {
+      setLoadingEdit(true);
+      setParentQuoteId(chargeFromQuoteId);
+      documentsApi
+        .get(token, chargeFromQuoteId)
+        .then((quote) => {
+          if (quote.documentType !== 'Quote') {
+            throw new Error(t('documents.issueChargeWrongSource'));
+          }
+          const loaded = loadDocumentIntoForm(quote, { forDuplicate: true });
+          applyLoadedDocument(loaded);
+          applyClientOrderFromDoc(quote);
+          setEditTitle('');
+          setEditDoc(null);
+          setPersistedDocId(null);
+          savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loaded, quote, products));
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
+        .finally(() => setLoadingEdit(false));
+      return;
+    }
     const freshIssueDate = todayIso();
+    setParentQuoteId(null);
     setCustomerId('');
     setNewCustomerOpen(false);
     setNewCustomerName('');
@@ -446,7 +493,7 @@ export function DocumentCreateWizard({
     setClientOrderFileName('');
     setPendingClientOrderFile(null);
     savedSnapshotRef.current = serializeSnapshot(emptyFormSnapshot(freshIssueDate));
-  }, [open, documentType, editDocumentId, duplicateFromDocumentId, token]);
+  }, [open, documentType, editDocumentId, duplicateFromDocumentId, chargeFromQuoteId, token, products, t]);
 
   const formVisible = open;
   const { panelRef, persistSize, onResizeHandleMouseDown } = useResizablePanel(
@@ -454,8 +501,23 @@ export function DocumentCreateWizard({
     DOCUMENT_WIZARD_RESIZE
   );
 
+  const abandonBlankDraftIfNeeded = useCallback(async () => {
+    if (!token) return;
+    const docId = persistedDocId;
+    if (!docId || editDocumentId) return;
+    const snapshot = parseSnapshot(captureSnapshot());
+    if (!isEmptyFormSnapshot(snapshot)) return;
+    try {
+      await documentsApi.delete(token, docId);
+      onDraftSaved?.();
+    } catch {
+      /* list refresh is best-effort */
+    }
+  }, [token, persistedDocId, editDocumentId, captureSnapshot, onDraftSaved]);
+
   const handleClose = () => {
     persistSize();
+    void abandonBlankDraftIfNeeded();
     onClose();
   };
 
@@ -569,17 +631,19 @@ export function DocumentCreateWizard({
         saved = await documentsApi.create(token, {
           documentType,
           customerId,
+          ...(parentQuoteId ? { parentDocumentId: parentQuoteId } : {}),
           ...payload,
         });
         setPersistedDocId(saved.id);
+        if (parentQuoteId) setParentQuoteId(null);
       }
 
       setEditDoc(saved);
       setEditVersion(saved.version);
       setEditTitle(saved.documentNumber);
 
-      const loadedForm = loadDocumentIntoForm(saved);
-      savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loadedForm, saved, products));
+      // Match the live form (what the user saved), not server-normalized fields — avoids false "unsaved changes".
+      savedSnapshotRef.current = captureSnapshot();
 
       if (closeOnSuccess) {
         onSuccess(wasUpdate ? t('documents.updated') : t('documents.created'));

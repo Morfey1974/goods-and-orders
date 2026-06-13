@@ -7,7 +7,7 @@ Get-ChildItem -Path $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue | For
     try {
         $sc = $wsh.CreateShortcut($_.FullName)
         $t = $sc.TargetPath
-        if ($t -like '*\scripts\start-app.bat' -or $t -like '*\scripts\stop-app.bat') {
+        if ($t -like '*\scripts\start-app.bat' -or $t -like '*\scripts\stop-app.bat' -or $t -like '*\scripts\restart-api.bat') {
             Remove-Item $_.FullName -Force
             Write-Output "Removed: $($_.Name)"
         }
@@ -27,5 +27,6 @@ function New-AppShortcut($fileName, $batName, $comment) {
 
 New-AppShortcut 'Zapusk - Uchet zakazov.lnk' 'start-app.bat' 'Zapusk: Docker, API, veb v brauzere'
 New-AppShortcut 'Ostanovit - Uchet zakazov.lnk' 'stop-app.bat' 'Ostanovka Docker'
+New-AppShortcut 'Perezapusk API.lnk' 'restart-api.bat' 'Perezapusk API v Docker (veb i skaner ne trogajutsya)'
 
 Write-Output 'OK'

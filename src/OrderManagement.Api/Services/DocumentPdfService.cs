@@ -5,7 +5,7 @@ using OrderManagement.Api.Services.Pdf;
 
 namespace OrderManagement.Api.Services;
 
-public class DocumentPdfService(AppDbContext db, TenantFileService files)
+public class DocumentPdfService(AppDbContext db, TenantFileService files, DocumentService documents)
 {
     private static readonly HashSet<DocumentType> SupportedTypes =
     [
@@ -25,6 +25,10 @@ public class DocumentPdfService(AppDbContext db, TenantFileService files)
 
         if (!SupportedTypes.Contains(doc.DocumentType))
             throw new InvalidOperationException("PDF template is not available for this document type.");
+
+        await documents.SyncDraftChargeFromParentQuoteAsync(doc, ct);
+        if (doc.Lines.Count == 0)
+            await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
 
         var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
             ?? throw new InvalidOperationException("Tenant not found.");

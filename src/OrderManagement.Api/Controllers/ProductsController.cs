@@ -281,6 +281,13 @@ public class ProductsController(
             if (err is not null) return BadRequest(new { message = err });
         }
 
+        if (request.AssemblyRecipeLines is not null)
+        {
+            var recipeErr = await AssemblyRecipeRules.ReplaceRecipeLinesAsync(
+                db, product, request.AssemblyRecipeLines, tenantId.Value, ct);
+            if (recipeErr is not null) return BadRequest(new { message = recipeErr });
+        }
+
         await db.SaveChangesAsync(ct);
 
         if (ProductInventoryHelper.TracksStock(product))
@@ -340,6 +347,13 @@ public class ProductsController(
 
             var bomErr = await ReplaceBomLinesAsync(product, request.BomLines, tenantId.Value, ct);
             if (bomErr is not null) return BadRequest(new { message = bomErr });
+        }
+
+        if (request.AssemblyRecipeLines is not null)
+        {
+            var recipeErr = await AssemblyRecipeRules.ReplaceRecipeLinesAsync(
+                db, product, request.AssemblyRecipeLines, tenantId.Value, ct);
+            if (recipeErr is not null) return BadRequest(new { message = recipeErr });
         }
 
         var warehouseErr = await ApplyWarehouseChangeAsync(product, request.WarehouseId, tenantId.Value, ct);
@@ -447,6 +461,7 @@ public class ProductsController(
 
         var source = await db.Products
             .Include(p => p.BomLines)
+            .Include(p => p.AssemblyRecipeLines)
             .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
         if (source is null) return NotFound();
 
@@ -472,6 +487,17 @@ public class ProductsController(
         foreach (var line in source.BomLines)
         {
             copy.BomLines.Add(new BomLine
+            {
+                Id = Guid.NewGuid(),
+                ParentProductId = copy.Id,
+                ComponentProductId = line.ComponentProductId,
+                Quantity = line.Quantity
+            });
+        }
+
+        foreach (var line in source.AssemblyRecipeLines)
+        {
+            copy.AssemblyRecipeLines.Add(new AssemblyRecipeLine
             {
                 Id = Guid.NewGuid(),
                 ParentProductId = copy.Id,

@@ -151,6 +151,7 @@ export function DocumentsPage() {
   const [wizardType, setWizardType] = useState<WizardDocumentType | null>(null);
   const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
   const [duplicateFromDocumentId, setDuplicateFromDocumentId] = useState<string | null>(null);
+  const [chargeFromQuoteId, setChargeFromQuoteId] = useState<string | null>(null);
   const [receiptEditId, setReceiptEditId] = useState<string | null>(null);
   const [receiptComposeOpen, setReceiptComposeOpen] = useState(false);
   const [rowMenuDoc, setRowMenuDoc] = useState<Document | null>(null);
@@ -289,6 +290,7 @@ export function DocumentsPage() {
     if (type === 'Quote' || type === 'ChargeInvoice') {
       setEditDocumentId(null);
       setDuplicateFromDocumentId(null);
+      setChargeFromQuoteId(null);
       setWizardType(type);
       return;
     }
@@ -311,6 +313,7 @@ export function DocumentsPage() {
     setWizardType(null);
     setEditDocumentId(null);
     setDuplicateFromDocumentId(null);
+    setChargeFromQuoteId(null);
   };
 
   const openReceiptEditor = (receiptId: string) => {
@@ -328,6 +331,7 @@ export function DocumentsPage() {
     if (!canManageDocument(doc)) return;
     setRowMenuDoc(null);
     setDuplicateFromDocumentId(null);
+    setChargeFromQuoteId(null);
     if (doc.documentType === 'Receipt') {
       openReceiptEditor(doc.id);
       return;
@@ -341,6 +345,7 @@ export function DocumentsPage() {
     if (!token || !canManageDocument(doc)) return;
     setRowMenuDoc(null);
     setEditDocumentId(null);
+    setChargeFromQuoteId(null);
     setError('');
     setWizardType(doc.documentType as WizardDocumentType);
     setDuplicateFromDocumentId(doc.id);
@@ -412,23 +417,14 @@ export function DocumentsPage() {
     }
   };
 
-  const onIssueCharge = async (quote: Document) => {
-    if (!token) return;
-    setIssueBusy(true);
-    setError('');
+  const onIssueCharge = (quote: Document) => {
     setRowMenuDoc(null);
-    try {
-      const created = await documentsApi.issueChargeInvoice(token, quote.id);
-      setDuplicateFromDocumentId(null);
-      setEditDocumentId(created.id);
-      setWizardType('ChargeInvoice');
-      setMessage('');
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
-    } finally {
-      setIssueBusy(false);
-    }
+    setError('');
+    setEditDocumentId(null);
+    setDuplicateFromDocumentId(null);
+    setChargeFromQuoteId(quote.id);
+    setWizardType('ChargeInvoice');
+    setMessage('');
   };
 
   const resolveReceiptForDoc = (doc: Document) => {
@@ -922,6 +918,7 @@ export function DocumentsPage() {
           products={products}
           editDocumentId={editDocumentId}
           duplicateFromDocumentId={duplicateFromDocumentId}
+          chargeFromQuoteId={chargeFromQuoteId}
           onClose={closeWizard}
           onSuccess={(msg) => {
             setMessage(msg);
