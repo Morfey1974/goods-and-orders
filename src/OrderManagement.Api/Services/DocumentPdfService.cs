@@ -33,24 +33,35 @@ public class DocumentPdfService(AppDbContext db, TenantFileService files, Docume
         var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
             ?? throw new InvalidOperationException("Tenant not found.");
 
-        BusinessDocument? sourceCharge = null;
+        IReadOnlyList<BusinessDocument>? sourceChargesForReceipt = null;
         BusinessDocument? sourceQuote = null;
         BusinessDocument linesSource = doc;
 
         if (doc.DocumentType == DocumentType.Receipt)
         {
-            if (doc.ParentDocumentId is not { } chargeId)
-                throw new InvalidOperationException("Receipt has no linked charge invoice.");
-
-            sourceCharge = await db.BusinessDocuments
+            sourceChargesForReceipt = await db.ReceiptChargeAllocations
                 .AsNoTracking()
-                .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct)
-                ?? throw new InvalidOperationException("Parent charge invoice not found.");
+                .Include(a => a.ChargeInvoice)
+                .Where(a => a.ReceiptId == doc.Id)
+                .OrderBy(a => a.ChargeInvoice.DocumentNumber)
+                .Select(a => a.ChargeInvoice)
+                .ToListAsync(ct);
 
-            if (sourceCharge.DocumentType != DocumentType.ChargeInvoice)
-                throw new InvalidOperationException("Receipt parent must be a charge invoice.");
+            if (sourceChargesForReceipt.Count == 0 && doc.ParentDocumentId is { } chargeId)
+            {
+                var legacyCharge = await db.BusinessDocuments
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct)
+                    ?? throw new InvalidOperationException("Parent charge invoice not found.");
+                if (legacyCharge.DocumentType != DocumentType.ChargeInvoice)
+                    throw new InvalidOperationException("Receipt parent must be a charge invoice.");
+                sourceChargesForReceipt = [legacyCharge];
+            }
 
-            sourceQuote = await ResolveSourceQuoteAsync(sourceCharge, tenantId, ct);
+            if (sourceChargesForReceipt.Count == 0)
+                throw new InvalidOperationException("Receipt has no linked charge invoices.");
+
+            sourceQuote = await ResolveSourceQuoteAsync(sourceChargesForReceipt[0], tenantId, ct);
         }
         else if (doc.DocumentType == DocumentType.ChargeInvoice)
         {
@@ -77,7 +88,7 @@ public class DocumentPdfService(AppDbContext db, TenantFileService files, Docume
             logoPath,
             signaturePath,
             sourceQuote,
-            sourceCharge);
+            sourceChargesForReceipt);
 
         return BusinessDocumentPdfRenderer.Render(model);
     }

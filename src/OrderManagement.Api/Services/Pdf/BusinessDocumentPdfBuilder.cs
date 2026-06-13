@@ -13,11 +13,11 @@ public static class BusinessDocumentPdfBuilder
         string? logoAbsolutePath,
         string? signatureAbsolutePath,
         BusinessDocument? sourceQuote,
-        BusinessDocument? sourceChargeForReceipt)
+        IReadOnlyList<BusinessDocument>? sourceChargesForReceipt)
     {
         var displayNumber = StripDocumentPrefix(document.DocumentNumber);
         var (title, footerLabel) = TitleLabels(document.DocumentType);
-        var tableBanner = BuildTableBanner(document, sourceQuote, sourceChargeForReceipt);
+        var tableBanner = BuildTableBanner(document, sourceQuote, sourceChargesForReceipt);
 
         List<BusinessDocumentPdfLine> pdfLines;
         decimal? subtotal = null;
@@ -143,13 +143,13 @@ public static class BusinessDocumentPdfBuilder
     private static string? BuildTableBanner(
         BusinessDocument document,
         BusinessDocument? sourceQuote,
-        BusinessDocument? sourceChargeForReceipt)
+        IReadOnlyList<BusinessDocument>? sourceChargesForReceipt)
     {
         return document.DocumentType switch
         {
             DocumentType.Quote => FormatProjectLine(document.Description),
             DocumentType.ChargeInvoice => BuildChargeInvoiceBanner(document, sourceQuote),
-            DocumentType.Receipt => BuildReceiptBanner(sourceChargeForReceipt, sourceQuote),
+            DocumentType.Receipt => BuildReceiptBanner(sourceChargesForReceipt, sourceQuote),
             _ => null
         };
     }
@@ -229,17 +229,26 @@ public static class BusinessDocumentPdfBuilder
         return $"מס׳ הזמנה {reference}";
     }
 
-    private static string? BuildReceiptBanner(BusinessDocument? sourceCharge, BusinessDocument? sourceQuote)
+    private static string? BuildReceiptBanner(
+        IReadOnlyList<BusinessDocument>? sourceCharges,
+        BusinessDocument? sourceQuote)
     {
-        if (sourceCharge is null)
+        if (sourceCharges is null or { Count: 0 })
             return null;
 
-        var chargeNum = StripDocumentPrefix(sourceCharge.DocumentNumber);
-        var project = ResolveProjectBannerText(sourceCharge, sourceQuote);
-        var parts = new List<string> { $"קבלה זו הוצאה על בסיס חשבון חיוב מס׳ {chargeNum}" };
-        if (!string.IsNullOrWhiteSpace(project))
-            parts.Add(project);
-        return string.Join(" | ", parts);
+        if (sourceCharges.Count == 1)
+        {
+            var sourceCharge = sourceCharges[0];
+            var chargeNum = StripDocumentPrefix(sourceCharge.DocumentNumber);
+            var project = ResolveProjectBannerText(sourceCharge, sourceQuote);
+            var parts = new List<string> { $"קבלה זו הוצאה על בסיס חשבון חיוב מס׳ {chargeNum}" };
+            if (!string.IsNullOrWhiteSpace(project))
+                parts.Add(project);
+            return string.Join(" | ", parts);
+        }
+
+        var nums = string.Join(", ", sourceCharges.Select(c => StripDocumentPrefix(c.DocumentNumber)));
+        return $"קבלה זו הוצאה על בסיס חשבונות עסקה מס׳ {nums}";
     }
 
     public static string StripDocumentPrefix(string documentNumber)

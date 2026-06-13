@@ -154,6 +154,8 @@ export function DocumentsPage() {
   const [chargeFromQuoteId, setChargeFromQuoteId] = useState<string | null>(null);
   const [receiptEditId, setReceiptEditId] = useState<string | null>(null);
   const [receiptComposeOpen, setReceiptComposeOpen] = useState(false);
+  const [preselectedChargeIds, setPreselectedChargeIds] = useState<string[]>([]);
+  const [selectedChargeIds, setSelectedChargeIds] = useState<string[]>([]);
   const [rowMenuDoc, setRowMenuDoc] = useState<Document | null>(null);
   const [issueMenuDocId, setIssueMenuDocId] = useState<string | null>(null);
   const rowMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -239,6 +241,59 @@ export function DocumentsPage() {
     [data]
   );
 
+  const chargeIdsInDraftReceipts = useMemo(() => {
+    const ids = new Set<string>();
+    for (const doc of allDocuments) {
+      if (doc.documentType !== 'Receipt' || doc.status !== 'Draft') continue;
+      for (const allocation of doc.chargeAllocations ?? []) {
+        ids.add(allocation.chargeInvoiceId);
+      }
+      if (doc.parentDocumentId) ids.add(doc.parentDocumentId);
+    }
+    return ids;
+  }, [allDocuments]);
+
+  const selectableOpenCharges = useMemo(
+    () => openCharges.filter((c) => !chargeIdsInDraftReceipts.has(c.id)),
+    [openCharges, chargeIdsInDraftReceipts]
+  );
+
+  const selectedChargeDocs = useMemo(
+    () => selectableOpenCharges.filter((c) => selectedChargeIds.includes(c.id)),
+    [selectableOpenCharges, selectedChargeIds]
+  );
+
+  const selectedChargeCustomerIds = useMemo(
+    () => new Set(selectedChargeDocs.map((c) => c.customerId)),
+    [selectedChargeDocs]
+  );
+
+  const canSelectChargeRow = (doc: Document) =>
+    doc.documentType === 'ChargeInvoice' &&
+    doc.status === 'Open' &&
+    !chargeIdsInDraftReceipts.has(doc.id);
+
+  const toggleChargeSelection = (doc: Document) => {
+    if (!canSelectChargeRow(doc)) return;
+    setSelectedChargeIds((prev) =>
+      prev.includes(doc.id) ? prev.filter((id) => id !== doc.id) : [...prev, doc.id]
+    );
+  };
+
+  const clearChargeSelection = () => setSelectedChargeIds([]);
+
+  const openReceiptFromSelection = () => {
+    if (selectedChargeDocs.length === 0) return;
+    if (selectedChargeCustomerIds.size !== 1) {
+      setError(t('documents.receiptMultiSameCustomer'));
+      return;
+    }
+    setError('');
+    setPreselectedChargeIds(selectedChargeDocs.map((c) => c.id));
+    setReceiptComposeOpen(true);
+    setReceiptEditId(null);
+  };
+
   type DocumentWithMonth = Document & { monthKey: string; year: number; month: number };
 
   const documentsWithMonth = useMemo<DocumentWithMonth[]>(
@@ -296,6 +351,7 @@ export function DocumentsPage() {
     }
     setReceiptComposeOpen(true);
     setReceiptEditId(null);
+    setPreselectedChargeIds([]);
     setError('');
   };
 
@@ -325,6 +381,8 @@ export function DocumentsPage() {
   const closeReceiptEditor = () => {
     setReceiptEditId(null);
     setReceiptComposeOpen(false);
+    setPreselectedChargeIds([]);
+    setSelectedChargeIds([]);
   };
 
   const onEditDocument = (doc: Document) => {
@@ -521,7 +579,20 @@ export function DocumentsPage() {
     `${DOCUMENTS_COLUMN_CLASS[key]}${DOCUMENTS_TEXT_START_COLUMNS.has(key) ? ' dt-col-text-start' : ''}`;
 
   const renderDocumentRow = (doc: Document) => (
-    <tr key={doc.id} className="dt-panel-doc-row">
+    <tr
+      key={doc.id}
+      className={`dt-panel-doc-row${selectedChargeIds.includes(doc.id) ? ' is-charge-selected' : ''}`}
+    >
+      <td className="doc-select-col">
+        {canSelectChargeRow(doc) ? (
+          <input
+            type="checkbox"
+            checked={selectedChargeIds.includes(doc.id)}
+            onChange={() => toggleChargeSelection(doc)}
+            aria-label={t('documents.colNumber')}
+          />
+        ) : null}
+      </td>
       <td className={cellClass('number')}>
         {supportsDocumentPdf(doc) ? (
           <button
@@ -729,6 +800,7 @@ export function DocumentsPage() {
               </colgroup>
               <thead>
                 <tr>
+                  <th className="doc-select-col" aria-hidden />
                   {DOCUMENTS_COLUMN_KEYS.map((key) =>
                     renderDataTableHeaderCell(
                       key,
@@ -745,7 +817,7 @@ export function DocumentsPage() {
                 {pageGroups.map((group) => (
                   <Fragment key={group.monthKey}>
                     <tr>
-                      <td colSpan={DOCUMENTS_COLUMN_KEYS.length} className="dt-panel-doc-month">
+                      <td colSpan={DOCUMENTS_COLUMN_KEYS.length + 1} className="dt-panel-doc-month">
                         {monthLabel(group.year, group.month)}
                       </td>
                     </tr>
@@ -757,6 +829,30 @@ export function DocumentsPage() {
           </div>
         )}
       </DataTablePanel>
+
+      {selectedChargeIds.length > 0 && (
+        <div className="documents-charge-selection-bar" role="status">
+          <span>{t('documents.receiptSelectionCount', { count: selectedChargeIds.length })}</span>
+          <div className="documents-charge-selection-actions">
+            <button type="button" className="btn btn-ghost-inline" onClick={clearChargeSelection}>
+              {t('documents.receiptSelectionClear')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={selectedChargeCustomerIds.size !== 1}
+              title={
+                selectedChargeCustomerIds.size !== 1
+                  ? t('documents.receiptMultiSameCustomer')
+                  : undefined
+              }
+              onClick={openReceiptFromSelection}
+            >
+              {t('documents.receiptCreateFromSelection')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <CatalogRowMenu open={rowMenuDoc !== null} anchorRef={rowMenuAnchorRef}>
         {rowMenuDoc && (
@@ -858,12 +954,14 @@ export function DocumentsPage() {
           open
           receiptId={receiptEditId}
           composeMode={receiptComposeOpen && !receiptEditId}
-          openCharges={openCharges.map((c) => ({
+          preselectedChargeIds={preselectedChargeIds}
+          openCharges={selectableOpenCharges.map((c) => ({
             id: c.id,
             documentNumber: c.documentNumber,
             customerId: c.customerId,
             customerName: c.customerName,
             totalAmount: c.totalAmount,
+            description: c.description,
           }))}
           token={token}
           onClose={closeReceiptEditor}

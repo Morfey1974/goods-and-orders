@@ -36,6 +36,20 @@ function formatMoney(n: number) {
   return `₪${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function buildMultiReceiptDescription(documentNumbers: string[]) {
+  const nums = documentNumbers.map((n) => n.replace(/^[A-Z]+-/, '')).join(', ');
+  return `יצא מתוך חשבונות עסקה מספר ${nums}`;
+}
+
+function resolveLinkedChargeTotal(doc: Document | null, charges: ChargeOption[]): number {
+  if (doc?.linkedChargesTotal != null) return doc.linkedChargesTotal;
+  if (doc?.chargeAllocations?.length) {
+    return roundMoney(doc.chargeAllocations.reduce((s, a) => s + a.chargeAmount, 0));
+  }
+  if (charges.length > 0) return roundMoney(charges.reduce((s, c) => s + c.totalAmount, 0));
+  return doc?.parentChargeAmount ?? 0;
+}
+
 function mapApiLine(line: ReceiptPaymentLine): SavedPaymentLine {
   return {
     id: line.id,
@@ -54,6 +68,7 @@ type ChargeOption = {
   customerId: string;
   customerName: string;
   totalAmount: number;
+  description?: string;
 };
 
 type Props = {
@@ -63,6 +78,8 @@ type Props = {
   /** New receipt: pick parent charge invoice in the form instead of a pre-modal. */
   composeMode?: boolean;
   openCharges?: ChargeOption[];
+  /** Pre-selected charge invoices from the documents list (multi-receipt). */
+  preselectedChargeIds?: string[];
   onClose: () => void;
   onSuccess: (message: string) => void;
   onDraftSaved?: () => void;
@@ -76,6 +93,7 @@ export function ReceiptEditWizard({
   token,
   composeMode = false,
   openCharges = [],
+  preselectedChargeIds = [],
   onClose,
   onSuccess,
   onDraftSaved,
@@ -108,12 +126,32 @@ export function ReceiptEditWizard({
   const [parentDocumentId, setParentDocumentId] = useState('');
   const skipTabDraftResetRef = useRef(false);
 
+  const linkedChargeOptions = useMemo(() => {
+    if (doc?.chargeAllocations?.length) {
+      return doc.chargeAllocations.map((a) => ({
+        id: a.chargeInvoiceId,
+        documentNumber: a.chargeNumber,
+        customerId: doc.customerId,
+        customerName: doc.customerName,
+        totalAmount: a.chargeAmount,
+      }));
+    }
+    const ids =
+      preselectedChargeIds.length > 0
+        ? preselectedChargeIds
+        : parentDocumentId
+          ? [parentDocumentId]
+          : [];
+    return openCharges.filter((c) => ids.includes(c.id));
+  }, [doc, openCharges, parentDocumentId, preselectedChargeIds]);
+
   const selectedCharge = useMemo(
-    () => openCharges.find((c) => c.id === parentDocumentId) ?? null,
-    [openCharges, parentDocumentId]
+    () => linkedChargeOptions[0] ?? openCharges.find((c) => c.id === parentDocumentId) ?? null,
+    [linkedChargeOptions, openCharges, parentDocumentId]
   );
+  const isMultiCharge = linkedChargeOptions.length > 1;
   const isDraft = composeMode && !doc ? true : doc?.status === 'Draft';
-  const chargeTotal = doc?.parentChargeAmount ?? selectedCharge?.totalAmount ?? 0;
+  const chargeTotal = resolveLinkedChargeTotal(doc, linkedChargeOptions);
   const chargeNumber =
     doc?.parentChargeNumber?.replace(/^[A-Z]+-/, '') ??
     selectedCharge?.documentNumber.replace(/^[A-Z]+-/, '') ??
@@ -177,9 +215,20 @@ export function ReceiptEditWizard({
       setError('');
       setInfoMessage('');
       setDoc(null);
-      setParentDocumentId(openCharges[0]?.id ?? '');
+      const initialCharges =
+        preselectedChargeIds.length > 0
+          ? openCharges.filter((c) => preselectedChargeIds.includes(c.id))
+          : openCharges.slice(0, 1);
+      const initialTotal = roundMoney(initialCharges.reduce((s, c) => s + c.totalAmount, 0));
+      const initialDescription =
+        initialCharges.length > 1
+          ? buildMultiReceiptDescription(initialCharges.map((c) => c.documentNumber))
+          : initialCharges.length === 1
+            ? (initialCharges[0].description ?? '')
+            : '';
+      setParentDocumentId(initialCharges[0]?.id ?? '');
       setIssueDate(todayIso());
-      setDescription('');
+      setDescription(initialDescription);
       setNotes('');
       setSavedLines([]);
       setVersion(1);
@@ -187,8 +236,8 @@ export function ReceiptEditWizard({
       setDraft(
         buildPaymentDraft('BankTransfer', {
           today: todayIso(),
-          chargeTotal: openCharges[0]?.totalAmount ?? 0,
-          openBalance: openCharges[0]?.totalAmount ?? 0,
+          chargeTotal: initialTotal,
+          openBalance: initialTotal,
         })
       );
       setActiveTab('BankTransfer');
@@ -209,18 +258,19 @@ export function ReceiptEditWizard({
         setIssueDate(date);
         setDescription(parts[0] ?? '');
         setNotes(parts.slice(1).join('\n\n'));
+        const linkedTotal = resolveLinkedChargeTotal(loaded, []);
         const lines = reconcileBankTransferAmounts(
           (loaded.paymentLines ?? []).map(mapApiLine),
-          loaded.parentChargeAmount ?? 0
+          linkedTotal
         );
         setSavedLines(lines);
         setVersion(loaded.version);
         const paid = lines.reduce((s, l) => s + l.amount, 0);
-        const balance = Math.max(0, roundMoney((loaded.parentChargeAmount ?? 0) - paid));
+        const balance = Math.max(0, roundMoney(linkedTotal - paid));
         setDraft(
           buildPaymentDraft('BankTransfer', {
             today: date,
-            chargeTotal: loaded.parentChargeAmount ?? 0,
+            chargeTotal: linkedTotal,
             openBalance: balance,
           })
         );
@@ -228,21 +278,21 @@ export function ReceiptEditWizard({
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
       .finally(() => setLoading(false));
-  }, [open, token, receiptId, composeMode, t]);
+  }, [open, token, receiptId, composeMode, preselectedChargeIds, openCharges, t]);
 
   useEffect(() => {
-    if (!composeMode || doc || !selectedCharge) return;
-    const balance = Math.max(0, roundMoney(selectedCharge.totalAmount));
+    if (!composeMode || doc || linkedChargeOptions.length === 0) return;
+    const balance = Math.max(0, roundMoney(chargeTotal));
     setDraft(
       buildPaymentDraft(activeTab, {
         ...draftContext,
-        chargeTotal: selectedCharge.totalAmount,
+        chargeTotal,
         openBalance: balance,
         today: issueDate || todayIso(),
       })
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync totals when parent charge changes
-  }, [parentDocumentId, selectedCharge?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync totals when linked charges change
+  }, [parentDocumentId, preselectedChargeIds.join(','), linkedChargeOptions.length, chargeTotal]);
 
   useEffect(() => {
     if (!open || !isDraft || loading) return;
@@ -386,21 +436,37 @@ export function ReceiptEditWizard({
 
   const ensureReceiptCreated = async (): Promise<Document | null> => {
     if (doc) return doc;
-    if (!parentDocumentId) {
+    const chargeIds =
+      preselectedChargeIds.length > 0
+        ? preselectedChargeIds
+        : parentDocumentId
+          ? [parentDocumentId]
+          : [];
+    if (chargeIds.length === 0) {
       setError(t('documents.receiptNeedsParent'));
       return null;
     }
-    const charge = openCharges.find((c) => c.id === parentDocumentId);
-    if (!charge) {
+    const charges = openCharges.filter((c) => chargeIds.includes(c.id));
+    if (charges.length !== chargeIds.length) {
       setError(t('documents.receiptNeedsParent'));
+      return null;
+    }
+    const customerIds = new Set(charges.map((c) => c.customerId));
+    if (customerIds.size !== 1) {
+      setError(t('documents.receiptMultiSameCustomer'));
       return null;
     }
     const created = await documentsApi.create(token, {
       documentType: 'Receipt',
-      customerId: charge.customerId,
-      parentDocumentId,
+      customerId: charges[0].customerId,
+      chargeInvoiceIds: chargeIds,
+      parentDocumentId: chargeIds[0],
       issueDate: dateInputToUtcIso(issueDate),
-      description: description.trim() || undefined,
+      description:
+        description.trim() ||
+        (charges.length > 1
+          ? buildMultiReceiptDescription(charges.map((c) => c.documentNumber))
+          : charges[0].description?.trim() || undefined),
     });
     setDoc(created);
     setVersion(created.version);
@@ -428,6 +494,11 @@ export function ReceiptEditWizard({
 
       if (finalize && savedLines.length === 0) {
         setError(t('documents.receiptNoLines'));
+        return false;
+      }
+
+      if (finalize && roundMoney(openBalance) !== 0) {
+        setError(t('documents.receiptExactAmountRequired'));
         return false;
       }
 
@@ -1095,7 +1166,7 @@ export function ReceiptEditWizard({
 
             <section className="doc-panel">
               <div className="doc-panel-grid">
-                {composeMode && !doc && (
+                {composeMode && !doc && preselectedChargeIds.length === 0 && (
                   <label style={{ gridColumn: '1 / -1' }}>
                     <span className="doc-panel-label">{t('documents.parentInvoice')} *</span>
                     <select
@@ -1104,6 +1175,10 @@ export function ReceiptEditWizard({
                       onChange={(e) => {
                         setParentDocumentId(e.target.value);
                         setError('');
+                        const charge = openCharges.find((c) => c.id === e.target.value);
+                        if (charge) {
+                          setDescription(charge.description ?? '');
+                        }
                       }}
                     >
                       <option value="">{t('documents.selectParentInvoice')}</option>
@@ -1115,6 +1190,22 @@ export function ReceiptEditWizard({
                       ))}
                     </select>
                   </label>
+                )}
+                {(isMultiCharge || preselectedChargeIds.length > 1) && linkedChargeOptions.length > 0 && (
+                  <div className="receipt-linked-charges" style={{ gridColumn: '1 / -1' }}>
+                    <span className="doc-panel-label">{t('documents.linkedChargeInvoices')}</span>
+                    <ul className="receipt-linked-charges-list">
+                      {linkedChargeOptions.map((c) => (
+                        <li key={c.id}>
+                          <code>{c.documentNumber.replace(/^[A-Z]+-/, '')}</code>
+                          <span>{formatMoney(c.totalAmount)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="receipt-linked-charges-total">
+                      {t('documents.linkedChargesTotal', { value: formatMoney(chargeTotal) })}
+                    </p>
+                  </div>
                 )}
                 <label>
                   <span className="doc-panel-label">{t('documents.colDate')}</span>

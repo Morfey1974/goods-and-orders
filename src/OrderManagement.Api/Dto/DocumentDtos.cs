@@ -22,6 +22,12 @@ public record ReceiptPaymentLineDto(
     string? DetailsJson,
     int SortOrder);
 
+public record ReceiptChargeAllocationDto(
+    Guid ChargeInvoiceId,
+    string ChargeNumber,
+    decimal ChargeAmount,
+    decimal AllocatedAmount);
+
 public record DocumentDto(
     Guid Id,
     string DocumentType,
@@ -43,6 +49,8 @@ public record DocumentDto(
     string? ClientOrderFileName,
     IReadOnlyList<DocumentLineDto> Lines,
     IReadOnlyList<ReceiptPaymentLineDto>? PaymentLines,
+    IReadOnlyList<ReceiptChargeAllocationDto>? ChargeAllocations,
+    decimal? LinkedChargesTotal,
     decimal? ParentChargeAmount,
     string? ParentChargeNumber,
     int Version,
@@ -89,6 +97,7 @@ public record CreateDocumentRequest(
     DateTime? DueDate,
     string? PaymentMethod,
     Guid? ParentDocumentId,
+    IReadOnlyList<Guid>? ChargeInvoiceIds,
     Guid? OrderId,
     [MinLength(1)] IReadOnlyList<DocumentLineInput>? Lines,
     [Range(0, 100)] decimal? DiscountPercent = null,
@@ -118,7 +127,26 @@ public static class DocumentMappers
 {
     public static DocumentDto ToDto(
         BusinessDocument d,
-        BusinessDocument? parentCharge = null) => new(
+        BusinessDocument? parentCharge = null,
+        IReadOnlyList<(ReceiptChargeAllocation Allocation, BusinessDocument Charge)>? chargeAllocations = null)
+    {
+        IReadOnlyList<ReceiptChargeAllocationDto>? allocationDtos = null;
+        decimal? linkedTotal = null;
+        if (d.DocumentType == DocumentType.Receipt && chargeAllocations is { Count: > 0 })
+        {
+            allocationDtos = chargeAllocations
+                .OrderBy(x => x.Charge.DocumentNumber)
+                .Select(x => new ReceiptChargeAllocationDto(
+                    x.Charge.Id,
+                    x.Charge.DocumentNumber,
+                    x.Charge.TotalAmount,
+                    x.Allocation.AllocatedAmount))
+                .ToList();
+            linkedTotal = Math.Round(allocationDtos.Sum(a => a.ChargeAmount), 2);
+            parentCharge ??= chargeAllocations[0].Charge;
+        }
+
+        return new DocumentDto(
         d.Id,
         d.DocumentType.ToString(),
         d.DocumentNumber,
@@ -148,10 +176,13 @@ public static class DocumentMappers
         d.DocumentType == DocumentType.Receipt
             ? d.PaymentLines.OrderBy(p => p.SortOrder).Select(ToPaymentLineDto).ToList()
             : null,
+        allocationDtos,
+        linkedTotal,
         parentCharge?.TotalAmount,
         parentCharge?.DocumentNumber,
         d.Version,
         d.CreatedAt);
+    }
 
     public static ReceiptPaymentLineDto ToPaymentLineDto(ReceiptPaymentLine p) => new(
         p.Id,

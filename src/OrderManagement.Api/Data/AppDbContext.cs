@@ -35,6 +35,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BusinessDocument> BusinessDocuments => Set<BusinessDocument>();
     public DbSet<BusinessDocumentLine> BusinessDocumentLines => Set<BusinessDocumentLine>();
     public DbSet<ReceiptPaymentLine> ReceiptPaymentLines => Set<ReceiptPaymentLine>();
+    public DbSet<ReceiptChargeAllocation> ReceiptChargeAllocations => Set<ReceiptChargeAllocation>();
     public DbSet<TenantComplianceDocument> TenantComplianceDocuments => Set<TenantComplianceDocument>();
     public DbSet<BusinessExpense> BusinessExpenses => Set<BusinessExpense>();
     public DbSet<BusinessExpenseDocument> BusinessExpenseDocuments => Set<BusinessExpenseDocument>();
@@ -532,6 +533,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(d => d.PaymentLines)
                 .HasForeignKey(x => x.DocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReceiptChargeAllocation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AllocatedAmount).HasPrecision(18, 2);
+            e.HasIndex(x => x.ReceiptId);
+            e.HasIndex(x => x.ChargeInvoiceId);
+            e.HasOne(x => x.Receipt)
+                .WithMany()
+                .HasForeignKey(x => x.ReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ChargeInvoice)
+                .WithMany()
+                .HasForeignKey(x => x.ChargeInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<BusinessExpense>(e =>

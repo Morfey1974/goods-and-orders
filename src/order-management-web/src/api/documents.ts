@@ -21,6 +21,13 @@ export type ReceiptPaymentLine = {
   sortOrder: number;
 };
 
+export type ReceiptChargeAllocation = {
+  chargeInvoiceId: string;
+  chargeNumber: string;
+  chargeAmount: number;
+  allocatedAmount: number;
+};
+
 export type Document = {
   id: string;
   documentType: string;
@@ -42,6 +49,8 @@ export type Document = {
   clientOrderFileName?: string;
   lines: DocumentLine[];
   paymentLines?: ReceiptPaymentLine[];
+  chargeAllocations?: ReceiptChargeAllocation[];
+  linkedChargesTotal?: number;
   parentChargeAmount?: number;
   parentChargeNumber?: string;
   version: number;
@@ -92,9 +101,22 @@ function mapLine(raw: Record<string, unknown>): DocumentLine {
   };
 }
 
+function mapChargeAllocation(raw: Record<string, unknown>): ReceiptChargeAllocation {
+  return {
+    chargeInvoiceId: String(raw.chargeInvoiceId ?? raw.ChargeInvoiceId ?? ''),
+    chargeNumber: String(raw.chargeNumber ?? raw.ChargeNumber ?? ''),
+    chargeAmount: Number(raw.chargeAmount ?? raw.ChargeAmount ?? 0),
+    allocatedAmount: Number(raw.allocatedAmount ?? raw.AllocatedAmount ?? 0),
+  };
+}
+
 function mapDocument(raw: Record<string, unknown>): Document {
   const linesRaw = (raw.lines ?? raw.Lines ?? []) as Record<string, unknown>[];
   const paymentLinesRaw = (raw.paymentLines ?? raw.PaymentLines ?? []) as Record<string, unknown>[];
+  const chargeAllocationsRaw = (raw.chargeAllocations ?? raw.ChargeAllocations ?? []) as Record<
+    string,
+    unknown
+  >[];
   return {
     id: String(raw.id ?? raw.Id),
     documentType: String(raw.documentType ?? raw.DocumentType ?? ''),
@@ -116,6 +138,10 @@ function mapDocument(raw: Record<string, unknown>): Document {
     clientOrderFileName: (raw.clientOrderFileName ?? raw.ClientOrderFileName) as string | undefined,
     lines: Array.isArray(linesRaw) ? linesRaw.map(mapLine) : [],
     paymentLines: Array.isArray(paymentLinesRaw) ? paymentLinesRaw.map(mapPaymentLine) : undefined,
+    chargeAllocations: Array.isArray(chargeAllocationsRaw)
+      ? chargeAllocationsRaw.map(mapChargeAllocation)
+      : undefined,
+    linkedChargesTotal: (raw.linkedChargesTotal ?? raw.LinkedChargesTotal) as number | undefined,
     parentChargeAmount: (raw.parentChargeAmount ?? raw.ParentChargeAmount) as number | undefined,
     parentChargeNumber: (raw.parentChargeNumber ?? raw.ParentChargeNumber) as string | undefined,
     version: Number(raw.version ?? raw.Version ?? 1),

@@ -1733,3 +1733,66 @@
     grid-template-columns: 1fr;
   }
 }
+
+.doc-select-col {
+  width: 2.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.doc-select-col input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+tr.is-charge-selected {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.documents-charge-selection-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+  color: #fff;
+}
+
+.documents-charge-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.documents-charge-selection-bar .btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.receipt-linked-charges-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.receipt-linked-charges-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.receipt-linked-charges-total {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}

@@ -3,6 +3,7 @@ using OrderManagement.Api.Data;
 using OrderManagement.Api.Dto;
 using OrderManagement.Api.Entities;
 using OrderManagement.Api.Helpers;
+using OrderManagement.Api.Services.Pdf;
 
 namespace OrderManagement.Api.Services;
 
@@ -74,6 +75,7 @@ public class DocumentService(
         decimal? discountAmount,
         bool receiptAsDraft = false,
         bool finalize = false,
+        IReadOnlyList<Guid>? chargeInvoiceIds = null,
         CancellationToken ct = default)
     {
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId && c.TenantId == tenantId, ct)
@@ -154,19 +156,25 @@ public class DocumentService(
                 throw new InvalidOperationException("A charge invoice already exists for this quote.");
         }
 
-        // Stock is deducted when a charge invoice is finalized (Save and exit), not while editing a draft.
-        if (type == DocumentType.Receipt && parentDocumentId is { } parentId)
+        List<BusinessDocument>? receiptCharges = null;
+        if (type == DocumentType.Receipt)
         {
-            var parent = await db.BusinessDocuments.FirstOrDefaultAsync(
-                d => d.Id == parentId && d.TenantId == tenantId, ct);
-            if (parent is null) throw new InvalidOperationException("Parent document not found.");
-            if (parent.DocumentType != DocumentType.ChargeInvoice)
-                throw new InvalidOperationException("Receipt parent must be a charge invoice.");
+            var chargeIds = chargeInvoiceIds?.Where(id => id != Guid.Empty).Distinct().ToList()
+                ?? (parentDocumentId is { } pid ? [pid] : []);
+            if (chargeIds.Count == 0)
+                throw new InvalidOperationException("Receipt requires at least one charge invoice.");
 
-            var hasReceipt = await db.BusinessDocuments.AnyAsync(
-                d => d.ParentDocumentId == parentId && d.DocumentType == DocumentType.Receipt, ct);
-            if (hasReceipt)
-                throw new InvalidOperationException("Receipt already exists for this invoice.");
+            receiptCharges = await LoadAndValidateReceiptChargesAsync(tenantId, chargeIds, customerId, ct);
+            doc.CustomerId = receiptCharges[0].CustomerId;
+            doc.ParentDocumentId = receiptCharges[0].Id;
+            doc.OrderId ??= receiptCharges[0].OrderId;
+
+            if (string.IsNullOrWhiteSpace(doc.Description))
+            {
+                doc.Description = receiptCharges.Count == 1
+                    ? receiptCharges[0].Description?.Trim()
+                    : BuildMultiChargeReceiptDescription(receiptCharges);
+            }
 
             if (receiptAsDraft)
             {
@@ -174,13 +182,31 @@ public class DocumentService(
             }
             else
             {
-                doc.TotalAmount = parent.TotalAmount;
-                parent.Status = DocumentStatus.Paid;
-                parent.UpdatedAt = now;
+                doc.TotalAmount = Math.Round(receiptCharges.Sum(c => c.TotalAmount), 2);
+                foreach (var charge in receiptCharges)
+                {
+                    charge.Status = DocumentStatus.Paid;
+                    charge.UpdatedAt = now;
+                }
             }
         }
 
         db.BusinessDocuments.Add(doc);
+
+        if (type == DocumentType.Receipt && receiptCharges is not null)
+        {
+            foreach (var charge in receiptCharges)
+            {
+                db.ReceiptChargeAllocations.Add(new ReceiptChargeAllocation
+                {
+                    Id = Guid.NewGuid(),
+                    ReceiptId = doc.Id,
+                    ChargeInvoiceId = charge.Id,
+                    AllocatedAmount = charge.TotalAmount
+                });
+            }
+        }
+
         await db.SaveChangesAsync(ct);
 
         if (type == DocumentType.ChargeInvoice && finalize)
@@ -219,10 +245,11 @@ public class DocumentService(
         if (doc.DocumentType is DocumentType.Receipt or DocumentType.Order)
             throw new InvalidOperationException("This document type cannot be edited.");
 
-        var hasFinalizedReceipt = await db.BusinessDocuments.AnyAsync(
-            d => d.ParentDocumentId == doc.Id &&
-                 d.DocumentType == DocumentType.Receipt &&
-                 d.Status != DocumentStatus.Draft,
+        var hasFinalizedReceipt = await db.ReceiptChargeAllocations.AnyAsync(
+            a => a.ChargeInvoiceId == doc.Id &&
+                 a.Receipt.TenantId == tenantId &&
+                 a.Receipt.DocumentType == DocumentType.Receipt &&
+                 a.Receipt.Status != DocumentStatus.Draft,
             ct);
         if (hasFinalizedReceipt)
             throw new InvalidOperationException(
@@ -419,15 +446,27 @@ public class DocumentService(
             await stock.ReverseStockForChargeAsync(tenantId, doc.DocumentNumber, ct);
         }
 
-        if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
+        if (doc.DocumentType == DocumentType.Receipt)
         {
-            var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
-                d => d.Id == chargeId && d.TenantId == tenantId, ct);
-            if (charge is { DocumentType: DocumentType.ChargeInvoice, Status: DocumentStatus.Paid })
+            var chargeIds = await db.ReceiptChargeAllocations
+                .Where(a => a.ReceiptId == doc.Id)
+                .Select(a => a.ChargeInvoiceId)
+                .ToListAsync(ct);
+            if (chargeIds.Count == 0 && doc.ParentDocumentId is { } legacyChargeId)
+                chargeIds.Add(legacyChargeId);
+
+            foreach (var chargeId in chargeIds)
             {
-                charge.Status = DocumentStatus.Open;
-                charge.UpdatedAt = DateTime.UtcNow;
+                var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
+                    d => d.Id == chargeId && d.TenantId == tenantId, ct);
+                if (charge is { DocumentType: DocumentType.ChargeInvoice, Status: DocumentStatus.Paid or DocumentStatus.Closed })
+                {
+                    charge.Status = DocumentStatus.Open;
+                    charge.UpdatedAt = DateTime.UtcNow;
+                }
             }
+
+            await db.ReceiptChargeAllocations.Where(a => a.ReceiptId == doc.Id).ExecuteDeleteAsync(ct);
         }
 
         db.BusinessDocumentLines.RemoveRange(doc.Lines);
@@ -466,6 +505,7 @@ public class DocumentService(
             source.DiscountAmount,
             receiptAsDraft: false,
             finalize: false,
+            chargeInvoiceIds: null,
             ct);
     }
 
@@ -513,6 +553,7 @@ public class DocumentService(
             quote.DiscountAmount,
             receiptAsDraft: false,
             finalize: false,
+            chargeInvoiceIds: null,
             ct);
 
         return charge;
@@ -636,11 +677,28 @@ public class DocumentService(
             throw new InvalidOperationException("Receipt can only be issued from a quote or charge invoice.");
         }
 
-        var existingReceipt = await db.BusinessDocuments
-            .Include(d => d.Customer)
-            .Include(d => d.PaymentLines)
-            .FirstOrDefaultAsync(
-                d => d.ParentDocumentId == charge.Id && d.DocumentType == DocumentType.Receipt, ct);
+        var existingReceiptId = await db.ReceiptChargeAllocations
+            .Where(a => a.ChargeInvoiceId == charge.Id && a.Receipt.DocumentType == DocumentType.Receipt)
+            .Select(a => (Guid?)a.ReceiptId)
+            .FirstOrDefaultAsync(ct);
+
+        BusinessDocument? existingReceipt = null;
+        if (existingReceiptId is { } rid)
+        {
+            existingReceipt = await db.BusinessDocuments
+                .Include(d => d.Customer)
+                .Include(d => d.PaymentLines)
+                .FirstOrDefaultAsync(d => d.Id == rid, ct);
+        }
+        else
+        {
+            existingReceipt = await db.BusinessDocuments
+                .Include(d => d.Customer)
+                .Include(d => d.PaymentLines)
+                .FirstOrDefaultAsync(
+                    d => d.ParentDocumentId == charge.Id && d.DocumentType == DocumentType.Receipt, ct);
+        }
+
         if (existingReceipt is not null)
             return existingReceipt;
 
@@ -667,6 +725,7 @@ public class DocumentService(
             null,
             receiptAsDraft: true,
             finalize: false,
+            chargeInvoiceIds: [charge.Id],
             ct);
     }
 
@@ -692,15 +751,35 @@ public class DocumentService(
         if (receipt.Version != version)
             throw new InvalidOperationException("Document was modified. Refresh and try again.");
 
-        if (receipt.ParentDocumentId is not { } chargeId)
-            throw new InvalidOperationException("Receipt has no linked charge invoice.");
+        var allocations = await db.ReceiptChargeAllocations
+            .Include(a => a.ChargeInvoice)
+            .Where(a => a.ReceiptId == receiptId)
+            .OrderBy(a => a.ChargeInvoice.DocumentNumber)
+            .ToListAsync(ct);
 
-        var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
-            d => d.Id == chargeId && d.TenantId == tenantId, ct)
-            ?? throw new InvalidOperationException("Parent charge invoice not found.");
+        if (allocations.Count == 0 && receipt.ParentDocumentId is { } legacyChargeId)
+        {
+            var legacyCharge = await db.BusinessDocuments.FirstOrDefaultAsync(
+                d => d.Id == legacyChargeId && d.TenantId == tenantId, ct)
+                ?? throw new InvalidOperationException("Parent charge invoice not found.");
+            allocations =
+            [
+                new ReceiptChargeAllocation
+                {
+                    Id = Guid.NewGuid(),
+                    ReceiptId = receiptId,
+                    ChargeInvoiceId = legacyCharge.Id,
+                    ChargeInvoice = legacyCharge,
+                    AllocatedAmount = legacyCharge.TotalAmount
+                }
+            ];
+        }
 
-        if (charge.DocumentType != DocumentType.ChargeInvoice)
-            throw new InvalidOperationException("Receipt parent must be a charge invoice.");
+        if (allocations.Count == 0)
+            throw new InvalidOperationException("Receipt has no linked charge invoices.");
+
+        var charges = allocations.Select(a => a.ChargeInvoice).ToList();
+        var chargesTotal = Math.Round(charges.Sum(c => c.TotalAmount), 2);
 
         receipt.Description = description?.Trim();
         if (issueDate.HasValue)
@@ -748,8 +827,16 @@ public class DocumentService(
         if (total <= 0)
             throw new InvalidOperationException("At least one payment line with amount is required.");
 
-        if (total > charge.TotalAmount)
+        if (finalize)
+        {
+            if (total != chargesTotal)
+                throw new InvalidOperationException(
+                    "Payment total must exactly match the combined charge invoice amount.");
+        }
+        else if (total > chargesTotal)
+        {
             throw new InvalidOperationException("Total payments exceed the charge invoice amount.");
+        }
 
         if (issueDate.HasValue)
             receipt.IssueDate = NormalizeBusinessDate(issueDate.Value);
@@ -760,7 +847,7 @@ public class DocumentService(
         if (finalize)
         {
             receipt.Status = DocumentStatus.Closed;
-            if (total >= charge.TotalAmount)
+            foreach (var charge in charges)
             {
                 charge.Status = DocumentStatus.Paid;
                 charge.UpdatedAt = DateTime.UtcNow;
@@ -831,4 +918,76 @@ public class DocumentService(
         DateTime.SpecifyKind(
             value.Kind == DateTimeKind.Utc ? value.Date : value.ToUniversalTime().Date,
             DateTimeKind.Utc);
+
+    public async Task<IReadOnlyList<(ReceiptChargeAllocation Allocation, BusinessDocument Charge)>>
+        GetReceiptChargeAllocationsAsync(Guid tenantId, Guid receiptId, CancellationToken ct)
+    {
+        var receiptExists = await db.BusinessDocuments.AnyAsync(
+            d => d.Id == receiptId && d.TenantId == tenantId && d.DocumentType == DocumentType.Receipt, ct);
+        if (!receiptExists)
+            throw new InvalidOperationException("Document not found.");
+
+        var rows = await db.ReceiptChargeAllocations
+            .AsNoTracking()
+            .Include(a => a.ChargeInvoice)
+            .Where(a => a.ReceiptId == receiptId)
+            .OrderBy(a => a.ChargeInvoice.DocumentNumber)
+            .ToListAsync(ct);
+
+        return rows.Select(a => (a, a.ChargeInvoice)).ToList();
+    }
+
+    private async Task<List<BusinessDocument>> LoadAndValidateReceiptChargesAsync(
+        Guid tenantId,
+        IReadOnlyList<Guid> chargeIds,
+        Guid expectedCustomerId,
+        CancellationToken ct)
+    {
+        var charges = await db.BusinessDocuments
+            .Where(d => d.TenantId == tenantId && chargeIds.Contains(d.Id))
+            .OrderBy(d => d.DocumentNumber)
+            .ToListAsync(ct);
+
+        if (charges.Count != chargeIds.Count)
+            throw new InvalidOperationException("One or more charge invoices were not found.");
+
+        Guid? customerId = null;
+        foreach (var charge in charges)
+        {
+            if (charge.DocumentType != DocumentType.ChargeInvoice)
+                throw new InvalidOperationException("Receipt can only reference charge invoices.");
+            if (charge.Status != DocumentStatus.Open)
+                throw new InvalidOperationException("All charge invoices must be open.");
+            customerId ??= charge.CustomerId;
+            if (charge.CustomerId != customerId)
+                throw new InvalidOperationException("All charge invoices must belong to the same customer.");
+            if (await ChargeHasReceiptAsync(tenantId, charge.Id, ct))
+                throw new InvalidOperationException("A receipt already exists for one of the selected invoices.");
+        }
+
+        if (customerId != expectedCustomerId)
+            throw new InvalidOperationException("Charge invoices do not belong to the specified customer.");
+
+        return charges;
+    }
+
+    private async Task<bool> ChargeHasReceiptAsync(Guid tenantId, Guid chargeId, CancellationToken ct) =>
+        await db.ReceiptChargeAllocations.AnyAsync(
+            a => a.ChargeInvoiceId == chargeId &&
+                 a.Receipt.TenantId == tenantId &&
+                 a.Receipt.DocumentType == DocumentType.Receipt,
+            ct) ||
+        await db.BusinessDocuments.AnyAsync(
+            d => d.TenantId == tenantId &&
+                 d.ParentDocumentId == chargeId &&
+                 d.DocumentType == DocumentType.Receipt,
+            ct);
+
+    private static string BuildMultiChargeReceiptDescription(IEnumerable<BusinessDocument> charges)
+    {
+        var nums = charges
+            .OrderBy(c => c.DocumentNumber)
+            .Select(c => BusinessDocumentPdfBuilder.StripDocumentPrefix(c.DocumentNumber));
+        return $"יצא מתוך חשבונות עסקה מספר {string.Join(", ", nums)}";
+    }
 }

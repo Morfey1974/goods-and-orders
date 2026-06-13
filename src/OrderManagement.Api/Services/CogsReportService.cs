@@ -102,16 +102,45 @@ public class CogsReportService(
             .Where(d =>
                 d.TenantId == tenantId
                 && d.DocumentType == DocumentType.Receipt
-                && d.Status == DocumentStatus.Closed
-                && d.ParentDocumentId != null)
+                && d.Status == DocumentStatus.Closed)
             .Include(d => d.PaymentLines)
             .ToListAsync(ct);
+
+        if (receipts.Count == 0)
+            return 0m;
+
+        var receiptIds = receipts.Select(r => r.Id).ToList();
+        var allocationRows = await db.ReceiptChargeAllocations
+            .AsNoTracking()
+            .Where(a => receiptIds.Contains(a.ReceiptId))
+            .ToListAsync(ct);
+        var allocationsByReceipt = allocationRows
+            .GroupBy(a => a.ReceiptId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         var chargePaymentInPeriod = new Dictionary<Guid, decimal>();
 
         foreach (var receipt in receipts)
         {
-            var chargeId = receipt.ParentDocumentId!.Value;
+            if (!allocationsByReceipt.TryGetValue(receipt.Id, out var receiptAllocations))
+            {
+                if (receipt.ParentDocumentId is not { } legacyChargeId)
+                    continue;
+                receiptAllocations =
+                [
+                    new ReceiptChargeAllocation
+                    {
+                        ChargeInvoiceId = legacyChargeId,
+                        AllocatedAmount = receipt.TotalAmount
+                    }
+                ];
+            }
+
+            var receiptLinkedTotal = Math.Round(receiptAllocations.Sum(a => a.AllocatedAmount), 2);
+            if (receiptLinkedTotal <= 0)
+                receiptLinkedTotal = receipt.TotalAmount;
+            if (receiptLinkedTotal <= 0)
+                continue;
 
             foreach (var pl in receipt.PaymentLines)
             {
@@ -126,7 +155,13 @@ public class CogsReportService(
 
                 var currency = string.IsNullOrWhiteSpace(pl.Currency) ? "ILS" : pl.Currency.Trim().ToUpperInvariant();
                 var amountIls = await ResolveAmountIlsAsync(pl.Amount, currency, paymentDate, ct);
-                chargePaymentInPeriod[chargeId] = chargePaymentInPeriod.GetValueOrDefault(chargeId) + amountIls;
+
+                foreach (var alloc in receiptAllocations)
+                {
+                    var share = amountIls * (alloc.AllocatedAmount / receiptLinkedTotal);
+                    chargePaymentInPeriod[alloc.ChargeInvoiceId] =
+                        chargePaymentInPeriod.GetValueOrDefault(alloc.ChargeInvoiceId) + share;
+                }
             }
         }
 

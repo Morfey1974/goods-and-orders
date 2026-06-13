@@ -63,6 +63,28 @@ public class DocumentsController(
         var list = await query.OrderByDescending(d => d.IssueDate).ThenByDescending(d => d.DocumentNumber).ToListAsync(ct);
         var summary = documents.ComputeSummary(list);
 
+        var receiptIds = list.Where(d => d.DocumentType == DocumentType.Receipt).Select(d => d.Id).ToList();
+        var allocationRows = receiptIds.Count == 0
+            ? []
+            : await db.ReceiptChargeAllocations
+                .AsNoTracking()
+                .Include(a => a.ChargeInvoice)
+                .Where(a => receiptIds.Contains(a.ReceiptId))
+                .ToListAsync(ct);
+        var allocationsByReceipt = allocationRows
+            .GroupBy(a => a.ReceiptId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(a => a.ChargeInvoice.DocumentNumber).ToList());
+
+        DocumentDto MapListItem(BusinessDocument d)
+        {
+            if (d.DocumentType != DocumentType.Receipt)
+                return DocumentMappers.ToDto(d);
+            if (!allocationsByReceipt.TryGetValue(d.Id, out var rows) || rows.Count == 0)
+                return DocumentMappers.ToDto(d);
+            var pairs = rows.Select(a => (a, a.ChargeInvoice)).ToList();
+            return DocumentMappers.ToDto(d, pairs[0].ChargeInvoice, pairs);
+        }
+
         var groups = list
             .GroupBy(d => new { d.IssueDate.Year, d.IssueDate.Month })
             .OrderByDescending(g => g.Key.Year)
@@ -71,7 +93,7 @@ public class DocumentsController(
                 $"{g.Key.Year:D4}-{g.Key.Month:D2}",
                 g.Key.Year,
                 g.Key.Month,
-                g.Select(d => DocumentMappers.ToDto(d)).ToList()))
+                g.Select(MapListItem).ToList()))
             .ToList();
 
         return Ok(new DocumentListResponseDto(summary, groups));
@@ -154,14 +176,21 @@ public class DocumentsController(
             await db.Entry(doc).Collection(d => d.Lines).LoadAsync(ct);
 
         BusinessDocument? parentCharge = null;
-        if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
+        IReadOnlyList<(ReceiptChargeAllocation Allocation, BusinessDocument Charge)>? chargeAllocations = null;
+        if (doc.DocumentType == DocumentType.Receipt)
         {
-            parentCharge = await db.BusinessDocuments
-                .AsNoTracking()
-                .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
+            chargeAllocations = await documents.GetReceiptChargeAllocationsAsync(tenantId.Value, doc.Id, ct);
+            if (chargeAllocations.Count > 0)
+                parentCharge = chargeAllocations[0].Charge;
+            else if (doc.ParentDocumentId is { } chargeId)
+            {
+                parentCharge = await db.BusinessDocuments
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
+            }
         }
 
-        return Ok(DocumentMappers.ToDto(doc, parentCharge));
+        return Ok(DocumentMappers.ToDto(doc, parentCharge, chargeAllocations));
     }
 
     [HttpPost]
@@ -173,9 +202,6 @@ public class DocumentsController(
         DocumentType type;
         try { type = DocumentMappers.ParseType(request.DocumentType); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-
-        if (type == DocumentType.Receipt && !request.ParentDocumentId.HasValue)
-            return BadRequest(new { message = "Receipt requires parent charge invoice." });
 
         List<(Guid? ProductId, string Description, decimal Qty, decimal UnitPrice)>? lines = null;
         if (request.Lines is { Count: > 0 })
@@ -204,15 +230,25 @@ public class DocumentsController(
         }
 
         Guid customerId = request.CustomerId;
+        List<Guid>? resolvedChargeIds = null;
         if (type == DocumentType.Receipt)
         {
-            var charge = await db.BusinessDocuments.FirstOrDefaultAsync(
-                d => d.Id == request.ParentDocumentId && d.TenantId == tenantId, ct);
-            if (charge is null)
-                return BadRequest(new { message = "Parent charge invoice not found." });
-            if (charge.DocumentType != DocumentType.ChargeInvoice)
-                return BadRequest(new { message = "Receipt parent must be a charge invoice." });
-            customerId = charge.CustomerId;
+            resolvedChargeIds = request.ChargeInvoiceIds?.Where(id => id != Guid.Empty).Distinct().ToList();
+            if (resolvedChargeIds is null or { Count: 0 })
+            {
+                if (!request.ParentDocumentId.HasValue)
+                    return BadRequest(new { message = "Receipt requires at least one charge invoice." });
+                resolvedChargeIds = [request.ParentDocumentId.Value];
+            }
+
+            var charges = await db.BusinessDocuments
+                .Where(d => d.TenantId == tenantId && resolvedChargeIds.Contains(d.Id))
+                .ToListAsync(ct);
+            if (charges.Count != resolvedChargeIds.Count)
+                return BadRequest(new { message = "One or more charge invoices were not found." });
+            if (charges.Select(c => c.CustomerId).Distinct().Count() != 1)
+                return BadRequest(new { message = "All charge invoices must belong to the same customer." });
+            customerId = charges[0].CustomerId;
         }
 
         try
@@ -225,22 +261,16 @@ public class DocumentsController(
                 request.IssueDate,
                 request.DueDate,
                 request.PaymentMethod,
-                request.ParentDocumentId,
+                request.ParentDocumentId ?? resolvedChargeIds?.FirstOrDefault(),
                 request.OrderId,
                 lines,
                 request.DiscountPercent,
                 request.DiscountAmount,
                 receiptAsDraft: type == DocumentType.Receipt,
                 finalize: request.Finalize,
+                chargeInvoiceIds: resolvedChargeIds,
                 ct);
-            BusinessDocument? parentCharge = null;
-            if (doc.DocumentType == DocumentType.Receipt && doc.ParentDocumentId is { } chargeId)
-            {
-                parentCharge = await db.BusinessDocuments
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
-            }
-            return CreatedAtAction(nameof(Get), new { id = doc.Id }, DocumentMappers.ToDto(doc, parentCharge));
+            return CreatedAtAction(nameof(Get), new { id = doc.Id }, await MapReceiptDtoAsync(doc, tenantId.Value, ct));
         }
         catch (InvalidOperationException ex)
         {
@@ -360,14 +390,7 @@ public class DocumentsController(
                 request.PaymentMethod,
                 request.PaymentDate,
                 ct);
-            BusinessDocument? parentCharge = null;
-            if (receipt.ParentDocumentId is { } chargeId)
-            {
-                parentCharge = await db.BusinessDocuments
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
-            }
-            return Ok(DocumentMappers.ToDto(receipt, parentCharge));
+            return Ok(await MapReceiptDtoAsync(receipt, tenantId.Value, ct));
         }
         catch (InvalidOperationException ex)
         {
@@ -402,14 +425,7 @@ public class DocumentsController(
                 request.Finalize,
                 ct);
 
-            BusinessDocument? parentCharge = null;
-            if (receipt.ParentDocumentId is { } chargeId)
-            {
-                parentCharge = await db.BusinessDocuments
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
-            }
-            return Ok(DocumentMappers.ToDto(receipt, parentCharge));
+            return Ok(await MapReceiptDtoAsync(receipt, tenantId.Value, ct));
         }
         catch (InvalidOperationException ex)
         {
@@ -555,19 +571,31 @@ public class DocumentsController(
                 request?.PaymentDate,
                 ct);
 
-            BusinessDocument? parentCharge = null;
-            if (receipt.ParentDocumentId is { } chargeId)
-            {
-                parentCharge = await db.BusinessDocuments
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
-            }
-            return Ok(DocumentMappers.ToDto(receipt, parentCharge));
+            return Ok(await MapReceiptDtoAsync(receipt, tenantId.Value, ct));
         }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    private async Task<DocumentDto> MapReceiptDtoAsync(BusinessDocument doc, Guid tenantId, CancellationToken ct)
+    {
+        if (doc.DocumentType != DocumentType.Receipt)
+            return DocumentMappers.ToDto(doc);
+
+        var chargeAllocations = await documents.GetReceiptChargeAllocationsAsync(tenantId, doc.Id, ct);
+        BusinessDocument? parentCharge = chargeAllocations.Count > 0
+            ? chargeAllocations[0].Charge
+            : null;
+        if (parentCharge is null && doc.ParentDocumentId is { } chargeId)
+        {
+            parentCharge = await db.BusinessDocuments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == chargeId && d.TenantId == tenantId, ct);
+        }
+
+        return DocumentMappers.ToDto(doc, parentCharge, chargeAllocations);
     }
 
     private static string BuildPdfFileName(BusinessDocument doc)
