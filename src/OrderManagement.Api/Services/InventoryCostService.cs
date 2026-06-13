@@ -97,6 +97,31 @@ public class InventoryCostService(AppDbContext db, WarehouseService warehouse)
             : await IssueFifoAsync(tenantId, productId, warehouseId, quantity, notes, normalizedDate, ct);
     }
 
+    public async Task<decimal> GetAvailableIssueQuantityAsync(
+        Guid tenantId,
+        Guid productId,
+        Guid warehouseId,
+        CancellationToken ct)
+    {
+        var method = await GetMethodAsync(tenantId, ct);
+        if (method == InventoryCostMethod.Wac)
+        {
+            var balance = await db.StockBalances
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.WarehouseId == warehouseId && b.ProductId == productId, ct);
+            return balance?.Quantity ?? 0m;
+        }
+
+        return await db.InventoryLots
+            .AsNoTracking()
+            .Where(l =>
+                l.TenantId == tenantId &&
+                l.ProductId == productId &&
+                l.WarehouseId == warehouseId &&
+                l.QuantityRemaining > 0)
+            .SumAsync(l => l.QuantityRemaining, ct);
+    }
+
     private async Task<StockMovement> IssueFifoAsync(
         Guid tenantId,
         Guid productId,
@@ -137,8 +162,9 @@ public class InventoryCostService(AppDbContext db, WarehouseService warehouse)
 
         if (remaining > 0)
         {
+            var articleCode = await ProductRefFormatter.ArticleCodeAsync(db, tenantId, productId, ct);
             throw new InvalidOperationException(
-                $"Insufficient costed stock for product {productId}: missing {remaining} units in FIFO layers.");
+                $"Insufficient stock for {articleCode} (missing {StockQuantity.Normalize(remaining)} units).");
         }
 
         totalCost = RoundIls(totalCost);

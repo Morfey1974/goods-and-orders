@@ -707,6 +707,20 @@
   font-size: 1rem;
 }
 
+.doc-lines-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.doc-lines-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted, #64748b);
+  line-height: 1.4;
+}
+
 .doc-btn-sm {
   padding: 0.35rem 0.75rem;
   font-size: 0.9rem;

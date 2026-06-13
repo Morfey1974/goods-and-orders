@@ -145,11 +145,7 @@ export type DraftDefaultsContext = {
   today: string;
   chargeTotal: number;
   openBalance: number;
-  /** Tenant (company) bank — bank transfer deposit account. */
-  bankCode?: string;
-  bankBranch?: string;
-  bankAccount?: string;
-  /** Customer bank — check drawer details. */
+  /** Customer bank — payer account (bank transfer / check). */
   customerBankCode?: string;
   customerBankBranch?: string;
   customerBankAccount?: string;
@@ -212,8 +208,12 @@ export function reconcileBankTransferAmounts(
 export function defaultAmountForTab(tab: ReceiptPaymentTypeKey, ctx: DraftDefaultsContext): string {
   if (tab === 'WithholdingTax') {
     const pct = ctx.withholdingPercent ?? 0;
-    if (pct > 0 && ctx.chargeTotal > 0 && ctx.openBalance > 0) {
-      return String(withholdingAmountFromPercent(ctx.chargeTotal, pct));
+    if (pct > 0 && ctx.chargeTotal > 0) {
+      const fromPercent = withholdingAmountFromPercent(ctx.chargeTotal, pct);
+      if (ctx.openBalance > 0) {
+        return String(Math.min(roundMoney(fromPercent), roundMoney(ctx.openBalance)));
+      }
+      return String(fromPercent);
     }
     return '';
   }
@@ -232,9 +232,9 @@ export function buildPaymentDraft(
     return {
       ...base,
       amount,
-      bankNumber: ctx.bankCode ?? '',
-      branchNumber: ctx.bankBranch ?? '',
-      accountNumber: ctx.bankAccount ?? '',
+      bankNumber: ctx.customerBankCode ?? '',
+      branchNumber: ctx.customerBankBranch ?? '',
+      accountNumber: ctx.customerBankAccount ?? '',
       depositDate: ctx.today,
     };
   }
@@ -244,7 +244,7 @@ export function buildPaymentDraft(
     return {
       ...base,
       amount,
-      percent: pct > 0 && ctx.openBalance > 0 ? String(pct) : '',
+      percent: pct > 0 ? String(pct) : '',
     };
   }
 

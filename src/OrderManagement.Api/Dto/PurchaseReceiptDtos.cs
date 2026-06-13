@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using OrderManagement.Api.Entities;
+using OrderManagement.Api.Services;
 
 namespace OrderManagement.Api.Dto;
 
@@ -145,7 +146,7 @@ public static class PurchaseReceiptMappers
 
     private static (decimal? Usd, decimal? Ils) ResolveListAmountsFromLines(PurchaseReceipt r)
     {
-        var currency = NormalizeListCurrency(r.Currency);
+        var currency = PurchaseReceiptCurrency.Normalize(r.Currency);
         if (currency == "USD")
         {
             decimal usd = 0;
@@ -191,13 +192,13 @@ public static class PurchaseReceiptMappers
         if (r.TotalAmount is not > 0)
             return (null, null);
 
-        var currency = NormalizeListCurrency(r.Currency);
+        var currency = PurchaseReceiptCurrency.Normalize(r.Currency);
         if (currency == "USD")
         {
             if (r.UsdIlsRate is > 0)
             {
-                var ils = r.TotalAmount.Value;
-                var usd = RoundListMoney(ils / r.UsdIlsRate.Value);
+                var usd = r.TotalAmount.Value;
+                var ils = RoundListMoney(usd * r.UsdIlsRate.Value);
                 return (usd > 0 ? usd : null, ils);
             }
 
@@ -205,12 +206,6 @@ public static class PurchaseReceiptMappers
         }
 
         return (null, r.TotalAmount);
-    }
-
-    private static string NormalizeListCurrency(string? currency)
-    {
-        var c = string.IsNullOrWhiteSpace(currency) ? "ILS" : currency.Trim().ToUpperInvariant();
-        return c is "NIS" or "₪" ? "ILS" : c.Length > 3 ? c[..3] : c;
     }
 
     private static decimal RoundListMoney(decimal value) =>

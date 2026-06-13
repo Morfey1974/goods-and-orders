@@ -162,20 +162,18 @@ public static class BusinessDocumentPdfRenderer
             if (!string.IsNullOrWhiteSpace(block.Heading))
             {
                 var headingLine = $"{block.Heading}: {block.Title}";
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, headingLine, block.TitleFontSize, bold: true));
+                col.Item().Element(c =>
+                    PdfMixedScriptText.Render(c, headingLine, block.TitleFontSize, bold: true));
             }
             else
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, block.Title, block.TitleFontSize, bold: true));
+                col.Item().Element(c =>
+                    PdfMixedScriptText.Render(c, block.Title, block.TitleFontSize, bold: true));
 
             if (!string.IsNullOrWhiteSpace(block.Subtitle))
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, block.Subtitle!, 10, bold: false));
+                col.Item().Element(c => PdfMixedScriptText.Render(c, block.Subtitle!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(block.Address))
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, block.Address!, 10, bold: false));
+                col.Item().Element(c => PdfMixedScriptText.Render(c, block.Address!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(block.DetailLine))
                 col.Item().AlignRight().Text(block.DetailLine).Style(Regular(10));
@@ -319,27 +317,11 @@ public static class BusinessDocumentPdfRenderer
     private static void RenderProductLineDetailCell(IContainer cell, BusinessDocumentPdfLine line, bool zebra)
     {
         var bg = zebra ? TableRowAltBg : TableRowBg;
-        var c = TableCellBorder(cell).Background(bg).PaddingVertical(6).PaddingHorizontal(5).AlignRight();
-
-        if (string.IsNullOrWhiteSpace(line.Sku))
-        {
-            PdfMixedScriptText.Render(c, line.Description, 9);
-            return;
-        }
-
-        // RTL table: first span is rightmost — article, then " / ", then name.
-        c.ContentFromRightToLeft().Text(t =>
-        {
-            t.Span(line.Sku)
-                .FontFamily(PdfFontRegistry.SansRegular)
-                .FontSize(9)
-                .DirectionFromLeftToRight();
-            t.Span(" / ")
-                .FontFamily(PdfFontRegistry.SansRegular)
-                .FontSize(9)
-                .DirectionFromLeftToRight();
-            PdfMixedScriptText.ComposeRuns(t, line.Description, 9, bold: false);
-        });
+        var c = TableCellBorder(cell).Background(bg).PaddingVertical(6).PaddingHorizontal(5);
+        var detail = string.IsNullOrWhiteSpace(line.Sku)
+            ? line.Description
+            : $"{line.Sku} / {line.Description}";
+        PdfMixedScriptText.Render(c, detail, 9);
     }
 
     private static IContainer TableCellBorder(IContainer cell) =>

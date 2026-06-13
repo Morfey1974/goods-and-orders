@@ -952,9 +952,12 @@ export default {
     contentDescription: 'תיאור של תכולת המסמך',
     contentDescriptionHint: 'לא חובה',
     lineItems: 'פירוט שירותים',
-    addLine: 'הוספת שורה',
+    addLine: 'הוספת שורת טקסט',
     addProduct: 'הוספת פריט',
-    emptyLines: 'עדיין אין פירוט שירותים. לחצו «הוספת פריט» לפתיחת הרשימה.',
+    emptyLines:
+      'עדיין אין שורות. «הוספת שורת טקסט» — תיאור וסכום בלי מלאי; «הוספת פריט» — מרשימת המוצרים.',
+    textLineNoStockHint:
+      'שורה בלי מוצר מהרשימה לא מורידה מלאי — לתשלום שכבר נרשם במערכת אחרת.',
     pickerTitle: 'רשימת פריטים',
     pickerNewItem: 'פריט חדש',
     pickerSearch: 'חיפוש מוצרים',
@@ -1002,7 +1005,7 @@ export default {
     receiptUnsavedLine:
       'יש שורת תשלום שלא נשמרה. לחצו «שמירת שורה» או נקו את השדות.',
     loading: 'טוען…',
-    needLines: 'יש להוסיף לפחות שורה אחת עם פריט וכמות',
+    needLines: 'יש להוסיף לפחות שורה אחת: מוצר מהרשימה או שורת תיאור עם סכום',
     updated: 'המסמך נשמר',
     deleted: 'המסמך נמחק',
     duplicated: 'המסמך שוכפל',

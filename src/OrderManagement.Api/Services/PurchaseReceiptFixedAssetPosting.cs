@@ -6,14 +6,40 @@ namespace OrderManagement.Api.Services;
 
 public static class PurchaseReceiptFixedAssetPosting
 {
+    /// <summary>
+    /// Line amount in ILS for posting and reports.
+    /// USD <see cref="PurchaseReceiptLine.LineTotal"/> is in dollars — never treated as shekels.
+    /// When <see cref="PurchaseReceiptLine.UnitCostIls"/> is set, it is the frozen ₪/unit snapshot.
+    /// </summary>
     public static decimal ResolveLineTotalIls(PurchaseReceipt receipt, PurchaseReceiptLine line)
     {
-        if (line.LineTotal is > 0)
-            return DepreciationCalculator.RoundMoney(line.LineTotal.Value);
+        var qty = StockQuantity.Normalize(line.Quantity);
 
-        var unit = line.UnitCostIls
-            ?? InventoryCostService.ResolveLineUnitCostIls(receipt.Currency, line.UnitPrice, line.UnitCostIls);
-        return DepreciationCalculator.RoundMoney(unit * StockQuantity.Normalize(line.Quantity));
+        if (PurchaseReceiptCurrency.IsIls(receipt.Currency))
+        {
+            if (line.LineTotal is > 0)
+                return DepreciationCalculator.RoundMoney(line.LineTotal.Value);
+            if (line.UnitPrice is > 0)
+                return DepreciationCalculator.RoundMoney(line.UnitPrice.Value * qty);
+            if (line.UnitCostIls is > 0)
+                return DepreciationCalculator.RoundMoney(line.UnitCostIls.Value * qty);
+        }
+        else
+        {
+            if (line.UnitCostIls is > 0)
+                return DepreciationCalculator.RoundMoney(line.UnitCostIls.Value * qty);
+
+            if (receipt.UsdIlsRate is not > 0)
+                throw new InvalidOperationException(
+                    "USD→ILS rate is required to convert purchase line amounts to shekels.");
+
+            if (line.LineTotal is > 0)
+                return DepreciationCalculator.RoundMoney(line.LineTotal.Value * receipt.UsdIlsRate.Value);
+            if (line.UnitPrice is > 0)
+                return DepreciationCalculator.RoundMoney(line.UnitPrice.Value * qty * receipt.UsdIlsRate.Value);
+        }
+
+        throw new InvalidOperationException("Cannot resolve purchase line amount in ILS.");
     }
 
     public static Dictionary<Guid, decimal> AllocateLandedCostToLines(

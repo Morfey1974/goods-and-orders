@@ -426,6 +426,8 @@ public class DocumentService(
         if (charge.DocumentType != DocumentType.ChargeInvoice)
             throw new InvalidOperationException("Stock is deducted only for charge invoices.");
 
+        await stock.ValidateChargeStockAsync(tenantId, charge, ct);
+
         foreach (var line in charge.Lines.Where(l => l.ProductId.HasValue))
         {
             await stock.DeductProductSaleAsync(

@@ -953,9 +953,12 @@ export default {
     contentDescription: 'Document contents description',
     contentDescriptionHint: 'Optional',
     lineItems: 'Line items',
-    addLine: 'Add line',
+    addLine: 'Add text line',
     addProduct: 'Add product / service',
-    emptyLines: 'No items yet. Click «Add product / service» to open the item list.',
+    emptyLines:
+      'No items yet. «Add text line» for description and amount without stock; «Add product» from catalog.',
+    textLineNoStockHint:
+      'A line without a catalog product does not deduct stock — use when payment was already recorded elsewhere.',
     pickerTitle: 'Item list',
     pickerNewItem: 'New item',
     pickerSearch: 'Search products',
@@ -1003,7 +1006,7 @@ export default {
     receiptUnsavedLine:
       'You have an unsaved payment line. Click «Save line» or clear the fields.',
     loading: 'Loading…',
-    needLines: 'Add at least one line with item and quantity',
+    needLines: 'Add at least one line: a catalog product or a text line with description and amount',
     updated: 'Document saved',
     deleted: 'Document deleted',
     duplicated: 'Document duplicated',

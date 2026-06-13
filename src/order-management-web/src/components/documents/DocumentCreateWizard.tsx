@@ -121,6 +121,22 @@ type FormSnapshot = {
   pendingClientOrderFileName: string;
 };
 
+function lineToSnapshot(
+  line: { productId?: string; description: string; quantity: number; unitPrice: number | string },
+  products?: { id: string; name: string }[]
+): FormSnapshot['lines'][number] {
+  const productId = line.productId ?? '';
+  const quantity = normalizeStockQuantity(line.quantity);
+  const unitPrice = finalizePriceDraft(
+    typeof line.unitPrice === 'number' ? String(line.unitPrice) : line.unitPrice
+  );
+  const trimmed = line.description.trim();
+  const description =
+    trimmed ||
+    (productId && products ? products.find((p) => p.id === productId)?.name ?? '' : '');
+  return { productId, description, quantity, unitPrice };
+}
+
 function emptyFormSnapshot(issueDate: string): FormSnapshot {
   return {
     customerId: '',
@@ -141,7 +157,8 @@ function emptyFormSnapshot(issueDate: string): FormSnapshot {
 
 function snapshotFromLoaded(
   loaded: ReturnType<typeof loadDocumentIntoForm>,
-  clientOrder?: Pick<Document, 'clientOrderReceivedAt' | 'clientOrderReference' | 'clientOrderFileName'>
+  clientOrder?: Pick<Document, 'clientOrderReceivedAt' | 'clientOrderReference' | 'clientOrderFileName'>,
+  products?: { id: string; name: string }[]
 ): FormSnapshot {
   return {
     customerId: loaded.customer.id,
@@ -149,12 +166,7 @@ function snapshotFromLoaded(
     dueDate: loaded.dueDate,
     description: loaded.description,
     notes: loaded.notes,
-    lines: loaded.lines.map((l) => ({
-      productId: l.productId,
-      description: l.description,
-      quantity: l.quantity,
-      unitPrice: finalizePriceDraft(l.unitPrice),
-    })),
+    lines: loaded.lines.map((l) => lineToSnapshot(l, products)),
     showDiscount: loaded.showDiscount,
     discountKind: loaded.discountKind,
     discountValue: loaded.discountValue,
@@ -178,6 +190,48 @@ function draftFromPicked(p: PickedReceiptProduct): DraftLine {
     description: p.product.name,
     quantity: p.quantity,
     unitPrice: String(p.unitPrice ?? p.product.unitPrice),
+  };
+}
+
+function draftEmptyTextLine(): DraftLine {
+  return {
+    key: crypto.randomUUID(),
+    productId: '',
+    description: '',
+    quantity: 1,
+    unitPrice: '',
+  };
+}
+
+function isPersistableLine(line: DraftLine): boolean {
+  const qty = normalizeStockQuantity(line.quantity);
+  if (qty <= 0) return false;
+  if (line.productId) return true;
+  const price = finalizePriceDraft(line.unitPrice);
+  return line.description.trim().length > 0 && price > 0;
+}
+
+function toLinePayload(
+  line: DraftLine,
+  products: { id: string; name: string }[]
+): {
+  productId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+} {
+  const productId = line.productId || undefined;
+  const quantity = normalizeStockQuantity(line.quantity);
+  const unitPrice = finalizePriceDraft(line.unitPrice);
+  const description =
+    line.description.trim() ||
+    (productId ? products.find((p) => p.id === productId)?.name : '') ||
+    '';
+  return {
+    ...(productId ? { productId } : {}),
+    description,
+    quantity,
+    unitPrice,
   };
 }
 
@@ -267,20 +321,14 @@ export function DocumentCreateWizard({
   const canPreviewPdf = Boolean(effectiveDocId && editDoc);
 
   const captureSnapshot = useCallback((): string => {
-    const validLines = lines.filter((l) => l.productId && l.quantity > 0);
+    const validLines = lines.filter(isPersistableLine);
     return serializeSnapshot({
       customerId,
       issueDate,
       dueDate,
       description,
       notes,
-      lines: validLines.map((l) => ({
-        productId: l.productId,
-        description:
-          l.description.trim() || products.find((p) => p.id === l.productId)?.name || '',
-        quantity: normalizeStockQuantity(l.quantity),
-        unitPrice: finalizePriceDraft(l.unitPrice),
-      })),
+      lines: validLines.map((l) => lineToSnapshot(l, products)),
       showDiscount,
       discountKind,
       discountValue,
@@ -351,7 +399,7 @@ export function DocumentCreateWizard({
           setEditDoc(doc);
           applyLoadedDocument(loaded);
           applyClientOrderFromDoc(doc);
-          savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loaded, doc));
+          savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loaded, doc, products));
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
         .finally(() => setLoadingEdit(false));
@@ -368,7 +416,7 @@ export function DocumentCreateWizard({
           setEditDoc(null);
           setPersistedDocId(null);
           savedSnapshotRef.current = serializeSnapshot(
-            snapshotFromLoaded({ ...loaded, issueDate: todayIso() })
+            snapshotFromLoaded({ ...loaded, issueDate: todayIso() }, undefined, products)
           );
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
@@ -473,13 +521,18 @@ export function DocumentCreateWizard({
     [lines]
   );
 
+  const addTextLine = () => {
+    setLines((prev) => [...prev, draftEmptyTextLine()]);
+    setError('');
+  };
+
   const persistDocument = async (closeOnSuccess: boolean): Promise<boolean> => {
     if (!token) return false;
     if (!customerId) {
       setError(t('documents.customerRequired'));
       return false;
     }
-    const validLines = lines.filter((l) => l.productId && l.quantity > 0);
+    const validLines = lines.filter(isPersistableLine);
     if (!validLines.length) {
       setError(t('documents.needLines'));
       return false;
@@ -489,12 +542,7 @@ export function DocumentCreateWizard({
     setInfoMessage('');
     try {
       const bodyDescription = [description.trim(), notes.trim()].filter(Boolean).join('\n\n') || undefined;
-      const linePayload = validLines.map((l) => ({
-        productId: l.productId,
-        description: l.description.trim() || products.find((p) => p.id === l.productId)?.name || '',
-        quantity: normalizeStockQuantity(l.quantity),
-        unitPrice: finalizePriceDraft(l.unitPrice),
-      }));
+      const linePayload = validLines.map((l) => toLinePayload(l, products));
       const discountPayload = {
         discountPercent:
           showDiscount && discountKind === 'percent' && discountValue > 0 ? discountValue : undefined,
@@ -530,7 +578,8 @@ export function DocumentCreateWizard({
       setEditVersion(saved.version);
       setEditTitle(saved.documentNumber);
 
-      savedSnapshotRef.current = captureSnapshot();
+      const loadedForm = loadDocumentIntoForm(saved);
+      savedSnapshotRef.current = serializeSnapshot(snapshotFromLoaded(loadedForm, saved, products));
 
       if (closeOnSuccess) {
         onSuccess(wasUpdate ? t('documents.updated') : t('documents.created'));
@@ -802,15 +851,27 @@ export function DocumentCreateWizard({
             <section className="doc-panel doc-lines-panel">
               <div className="doc-lines-head">
                 <h2>{t('documents.lineItems')}</h2>
-                <button
-                  type="button"
-                  className="btn btn-secondary doc-btn-sm"
-                  onClick={() => setPickerOpen(true)}
-                  disabled={!products.length}
-                >
-                  + {t('documents.addProduct')}
-                </button>
+                <div className="doc-lines-head-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary doc-btn-sm"
+                    onClick={addTextLine}
+                  >
+                    + {t('documents.addLine')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary doc-btn-sm"
+                    onClick={() => setPickerOpen(true)}
+                    disabled={!products.length}
+                  >
+                    + {t('documents.addProduct')}
+                  </button>
+                </div>
               </div>
+              {documentType === 'ChargeInvoice' && (
+                <p className="muted doc-lines-hint">{t('documents.textLineNoStockHint')}</p>
+              )}
 
               <div className="doc-lines-layout">
                 <div className="doc-lines-table-wrap">

@@ -148,16 +148,16 @@ public static class BusinessDocumentPdfBuilder
         return document.DocumentType switch
         {
             DocumentType.Quote => FormatProjectLine(document.Description),
-            DocumentType.ChargeInvoice => BuildChargeInvoiceBanner(sourceQuote),
+            DocumentType.ChargeInvoice => BuildChargeInvoiceBanner(document, sourceQuote),
             DocumentType.Receipt => BuildReceiptBanner(sourceChargeForReceipt, sourceQuote),
             _ => null
         };
     }
 
-    private static string? BuildChargeInvoiceBanner(BusinessDocument? sourceQuote)
+    private static string? BuildChargeInvoiceBanner(BusinessDocument charge, BusinessDocument? sourceQuote)
     {
         if (sourceQuote is null)
-            return null;
+            return FormatProjectLine(charge.Description);
 
         var quoteNum = StripDocumentPrefix(sourceQuote.DocumentNumber);
         var parts = new List<string> { $"יצא מתוך הצעת מחיר מס׳ {quoteNum}" };

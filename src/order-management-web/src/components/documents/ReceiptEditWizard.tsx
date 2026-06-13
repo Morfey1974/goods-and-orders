@@ -129,15 +129,12 @@ export function ReceiptEditWizard({
       today: issueDate || todayIso(),
       chargeTotal,
       openBalance,
-      bankCode: tenantProfile?.bankCode ?? '',
-      bankBranch: tenantProfile?.bankBranch ?? '',
-      bankAccount: tenantProfile?.bankAccountNumber ?? '',
       customerBankCode: normalizeBankCode(customer?.bankCode ?? '') || (customer?.bankCode ?? ''),
       customerBankBranch: customer?.bankBranch ?? '',
       customerBankAccount: customer?.bankAccountNumber ?? '',
       withholdingPercent,
     }),
-    [issueDate, chargeTotal, openBalance, tenantProfile, customer, withholdingPercent]
+    [issueDate, chargeTotal, openBalance, customer, withholdingPercent]
   );
 
   const detailLabels = useMemo(
@@ -254,8 +251,13 @@ export function ReceiptEditWizard({
       return;
     }
     setEditingLineId(null);
+    const canBuildDraft =
+      openBalance > 0 ||
+      (activeTab === 'WithholdingTax' &&
+        (withholdingPercent ?? 0) > 0 &&
+        chargeTotal > 0);
     setDraft(
-      openBalance > 0
+      canBuildDraft
         ? buildPaymentDraft(activeTab, draftContext)
         : emptyPaymentDraft(issueDate || todayIso())
     );
@@ -264,14 +266,31 @@ export function ReceiptEditWizard({
 
   useEffect(() => {
     if (!open || !isDraft || loading || editingLineId) return;
-    if (!tenantProfile && !customer) return;
+    if (!tenantProfile && !customer && chargeTotal <= 0) return;
+    const canBuildDraft =
+      openBalance > 0 ||
+      (activeTab === 'WithholdingTax' &&
+        (withholdingPercent ?? 0) > 0 &&
+        chargeTotal > 0);
     setDraft(
-      openBalance > 0
+      canBuildDraft
         ? buildPaymentDraft(activeTab, draftContext)
         : emptyPaymentDraft(issueDate || todayIso())
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh bank defaults when profile/customer loads
-  }, [tenantProfile?.id, customer?.id, loading, open, isDraft]);
+  }, [
+    tenantProfile?.id,
+    customer?.id,
+    loading,
+    open,
+    isDraft,
+    editingLineId,
+    activeTab,
+    chargeTotal,
+    openBalance,
+    withholdingPercent,
+    issueDate,
+    draftContext,
+  ]);
 
   const setDraftField = <K extends keyof PaymentDraftFields>(key: K, value: PaymentDraftFields[K]) => {
     setDraft((prev) => {

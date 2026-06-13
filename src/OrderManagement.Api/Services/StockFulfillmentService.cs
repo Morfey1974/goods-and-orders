@@ -53,7 +53,6 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
 
             if (bomLines.Count > 0)
             {
-                // Assembled FG: no FG stock — deduct BOM components only.
                 foreach (var line in bomLines)
                 {
                     var component = await db.Products.FirstOrDefaultAsync(
@@ -77,7 +76,6 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
                 return;
             }
 
-            // Purchased finished good (no BOM): deduct FG stock when tracked.
             if (!ProductInventoryHelper.TracksStock(product))
                 return;
 
@@ -93,6 +91,117 @@ public class StockFulfillmentService(AppDbContext db, WarehouseService warehouse
         var wh = await warehouse.GetForProductAsync(tenantId, product, ct);
         await inventoryCost.IssueAsync(
             tenantId, product.Id, wh.Id, quantity, note, when, ct);
+    }
+
+    /// <summary>
+    /// Validates stock for all charge lines (including BOM components) before any deduction.
+    /// </summary>
+    public async Task ValidateChargeStockAsync(
+        Guid tenantId,
+        BusinessDocument charge,
+        CancellationToken ct)
+    {
+        if (charge.DocumentType != DocumentType.ChargeInvoice)
+            throw new InvalidOperationException("Stock is validated only for charge invoices.");
+
+        var requirements = new Dictionary<(Guid ProductId, Guid WarehouseId), decimal>();
+
+        foreach (var line in charge.Lines.Where(l => l.ProductId.HasValue))
+        {
+            await AccumulateSaleRequirementsAsync(
+                tenantId,
+                line.ProductId!.Value,
+                line.Quantity,
+                requirements,
+                ct);
+        }
+
+        var shortages = new List<string>();
+        foreach (var ((productId, warehouseId), required) in requirements)
+        {
+            var available = await inventoryCost.GetAvailableIssueQuantityAsync(
+                tenantId, productId, warehouseId, ct);
+            if (available >= required)
+                continue;
+
+            var articleCode = await ProductRefFormatter.ArticleCodeAsync(db, tenantId, productId, ct);
+            var missing = StockQuantity.Normalize(required - available);
+            shortages.Add($"{articleCode} (missing {missing} units)");
+        }
+
+        if (shortages.Count == 0)
+            return;
+
+        throw new InvalidOperationException(
+            shortages.Count == 1
+                ? $"Insufficient stock for {shortages[0]}."
+                : $"Insufficient stock: {string.Join("; ", shortages)}.");
+    }
+
+    private async Task AccumulateSaleRequirementsAsync(
+        Guid tenantId,
+        Guid productId,
+        decimal quantity,
+        Dictionary<(Guid ProductId, Guid WarehouseId), decimal> requirements,
+        CancellationToken ct)
+    {
+        if (quantity <= 0)
+            return;
+
+        var product = await db.Products.FirstOrDefaultAsync(
+            p => p.Id == productId && p.TenantId == tenantId, ct);
+        if (product is null)
+            return;
+
+        if (product.ProductType is ProductType.FinishedGood or ProductType.Bundle)
+        {
+            var bomLines = await db.BomLines
+                .Where(b => b.ParentProductId == product.Id)
+                .ToListAsync(ct);
+
+            if (bomLines.Count > 0)
+            {
+                foreach (var line in bomLines)
+                {
+                    var component = await db.Products.FirstOrDefaultAsync(
+                        p => p.Id == line.ComponentProductId && p.TenantId == tenantId, ct);
+                    if (component is null) continue;
+                    if (!ProductInventoryHelper.TracksStock(component)) continue;
+
+                    var cpWh = await warehouse.GetForProductAsync(tenantId, component, ct);
+                    var componentQty = StockQuantity.Normalize(quantity * line.Quantity);
+                    if (componentQty <= 0) continue;
+
+                    var key = (component.Id, cpWh.Id);
+                    requirements[key] = requirements.GetValueOrDefault(key) + componentQty;
+                }
+
+                return;
+            }
+
+            if (!ProductInventoryHelper.TracksStock(product))
+                return;
+
+            var fgWh = await warehouse.GetForProductAsync(tenantId, product, ct);
+            AddRequirement(requirements, product.Id, fgWh.Id, quantity);
+            return;
+        }
+
+        if (!ProductInventoryHelper.TracksStock(product))
+            return;
+
+        var wh = await warehouse.GetForProductAsync(tenantId, product, ct);
+        AddRequirement(requirements, product.Id, wh.Id, quantity);
+    }
+
+    private static void AddRequirement(
+        Dictionary<(Guid ProductId, Guid WarehouseId), decimal> requirements,
+        Guid productId,
+        Guid warehouseId,
+        decimal quantity)
+    {
+        var key = (productId, warehouseId);
+        requirements[key] = requirements.GetValueOrDefault(key) + StockQuantity.Normalize(quantity);
     }
 
     [Obsolete("Use DeductProductSaleAsync")]

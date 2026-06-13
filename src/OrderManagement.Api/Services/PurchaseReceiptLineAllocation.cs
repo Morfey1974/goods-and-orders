@@ -46,6 +46,13 @@ public static class PurchaseReceiptLineAllocation
         var shares = landedShares ?? ComputeLandedSharesFromReceipt(receipt);
         var total = stockLines.Sum(l =>
         {
+            // Posted stock: UnitCostIls already includes landed cost in the unit price.
+            if (receipt.Status == PurchaseReceiptStatus.Posted && l.UnitCostIls is > 0)
+            {
+                return DepreciationCalculator.RoundMoney(
+                    l.UnitCostIls.Value * StockQuantity.Normalize(l.Quantity));
+            }
+
             var baseIls = ResolveLineBaseIls(receipt, l);
             var landed = shares.GetValueOrDefault(l.Id);
             return DepreciationCalculator.RoundMoney(baseIls + landed);

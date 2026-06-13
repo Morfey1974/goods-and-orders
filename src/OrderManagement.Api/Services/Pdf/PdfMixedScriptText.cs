@@ -5,13 +5,7 @@ using QuestPDF.Infrastructure;
 
 namespace OrderManagement.Api.Services.Pdf;
 
-public enum PdfScriptKind
-{
-    Hebrew,
-    Sans,
-}
-
-/// <summary>Mixed user text: logical-order spans with per-run direction + font (QuestPDF bidi).</summary>
+/// <summary>Mixed user text in PDF via QuestPDF/HarfBuzz bidi + Hebrew/Sans font fallback.</summary>
 public static class PdfMixedScriptText
 {
     public static void Render(
@@ -23,46 +17,26 @@ public static class PdfMixedScriptText
     {
         var text = value ?? "";
         var target = alignCenter ? container.AlignCenter() : container.AlignRight();
-        if (IsRtlDominant(text))
+        if (ShouldUseRtlLayout(text))
             target = target.ContentFromRightToLeft();
-        target.Text(t => ComposeRuns(t, text, fontSize, bold));
+        target.Text(text).Style(UserTextStyle(fontSize, bold));
     }
 
-    /// <summary>Dark banner above document line tables — explicit RTL run order for Hebrew + Latin.</summary>
+    /// <summary>Dark banner above document line tables — Hebrew + Latin in logical order.</summary>
     public static void RenderDocumentTableBanner(IContainer container, string? value, float fontSize)
     {
         var text = value ?? "";
-        container.ContentFromRightToLeft().Text(t =>
-        {
-            foreach (var (kind, run) in SplitRuns(text))
-            {
-                var span = t.Span(run)
-                    .FontFamily(FontFamily(kind, bold: true))
-                    .FontSize(fontSize)
-                    .FontColor(Colors.White)
-                    .Bold();
-
-                if (kind == PdfScriptKind.Hebrew)
-                    span.DirectionFromRightToLeft();
-                else
-                    span.DirectionFromLeftToRight();
-            }
-        });
+        container
+            .ContentFromRightToLeft()
+            .AlignRight()
+            .Text(text)
+            .Style(UserTextStyle(fontSize, bold: true).FontColor(Colors.White));
     }
 
+    /// <summary>Legacy hook for inline <see cref="TextDescriptor"/> callbacks — prefer <see cref="Render"/>.</summary>
     public static void ComposeRuns(TextDescriptor text, string value, float fontSize, bool bold)
     {
-        foreach (var (kind, run) in SplitRuns(value))
-        {
-            var span = text.Span(run)
-                .FontFamily(FontFamily(kind, bold))
-                .FontSize(fontSize);
-
-            if (kind == PdfScriptKind.Hebrew)
-                span.DirectionFromRightToLeft();
-            else
-                span.DirectionFromLeftToRight();
-        }
+        text.Span(value ?? "").Style(UserTextStyle(fontSize, bold));
     }
 
     public static TextStyle UserTextStyle(float fontSize, bool bold)
@@ -72,60 +46,24 @@ public static class PdfMixedScriptText
         return TextStyle.Default.FontFamily(hebrew, sans).FontSize(fontSize);
     }
 
-    public static IReadOnlyList<(PdfScriptKind Kind, string Text)> SplitRuns(string? text)
+    /// <summary>RTL layout when Hebrew leads or when Hebrew is mixed with Latin/digits (Israeli documents).</summary>
+    public static bool ShouldUseRtlLayout(string text)
     {
-        if (string.IsNullOrEmpty(text))
-            return [(PdfScriptKind.Sans, "")];
-
-        var runs = new List<(PdfScriptKind, string)>();
-        var sb = new System.Text.StringBuilder();
-        PdfScriptKind? current = null;
-
-        foreach (var ch in text)
-        {
-            if (char.IsWhiteSpace(ch))
-            {
-                sb.Append(ch);
-                if (current is null)
-                    current = PdfScriptKind.Sans;
-                continue;
-            }
-
-            var kind = Classify(ch);
-            if (current is null)
-            {
-                current = kind;
-                sb.Append(ch);
-                continue;
-            }
-
-            if (kind == current)
-            {
-                sb.Append(ch);
-            }
-            else
-            {
-                runs.Add((current.Value, sb.ToString()));
-                sb.Clear();
-                sb.Append(ch);
-                current = kind;
-            }
-        }
-
-        if (sb.Length > 0 && current.HasValue)
-            runs.Add((current.Value, sb.ToString()));
-
-        return runs;
+        if (string.IsNullOrEmpty(text)) return false;
+        if (IsRtlDominant(text)) return true;
+        return ContainsHebrew(text);
     }
 
-    private static PdfScriptKind Classify(char c) =>
-        c is (>= '\u0590' and <= '\u05FF') ? PdfScriptKind.Hebrew : PdfScriptKind.Sans;
-
-    public static string FontFamily(PdfScriptKind kind, bool bold) => kind switch
+    public static bool ContainsHebrew(string text)
     {
-        PdfScriptKind.Hebrew => bold ? PdfFontRegistry.HebrewBold : PdfFontRegistry.HebrewRegular,
-        _ => bold ? PdfFontRegistry.SansBold : PdfFontRegistry.SansRegular,
-    };
+        foreach (var ch in text)
+        {
+            if (ch is >= '\u0590' and <= '\u05FF')
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>First strong character, like HTML dir="auto".</summary>
     public static bool IsRtlDominant(string text)

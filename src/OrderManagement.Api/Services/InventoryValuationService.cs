@@ -172,12 +172,16 @@ public class InventoryValuationService(AppDbContext db)
         Guid? warehouseId,
         CancellationToken ct)
     {
+        var historical = IsHistoricalAsOf(effectiveDate);
+        var restoredQtyByLot = historical
+            ? await SumIssueAllocationsAfterDateAsync(tenantId, effectiveDate, ct)
+            : null;
+
         var query =
             from lot in db.InventoryLots.AsNoTracking()
             join p in db.Products.AsNoTracking() on lot.ProductId equals p.Id
             join w in db.Warehouses.AsNoTracking() on lot.WarehouseId equals w.Id
             where lot.TenantId == tenantId &&
-                  lot.QuantityRemaining > 0 &&
                   lot.ReceivedAt <= effectiveDate
             select new { lot, p, w };
 
@@ -222,30 +226,66 @@ public class InventoryValuationService(AppDbContext db)
                 select new { LineId = line.Id, receipt.Id, receipt.ReceiptNumber }
             ).ToDictionaryAsync(x => x.LineId, x => new ReceiptLineInfo(x.Id, x.ReceiptNumber), ct);
 
-        return raw.Select(x =>
-        {
-            ReceiptLineInfo? receiptInfo = null;
-            if (x.SourceType == InventoryLotSource.PurchaseReceipt && x.SourceId is { } lineId)
-                receiptByLineId.TryGetValue(lineId, out receiptInfo);
+        return raw
+            .Select(x =>
+            {
+                var qty = x.QuantityRemaining;
+                if (historical && restoredQtyByLot!.TryGetValue(x.Id, out var restored))
+                    qty = StockQuantity.Normalize(qty + restored);
 
-            return new OpenLotRow(
-                x.Id,
-                x.ProductId,
-                x.ArticleCode,
-                x.LegacySku,
-                x.ProductName,
-                x.WarehouseId,
-                x.WarehouseName,
-                x.QuantityRemaining,
-                x.UnitCostIls,
-                x.ReceivedAt,
-                x.SourceType.ToString(),
-                x.SourceId,
-                receiptInfo?.ReceiptId,
-                receiptInfo?.ReceiptNumber,
-                ResolveSourceLabel(x.SourceType, x.ReceivedAt, receiptInfo?.ReceiptNumber));
-        }).ToList();
+                return new { x, qty };
+            })
+            .Where(x => x.qty > 0)
+            .Select(x =>
+            {
+                ReceiptLineInfo? receiptInfo = null;
+                if (x.x.SourceType == InventoryLotSource.PurchaseReceipt && x.x.SourceId is { } lineId)
+                    receiptByLineId.TryGetValue(lineId, out receiptInfo);
+
+                return new OpenLotRow(
+                    x.x.Id,
+                    x.x.ProductId,
+                    x.x.ArticleCode,
+                    x.x.LegacySku,
+                    x.x.ProductName,
+                    x.x.WarehouseId,
+                    x.x.WarehouseName,
+                    x.qty,
+                    x.x.UnitCostIls,
+                    x.x.ReceivedAt,
+                    x.x.SourceType.ToString(),
+                    x.x.SourceId,
+                    receiptInfo?.ReceiptId,
+                    receiptInfo?.ReceiptNumber,
+                    ResolveSourceLabel(x.x.SourceType, x.x.ReceivedAt, receiptInfo?.ReceiptNumber));
+            })
+            .ToList();
     }
+
+    /// <summary>
+    /// Issue allocations after as-of date — add back to current lot qty for historical valuation.
+    /// </summary>
+    private async Task<Dictionary<Guid, decimal>> SumIssueAllocationsAfterDateAsync(
+        Guid tenantId,
+        DateTime asOfInclusive,
+        CancellationToken ct)
+    {
+        var cutoff = asOfInclusive.Date.AddDays(1);
+
+        return await (
+            from a in db.InventoryLotAllocations.AsNoTracking()
+            join m in db.StockMovements.AsNoTracking() on a.StockMovementId equals m.Id
+            where a.TenantId == tenantId
+                  && m.MovementType == StockMovementType.Issue
+                  && m.MovementDate >= cutoff
+            group a by a.InventoryLotId
+            into g
+            select new { LotId = g.Key, Qty = g.Sum(x => x.Quantity) }
+        ).ToDictionaryAsync(x => x.LotId, x => x.Qty, ct);
+    }
+
+    private static bool IsHistoricalAsOf(DateTime effectiveDate) =>
+        effectiveDate.Date < DateTime.UtcNow.Date;
 
     private static string? ResolveSourceLabel(
         InventoryLotSource sourceType,

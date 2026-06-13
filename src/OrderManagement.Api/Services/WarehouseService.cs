@@ -258,7 +258,10 @@ public class WarehouseService(AppDbContext db)
             var delta = type == StockMovementType.Receipt ? quantity : -quantity;
             balance.Quantity = StockQuantity.Normalize(balance.Quantity + delta);
             if (balance.Quantity < 0)
-                throw new InvalidOperationException("Insufficient stock.");
+            {
+                var articleCode = await ProductRefFormatter.ArticleCodeAsync(db, tenantId, productId, ct);
+                throw new InvalidOperationException($"Insufficient stock for {articleCode}.");
+            }
         }
 
         var when = movementDate ?? DateTime.UtcNow;

@@ -332,16 +332,13 @@ internal static class PdfLetterheadRenderer
         container.Column(col =>
         {
             col.Spacing(2);
-            col.Item().AlignRight().Text(t =>
-                PdfMixedScriptText.ComposeRuns(t, model.SupplierName, 22, bold: true));
+            col.Item().Element(c => PdfMixedScriptText.Render(c, model.SupplierName, 22, bold: true));
 
             if (!string.IsNullOrWhiteSpace(model.SupplierTagline))
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, model.SupplierTagline!, 10, bold: false));
+                col.Item().Element(c => PdfMixedScriptText.Render(c, model.SupplierTagline!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(model.SupplierAddress))
-                col.Item().AlignRight().Text(t =>
-                    PdfMixedScriptText.ComposeRuns(t, model.SupplierAddress!, 10, bold: false));
+                col.Item().Element(c => PdfMixedScriptText.Render(c, model.SupplierAddress!, 10, bold: false));
 
             if (!string.IsNullOrWhiteSpace(model.SupplierTaxLine))
                 col.Item().AlignRight().Text(model.SupplierTaxLine).Style(Regular(10));
