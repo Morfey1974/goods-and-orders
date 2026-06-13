@@ -13,6 +13,8 @@ import { dateInputToUtcIso, isoToDateInput, todayDateInput } from '../../lib/dat
 import { ISRAELI_BANKS } from '../../data/israeliBanks';
 import {
   RECEIPT_PAYMENT_TABS,
+  applyCustomerBankDefaults,
+  applyWithholdingDefaults,
   buildDetailsJson,
   buildPaymentDraft,
   draftFromSavedLine,
@@ -21,7 +23,10 @@ import {
   formatLineDateDisplay,
   formatPaymentLineDetail,
   lineDateForType,
+  mergePaymentDraftPreservingFields,
   parseDetailsJson,
+  shouldBuildPaymentDraft,
+  dedupePaymentLines,
   reconcileBankTransferAmounts,
   roundMoney,
   withholdingAmountFromPercent,
@@ -82,7 +87,7 @@ type Props = {
   preselectedChargeIds?: string[];
   onClose: () => void;
   onSuccess: (message: string) => void;
-  onDraftSaved?: () => void;
+  onDraftSaved?: (doc: Document) => void;
   onPreviewPdf?: (doc: Document) => void;
   onSendEmail?: (doc: Document) => void;
 };
@@ -125,6 +130,7 @@ export function ReceiptEditWizard({
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [parentDocumentId, setParentDocumentId] = useState('');
   const skipTabDraftResetRef = useRef(false);
+  const skipNextFetchRef = useRef(false);
 
   const linkedChargeOptions = useMemo(() => {
     if (doc?.chargeAllocations?.length) {
@@ -149,7 +155,6 @@ export function ReceiptEditWizard({
     () => linkedChargeOptions[0] ?? openCharges.find((c) => c.id === parentDocumentId) ?? null,
     [linkedChargeOptions, openCharges, parentDocumentId]
   );
-  const isMultiCharge = linkedChargeOptions.length > 1;
   const isDraft = composeMode && !doc ? true : doc?.status === 'Draft';
   const chargeTotal = resolveLinkedChargeTotal(doc, linkedChargeOptions);
   const chargeNumber =
@@ -172,7 +177,15 @@ export function ReceiptEditWizard({
       customerBankAccount: customer?.bankAccountNumber ?? '',
       withholdingPercent,
     }),
-    [issueDate, chargeTotal, openBalance, customer, withholdingPercent]
+    [
+      issueDate,
+      chargeTotal,
+      openBalance,
+      customer?.bankCode,
+      customer?.bankBranch,
+      customer?.bankAccountNumber,
+      withholdingPercent,
+    ]
   );
 
   const detailLabels = useMemo(
@@ -186,6 +199,26 @@ export function ReceiptEditWizard({
     }),
     [t]
   );
+
+  const syncPaymentDraftFromContext = (
+    prev: PaymentDraftFields,
+    tab: ReceiptPaymentTypeKey,
+    ctx: typeof draftContext
+  ): PaymentDraftFields => {
+    const canBuild = shouldBuildPaymentDraft(tab, ctx);
+    const built = canBuild
+      ? buildPaymentDraft(tab, ctx)
+      : applyCustomerBankDefaults(emptyPaymentDraft(ctx.today), ctx);
+    return applyWithholdingDefaults(
+      mergePaymentDraftPreservingFields(
+        prev,
+        applyCustomerBankDefaults(built, ctx),
+        tab
+      ),
+      ctx,
+      tab
+    );
+  };
 
   const handleClose = () => {
     persistSize();
@@ -211,10 +244,10 @@ export function ReceiptEditWizard({
   useEffect(() => {
     if (!open || !token) return;
     if (composeMode && !receiptId) {
+      if (doc) return;
       setLoading(false);
       setError('');
       setInfoMessage('');
-      setDoc(null);
       const initialCharges =
         preselectedChargeIds.length > 0
           ? openCharges.filter((c) => preselectedChargeIds.includes(c.id))
@@ -234,16 +267,25 @@ export function ReceiptEditWizard({
       setVersion(1);
       setEditingLineId(null);
       setDraft(
-        buildPaymentDraft('BankTransfer', {
-          today: todayIso(),
-          chargeTotal: initialTotal,
-          openBalance: initialTotal,
-        })
+        applyCustomerBankDefaults(
+          buildPaymentDraft('BankTransfer', {
+            ...draftContext,
+            today: todayIso(),
+            chargeTotal: initialTotal,
+            openBalance: initialTotal,
+          }),
+          draftContext
+        )
       );
       setActiveTab('BankTransfer');
       return;
     }
     if (!receiptId) return;
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     documentsApi
@@ -268,31 +310,89 @@ export function ReceiptEditWizard({
         const paid = lines.reduce((s, l) => s + l.amount, 0);
         const balance = Math.max(0, roundMoney(linkedTotal - paid));
         setDraft(
-          buildPaymentDraft('BankTransfer', {
-            today: date,
-            chargeTotal: linkedTotal,
-            openBalance: balance,
-          })
+          applyCustomerBankDefaults(
+            buildPaymentDraft('BankTransfer', {
+              ...draftContext,
+              today: date,
+              chargeTotal: linkedTotal,
+              openBalance: balance,
+            }),
+            draftContext
+          )
         );
         setActiveTab('BankTransfer');
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
       .finally(() => setLoading(false));
-  }, [open, token, receiptId, composeMode, preselectedChargeIds, openCharges, t]);
+  }, [open, token, receiptId, composeMode, preselectedChargeIds, t]);
 
   useEffect(() => {
     if (!composeMode || doc || linkedChargeOptions.length === 0) return;
     const balance = Math.max(0, roundMoney(chargeTotal));
     setDraft(
-      buildPaymentDraft(activeTab, {
-        ...draftContext,
-        chargeTotal,
-        openBalance: balance,
-        today: issueDate || todayIso(),
+      applyCustomerBankDefaults(
+        buildPaymentDraft(activeTab, {
+          ...draftContext,
+          chargeTotal,
+          openBalance: balance,
+          today: issueDate || todayIso(),
+        }),
+        draftContext
+      )
+    );
+  }, [
+    parentDocumentId,
+    preselectedChargeIds.join(','),
+    linkedChargeOptions.length,
+    chargeTotal,
+    customer?.id,
+    customer?.bankCode,
+    customer?.bankBranch,
+    customer?.bankAccountNumber,
+  ]);
+
+  useEffect(() => {
+    if (!open || !isDraft || loading || editingLineId || activeTab !== 'WithholdingTax') return;
+    const pct = withholdingPercent ?? 0;
+    if (pct <= 0 || chargeTotal <= 0) return;
+    setDraft((prev) =>
+      applyWithholdingDefaults(prev, draftContext, 'WithholdingTax')
+    );
+  }, [
+    open,
+    isDraft,
+    loading,
+    editingLineId,
+    activeTab,
+    withholdingPercent,
+    chargeTotal,
+    openBalance,
+    draftContext,
+  ]);
+
+  useEffect(() => {
+    if (!open || !isDraft || loading || editingLineId || !customer) return;
+    if (activeTab !== 'BankTransfer' && activeTab !== 'Check') return;
+    const bankCode = normalizeBankCode(customer.bankCode ?? '') || (customer.bankCode ?? '');
+    if (!bankCode && !customer.bankBranch && !customer.bankAccountNumber) return;
+    setDraft((prev) =>
+      applyCustomerBankDefaults(prev, {
+        customerBankCode: bankCode,
+        customerBankBranch: customer.bankBranch ?? '',
+        customerBankAccount: customer.bankAccountNumber ?? '',
       })
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync totals when linked charges change
-  }, [parentDocumentId, preselectedChargeIds.join(','), linkedChargeOptions.length, chargeTotal]);
+  }, [
+    open,
+    isDraft,
+    loading,
+    editingLineId,
+    activeTab,
+    customer?.id,
+    customer?.bankCode,
+    customer?.bankBranch,
+    customer?.bankAccountNumber,
+  ]);
 
   useEffect(() => {
     if (!open || !isDraft || loading) return;
@@ -301,35 +401,20 @@ export function ReceiptEditWizard({
       return;
     }
     setEditingLineId(null);
-    const canBuildDraft =
-      openBalance > 0 ||
-      (activeTab === 'WithholdingTax' &&
-        (withholdingPercent ?? 0) > 0 &&
-        chargeTotal > 0);
-    setDraft(
-      canBuildDraft
-        ? buildPaymentDraft(activeTab, draftContext)
-        : emptyPaymentDraft(issueDate || todayIso())
-    );
+    setDraft((prev) => syncPaymentDraftFromContext(prev, activeTab, draftContext));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when payment tab changes
   }, [activeTab]);
 
   useEffect(() => {
     if (!open || !isDraft || loading || editingLineId) return;
     if (!tenantProfile && !customer && chargeTotal <= 0) return;
-    const canBuildDraft =
-      openBalance > 0 ||
-      (activeTab === 'WithholdingTax' &&
-        (withholdingPercent ?? 0) > 0 &&
-        chargeTotal > 0);
-    setDraft(
-      canBuildDraft
-        ? buildPaymentDraft(activeTab, draftContext)
-        : emptyPaymentDraft(issueDate || todayIso())
-    );
+    setDraft((prev) => syncPaymentDraftFromContext(prev, activeTab, draftContext));
   }, [
     tenantProfile?.id,
     customer?.id,
+    customer?.bankCode,
+    customer?.bankBranch,
+    customer?.bankAccountNumber,
     loading,
     open,
     isDraft,
@@ -356,14 +441,12 @@ export function ReceiptEditWizard({
   };
 
   const applySavedLines = (lines: SavedPaymentLine[]) => {
-    const next = reconcileBankTransferAmounts(lines, chargeTotal);
+    const next = reconcileBankTransferAmounts(dedupePaymentLines(lines), chargeTotal);
     const paid = next.reduce((s, l) => s + l.amount, 0);
     const balance = Math.max(0, roundMoney(chargeTotal - paid));
     setSavedLines(next);
-    setDraft(
-      balance > 0
-        ? buildPaymentDraft(activeTab, { ...draftContext, openBalance: balance })
-        : emptyPaymentDraft(issueDate || todayIso())
+    setDraft((prev) =>
+      syncPaymentDraftFromContext(prev, activeTab, { ...draftContext, openBalance: balance })
     );
     return next;
   };
@@ -403,10 +486,12 @@ export function ReceiptEditWizard({
     };
     const merged = editingLineId
       ? savedLines.map((l) => (l.id === editingLineId ? line : l))
-      : [...savedLines, line];
+      : activeTab === 'WithholdingTax'
+        ? [...savedLines.filter((l) => l.paymentType !== 'WithholdingTax'), line]
+        : [...savedLines, line];
     applySavedLines(merged);
     setEditingLineId(null);
-    setDraft(emptyPaymentDraft(issueDate || todayIso()));
+    setDraft((prev) => syncPaymentDraftFromContext(prev, activeTab, draftContext));
   };
 
   const onEditLine = (line: SavedPaymentLine) => {
@@ -431,7 +516,7 @@ export function ReceiptEditWizard({
       setError(t('documents.receiptNoLines'));
       return null;
     }
-    return reconcileBankTransferAmounts(savedLines, chargeTotal);
+    return reconcileBankTransferAmounts(dedupePaymentLines(savedLines), chargeTotal);
   };
 
   const ensureReceiptCreated = async (): Promise<Document | null> => {
@@ -520,16 +605,20 @@ export function ReceiptEditWizard({
         finalize,
       });
       const synced = reconcileBankTransferAmounts(
-        (updated.paymentLines ?? []).map(mapApiLine),
+        dedupePaymentLines((updated.paymentLines ?? []).map(mapApiLine)),
         chargeTotal
       );
+      skipNextFetchRef.current = true;
       setSavedLines(synced);
       setDoc(updated);
       setVersion(updated.version);
       setIssueDate(isoToDateInput(updated.issueDate) || issueDate);
+      if (finalize) {
+        setDraft((prev) => syncPaymentDraftFromContext(prev, activeTab, draftContext));
+      }
       if (!finalize) {
         setInfoMessage(t('documents.draftSaved'));
-        onDraftSaved?.();
+        onDraftSaved?.(updated);
       }
       return true;
     } catch (err) {
@@ -1123,6 +1212,7 @@ export function ReceiptEditWizard({
   if (!open) return null;
 
   const titleNum = doc?.documentNumber.replace(/^[A-Z]+-/, '') ?? '';
+  const showLinkedChargesBar = linkedChargeOptions.length > 1;
 
   return createPortal(
     <div className="doc-wizard-overlay doc-wizard-overlay--form" role="presentation">
@@ -1138,16 +1228,20 @@ export function ReceiptEditWizard({
           <button type="button" className="doc-wizard-back" onClick={handleClose} aria-label={t('settings.cancel')}>
             ←
           </button>
-          <div className="receipt-wizard-title-wrap">
-            <h1 id="receipt-wizard-title">
-              {t('documents.types.Receipt')} {titleNum}
-            </h1>
-            {(customerName || chargeNumber) && (
-              <p className="muted receipt-wizard-sub">
-                {customerName}
-                {chargeNumber ? ` · ${t('documents.receiptFromCharge', { number: chargeNumber })}` : ''}
-              </p>
-            )}
+          <div className="receipt-wizard-header-main">
+            <div className="receipt-wizard-title-wrap">
+              <h1 id="receipt-wizard-title">
+                {t('documents.types.Receipt')} {titleNum}
+              </h1>
+              {customerName && (
+                <p className="muted receipt-wizard-sub">
+                  {customerName}
+                  {!showLinkedChargesBar && chargeNumber
+                    ? ` · ${t('documents.receiptFromCharge', { number: chargeNumber })}`
+                    : ''}
+                </p>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1165,36 +1259,54 @@ export function ReceiptEditWizard({
             {infoMessage && <div className="success-banner doc-wizard-error">{infoMessage}</div>}
 
             <section className="doc-panel">
-              <div className="doc-panel-grid">
-                {composeMode && !doc && preselectedChargeIds.length === 0 && (
-                  <label style={{ gridColumn: '1 / -1' }}>
-                    <span className="doc-panel-label">{t('documents.parentInvoice')} *</span>
-                    <select
-                      value={parentDocumentId}
-                      required
-                      onChange={(e) => {
-                        setParentDocumentId(e.target.value);
-                        setError('');
-                        const charge = openCharges.find((c) => c.id === e.target.value);
-                        if (charge) {
-                          setDescription(charge.description ?? '');
-                        }
-                      }}
-                    >
-                      <option value="">{t('documents.selectParentInvoice')}</option>
-                      {openCharges.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.documentNumber.replace(/^[A-Z]+-/, '')} — {c.customerName} (
-                          {formatMoney(c.totalAmount)})
-                        </option>
-                      ))}
-                    </select>
+              {composeMode && !doc && preselectedChargeIds.length === 0 && (
+                <label className="receipt-doc-parent-select">
+                  <span className="doc-panel-label">{t('documents.parentInvoice')} *</span>
+                  <select
+                    value={parentDocumentId}
+                    required
+                    onChange={(e) => {
+                      setParentDocumentId(e.target.value);
+                      setError('');
+                      const charge = openCharges.find((c) => c.id === e.target.value);
+                      if (charge) {
+                        setDescription(charge.description ?? '');
+                      }
+                    }}
+                  >
+                    <option value="">{t('documents.selectParentInvoice')}</option>
+                    {openCharges.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.documentNumber.replace(/^[A-Z]+-/, '')} — {c.customerName} (
+                        {formatMoney(c.totalAmount)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div
+                className={`receipt-doc-header-row${showLinkedChargesBar ? ' receipt-doc-header-row--with-charges' : ''}`}
+              >
+                <div className="receipt-doc-meta">
+                  <label>
+                    <span className="doc-panel-label">{t('documents.colDate')}</span>
+                    <DateInput
+                      value={issueDate}
+                      onChange={setIssueDate}
+                      disabled={!isDraft}
+                    />
                   </label>
-                )}
-                {(isMultiCharge || preselectedChargeIds.length > 1) && linkedChargeOptions.length > 0 && (
-                  <div className="receipt-linked-charges" style={{ gridColumn: '1 / -1' }}>
-                    <span className="doc-panel-label">{t('documents.linkedChargeInvoices')}</span>
-                    <ul className="receipt-linked-charges-list">
+                  <label>
+                    <span className="doc-panel-label">{t('documents.receiptCurrency')}</span>
+                    <input type="text" value="₪ ILS" readOnly disabled />
+                  </label>
+                </div>
+                {showLinkedChargesBar && (
+                  <div className="receipt-linked-charges-panel">
+                    <span className="receipt-linked-charges-panel-title">
+                      {t('documents.linkedChargeInvoices')}
+                    </span>
+                    <ul className="receipt-linked-charges-panel-list">
                       {linkedChargeOptions.map((c) => (
                         <li key={c.id}>
                           <code>{c.documentNumber.replace(/^[A-Z]+-/, '')}</code>
@@ -1202,34 +1314,22 @@ export function ReceiptEditWizard({
                         </li>
                       ))}
                     </ul>
-                    <p className="receipt-linked-charges-total">
+                    <p className="receipt-linked-charges-panel-total">
                       {t('documents.linkedChargesTotal', { value: formatMoney(chargeTotal) })}
                     </p>
                   </div>
                 )}
-                <label>
-                  <span className="doc-panel-label">{t('documents.colDate')}</span>
-                  <DateInput
-                    value={issueDate}
-                    onChange={setIssueDate}
-                    disabled={!isDraft}
-                  />
-                </label>
-                <label>
-                  <span className="doc-panel-label">{t('documents.receiptCurrency')}</span>
-                  <input type="text" value="₪ ILS" readOnly disabled />
-                </label>
-                <label className="doc-field-block" style={{ gridColumn: '1 / -1' }}>
-                  <span className="doc-panel-label">{t('documents.contentDescriptionHint')}</span>
-                  <textarea
-                    {...bidiAutoInput('doc-textarea')}
-                    rows={2}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    disabled={!isDraft}
-                  />
-                </label>
               </div>
+              <label className="doc-field-block receipt-doc-description">
+                <span className="doc-panel-label">{t('documents.contentDescriptionHint')}</span>
+                <textarea
+                  {...bidiAutoInput('doc-textarea')}
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={!isDraft}
+                />
+              </label>
             </section>
 
             <section className="doc-panel receipt-pay-panel">

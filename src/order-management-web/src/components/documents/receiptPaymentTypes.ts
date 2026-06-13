@@ -170,6 +170,28 @@ export function totalWithholdingAmount(lines: SavedPaymentLine[]): number {
   );
 }
 
+function paymentLineKey(line: SavedPaymentLine): string {
+  return `${line.paymentType}|${line.amount}|${line.lineDate}|${line.generalDetail}|${JSON.stringify(line.details)}`;
+}
+
+/** Remove duplicate payment rows (e.g. after draft save reload). */
+export function dedupePaymentLines(lines: SavedPaymentLine[]): SavedPaymentLine[] {
+  const seen = new Set<string>();
+  let hasWithholding = false;
+  const result: SavedPaymentLine[] = [];
+  for (const line of lines) {
+    if (line.paymentType === 'WithholdingTax') {
+      if (hasWithholding) continue;
+      hasWithholding = true;
+    }
+    const key = paymentLineKey(line);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(line);
+  }
+  return result;
+}
+
 /** When ניכוי במקור exists, bank transfer = charge − withholding − other payments. */
 export function reconcileBankTransferAmounts(
   lines: SavedPaymentLine[],
@@ -260,6 +282,99 @@ export function buildPaymentDraft(
   }
 
   return { ...base, amount };
+}
+
+export function applyCustomerBankDefaults(
+  draft: PaymentDraftFields,
+  ctx: Pick<DraftDefaultsContext, 'customerBankCode' | 'customerBankBranch' | 'customerBankAccount'>
+): PaymentDraftFields {
+  const bankNumber = draft.bankNumber || ctx.customerBankCode || '';
+  const branchNumber = draft.branchNumber || ctx.customerBankBranch || '';
+  const accountNumber = draft.accountNumber || ctx.customerBankAccount || '';
+  if (
+    bankNumber === draft.bankNumber &&
+    branchNumber === draft.branchNumber &&
+    accountNumber === draft.accountNumber
+  ) {
+    return draft;
+  }
+  return { ...draft, bankNumber, branchNumber, accountNumber };
+}
+
+export function shouldBuildPaymentDraft(
+  tab: ReceiptPaymentTypeKey,
+  ctx: DraftDefaultsContext
+): boolean {
+  if (ctx.openBalance > 0) return true;
+  if (
+    tab === 'WithholdingTax' &&
+    (ctx.withholdingPercent ?? 0) > 0 &&
+    ctx.chargeTotal > 0
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function applyWithholdingDefaults(
+  draft: PaymentDraftFields,
+  ctx: DraftDefaultsContext,
+  tab: ReceiptPaymentTypeKey
+): PaymentDraftFields {
+  if (tab !== 'WithholdingTax') return draft;
+  const pct = ctx.withholdingPercent ?? 0;
+  if (pct <= 0 || ctx.chargeTotal <= 0) return draft;
+
+  const percent = draft.percent.trim() ? draft.percent : String(pct);
+  const amount = draft.amount.trim()
+    ? draft.amount
+    : defaultAmountForTab('WithholdingTax', { ...ctx, withholdingPercent: pct });
+
+  if (percent === draft.percent && amount === draft.amount) return draft;
+  return { ...draft, percent, amount };
+}
+
+/** Keep user-edited payment fields when the draft is rebuilt (e.g. after save draft). */
+export function mergePaymentDraftPreservingFields(
+  prev: PaymentDraftFields,
+  next: PaymentDraftFields,
+  tab: ReceiptPaymentTypeKey
+): PaymentDraftFields {
+  switch (tab) {
+    case 'BankTransfer':
+      return {
+        ...next,
+        depositDate: prev.depositDate || next.depositDate,
+        bankNumber: prev.bankNumber || next.bankNumber,
+        branchNumber: prev.branchNumber || next.branchNumber,
+        accountNumber: prev.accountNumber || next.accountNumber,
+        reference: prev.reference || next.reference,
+        generalDetail: prev.generalDetail || next.generalDetail,
+      };
+    case 'Check':
+      return {
+        ...next,
+        dueDate: prev.dueDate || next.dueDate,
+        bankNumber: prev.bankNumber || next.bankNumber,
+        branchNumber: prev.branchNumber || next.branchNumber,
+        accountNumber: prev.accountNumber || next.accountNumber,
+        checkNumber: prev.checkNumber || next.checkNumber,
+        generalDetail: prev.generalDetail || next.generalDetail,
+      };
+    case 'WithholdingTax':
+      return {
+        ...next,
+        percent: prev.percent.trim() ? prev.percent : next.percent,
+        amount: prev.amount.trim() ? prev.amount : next.amount,
+        generalDetail: prev.generalDetail || next.generalDetail,
+      };
+    default:
+      return {
+        ...next,
+        lineDate: prev.lineDate || next.lineDate,
+        generalDetail: prev.generalDetail || next.generalDetail,
+      };
+  }
 }
 
 export function formatLineDateDisplay(iso: string): string {

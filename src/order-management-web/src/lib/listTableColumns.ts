@@ -173,6 +173,7 @@ export const PURCHASE_RECEIPTS_TEXT_START_COLUMNS = new Set<PurchaseReceiptsColu
 
 export const DOCUMENTS_COLUMN_WIDTHS_KEY = RESIZABLE_PANEL_KEYS.documentsColumns;
 export const DOCUMENTS_COLUMN_KEYS = [
+  'select',
   'number',
   'status',
   'type',
@@ -187,6 +188,7 @@ export const DOCUMENTS_COLUMN_KEYS = [
 ] as const;
 export type DocumentsColumnKey = (typeof DOCUMENTS_COLUMN_KEYS)[number];
 export const DOCUMENTS_DEFAULT_WIDTHS: Record<DocumentsColumnKey, number> = {
+  select: 40,
   number: 88,
   status: 88,
   type: 100,
@@ -200,6 +202,7 @@ export const DOCUMENTS_DEFAULT_WIDTHS: Record<DocumentsColumnKey, number> = {
   actions: 120,
 };
 export const DOCUMENTS_COLUMN_CLASS: Record<DocumentsColumnKey, string> = {
+  select: 'doc-select-col',
   number: 'dt-col-number',
   status: 'dt-col-status',
   type: 'dt-col-type',

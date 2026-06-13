@@ -548,6 +548,8 @@ export function DocumentsPage() {
 
   const columnLabel = (key: DocumentsColumnKey): string => {
     switch (key) {
+      case 'select':
+        return '';
       case 'number':
         return t('documents.colNumber');
       case 'status':
@@ -583,7 +585,7 @@ export function DocumentsPage() {
       key={doc.id}
       className={`dt-panel-doc-row${selectedChargeIds.includes(doc.id) ? ' is-charge-selected' : ''}`}
     >
-      <td className="doc-select-col">
+      <td className={cellClass('select')}>
         {canSelectChargeRow(doc) ? (
           <input
             type="checkbox"
@@ -800,15 +802,18 @@ export function DocumentsPage() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="doc-select-col" aria-hidden />
                   {DOCUMENTS_COLUMN_KEYS.map((key) =>
-                    renderDataTableHeaderCell(
-                      key,
-                      columnLabel(key),
-                      DOCUMENTS_COLUMN_CLASS[key],
-                      onResizeHandleMouseDown,
-                      t('products.resizeColumn'),
-                      DOCUMENTS_TEXT_START_COLUMNS.has(key)
+                    key === 'select' ? (
+                      <th key={key} className={cellClass('select')} aria-hidden />
+                    ) : (
+                      renderDataTableHeaderCell(
+                        key,
+                        columnLabel(key),
+                        DOCUMENTS_COLUMN_CLASS[key],
+                        onResizeHandleMouseDown,
+                        t('products.resizeColumn'),
+                        DOCUMENTS_TEXT_START_COLUMNS.has(key)
+                      )
                     )
                   )}
                 </tr>
@@ -817,7 +822,7 @@ export function DocumentsPage() {
                 {pageGroups.map((group) => (
                   <Fragment key={group.monthKey}>
                     <tr>
-                      <td colSpan={DOCUMENTS_COLUMN_KEYS.length + 1} className="dt-panel-doc-month">
+                      <td colSpan={DOCUMENTS_COLUMN_KEYS.length} className="dt-panel-doc-month">
                         {monthLabel(group.year, group.month)}
                       </td>
                     </tr>
@@ -965,7 +970,10 @@ export function DocumentsPage() {
           }))}
           token={token}
           onClose={closeReceiptEditor}
-          onDraftSaved={load}
+          onDraftSaved={(saved) => {
+            setReceiptEditId((id) => id ?? saved.id);
+            load();
+          }}
           onSuccess={(msg) => {
             setMessage(msg);
             closeReceiptEditor();
