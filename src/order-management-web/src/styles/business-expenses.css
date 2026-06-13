@@ -2,6 +2,13 @@
   cursor: default;
 }
 
+.business-expenses-panel-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: baseline;
+}
+
 .business-expense-modal .app-modal-panel__body {
   overflow: hidden;
 }

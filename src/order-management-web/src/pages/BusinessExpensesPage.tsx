@@ -41,6 +41,13 @@ function formatIls(value: number): string {
   return `${value.toFixed(2)} ₪`;
 }
 
+function formatPanelDate(iso: string): string {
+  const d = iso.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return iso;
+  const [y, m, day] = d.split('-');
+  return `${day}.${m}.${y}`;
+}
+
 const LEGACY_SUPPLIER_ID = '__legacy__';
 const ADD_SUPPLIER_ID = '__add_supplier__';
 
@@ -162,6 +169,17 @@ export function BusinessExpensesPage() {
     from,
     to,
   ]);
+  const totals = useMemo(
+    () =>
+      list.reduce(
+        (acc, row) => ({
+          amountIls: acc.amountIls + row.amountIls,
+          recognizedIls: acc.recognizedIls + row.recognizedAmountIls,
+        }),
+        { amountIls: 0, recognizedIls: 0 }
+      ),
+    [list]
+  );
   const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
     BUSINESS_EXPENSES_COLUMN_WIDTHS_KEY,
     BUSINESS_EXPENSES_DEFAULT_WIDTHS
@@ -717,6 +735,20 @@ export function BusinessExpensesPage() {
               {homeOffice ? t('businessExpenses.hintHome') : t('businessExpenses.hintOffice')}
             </p>
           </>
+        }
+        summary={
+          total > 0 ? (
+            <div className="inventory-valuation-summary business-expenses-panel-summary">
+              <span>
+                {t('businessExpenses.summaryPeriod', {
+                  from: from ? formatPanelDate(from) : t('reports.datePresetAll'),
+                  to: to ? formatPanelDate(to) : t('reports.datePresetAll'),
+                })}
+              </span>
+              <span>{t('businessExpenses.summaryAmount', { value: formatIls(totals.amountIls) })}</span>
+              <strong>{t('businessExpenses.summaryRecognized', { value: formatIls(totals.recognizedIls) })}</strong>
+            </div>
+          ) : undefined
         }
         pagination={{
           page,

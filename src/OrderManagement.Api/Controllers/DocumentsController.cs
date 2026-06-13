@@ -385,7 +385,10 @@ public class DocumentsController(
         if (tenantId is null) return Unauthorized();
 
         if (request.PaymentLines is null or { Count: 0 })
-            return BadRequest(new { message = "At least one payment line is required." });
+        {
+            if (request.Finalize)
+                return BadRequest(new { message = "At least one payment line is required." });
+        }
 
         try
         {
@@ -395,7 +398,7 @@ public class DocumentsController(
                 request.Description,
                 request.IssueDate,
                 request.Version,
-                request.PaymentLines,
+                request.PaymentLines ?? Array.Empty<ReceiptPaymentLineInput>(),
                 request.Finalize,
                 ct);
 

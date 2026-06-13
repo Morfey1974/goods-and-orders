@@ -111,7 +111,7 @@ public record UpdateReceiptRequest(
     string? Description,
     DateTime? IssueDate,
     int Version,
-    [MinLength(1)] IReadOnlyList<ReceiptPaymentLineInput>? PaymentLines,
+    IReadOnlyList<ReceiptPaymentLineInput>? PaymentLines,
     bool Finalize = true);
 
 public static class DocumentMappers

@@ -36,3 +36,9 @@ export function isoToDateInput(iso: string): string {
 export function todayDateInput(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/** Calendar date from YYYY-MM-DD → UTC noon ISO (stable across time zones, like charge/quote forms). */
+export function dateInputToUtcIso(value: string): string | undefined {
+  if (!isValidDateInput(value)) return undefined;
+  return `${value}T12:00:00Z`;
+}

@@ -9,7 +9,7 @@ import { RECEIPT_WIZARD_RESIZE } from '../../lib/resizablePanelKeys';
 import { normalizeBankCode } from '../../data/israeliBanks';
 import { bidiAutoInput } from '../BidiText';
 import { DateInput } from '../DateInput';
-import { isoToDateInput, todayDateInput } from '../../lib/dateInput';
+import { dateInputToUtcIso, isoToDateInput, todayDateInput } from '../../lib/dateInput';
 import { ISRAELI_BANKS } from '../../data/israeliBanks';
 import {
   RECEIPT_PAYMENT_TABS,
@@ -228,7 +228,7 @@ export function ReceiptEditWizard({
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
       .finally(() => setLoading(false));
-  }, [open, token, receiptId, composeMode, openCharges, t]);
+  }, [open, token, receiptId, composeMode, t]);
 
   useEffect(() => {
     if (!composeMode || doc || !selectedCharge) return;
@@ -399,7 +399,7 @@ export function ReceiptEditWizard({
       documentType: 'Receipt',
       customerId: charge.customerId,
       parentDocumentId,
-      issueDate: issueDate ? new Date(issueDate).toISOString() : undefined,
+      issueDate: dateInputToUtcIso(issueDate),
       description: description.trim() || undefined,
     });
     setDoc(created);
@@ -420,31 +420,29 @@ export function ReceiptEditWizard({
         if (!workingDoc) return false;
       }
 
-      if (savedLines.length === 0) {
-        if (!finalize) {
-          setInfoMessage(t('documents.draftSaved'));
-          onDraftSaved?.();
-          return true;
-        }
-        setError(t('documents.receiptNoLines'));
-        return false;
-      }
-
-      const linesToSave = linesForPersist();
-      if (!linesToSave) return false;
+      if (!workingDoc) return false;
 
       const fullDescription = notes.trim()
         ? `${description.trim()}\n\n${notes.trim()}`.trim()
         : description.trim();
+
+      if (finalize && savedLines.length === 0) {
+        setError(t('documents.receiptNoLines'));
+        return false;
+      }
+
+      const linesToSave = savedLines.length > 0 ? linesForPersist() : [];
+      if (savedLines.length > 0 && !linesToSave) return false;
+
       const updated = await documentsApi.saveReceipt(token, workingDoc.id, {
         description: fullDescription || undefined,
-        issueDate: new Date(issueDate).toISOString(),
+        issueDate: dateInputToUtcIso(issueDate),
         version,
-        paymentLines: linesToSave.map((l) => ({
+        paymentLines: (linesToSave ?? []).map((l) => ({
           paymentType: l.paymentType,
           amount: l.amount,
           currency: l.currency,
-          lineDate: l.lineDate ? new Date(l.lineDate).toISOString() : undefined,
+          lineDate: l.lineDate ? dateInputToUtcIso(l.lineDate) : undefined,
           generalDetail: l.generalDetail || undefined,
           detailsJson: JSON.stringify(l.details),
         })),
@@ -457,6 +455,7 @@ export function ReceiptEditWizard({
       setSavedLines(synced);
       setDoc(updated);
       setVersion(updated.version);
+      setIssueDate(isoToDateInput(updated.issueDate) || issueDate);
       if (!finalize) {
         setInfoMessage(t('documents.draftSaved'));
         onDraftSaved?.();

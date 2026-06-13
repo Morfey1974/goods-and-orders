@@ -81,7 +81,9 @@ public class DocumentService(
 
         var number = await documentNumbers.AllocateNextAsync(tenantId, type, ct);
         var now = DateTime.UtcNow;
-        var issue = issueDate?.ToUniversalTime() ?? now;
+        var issue = issueDate.HasValue
+            ? NormalizeBusinessDate(issueDate.Value)
+            : DateTime.SpecifyKind(now.Date, DateTimeKind.Utc);
 
         var doc = new BusinessDocument
         {
@@ -700,8 +702,21 @@ public class DocumentService(
         if (charge.DocumentType != DocumentType.ChargeInvoice)
             throw new InvalidOperationException("Receipt parent must be a charge invoice.");
 
+        receipt.Description = description?.Trim();
+        if (issueDate.HasValue)
+            receipt.IssueDate = NormalizeBusinessDate(issueDate.Value);
+
         if (paymentLines.Count == 0)
-            throw new InvalidOperationException("At least one payment line is required.");
+        {
+            if (finalize)
+                throw new InvalidOperationException("At least one payment line is required.");
+
+            receipt.Version++;
+            receipt.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            await db.Entry(receipt).Collection(d => d.PaymentLines).LoadAsync(ct);
+            return receipt;
+        }
 
         await db.ReceiptPaymentLines.Where(p => p.DocumentId == receiptId).ExecuteDeleteAsync(ct);
 
@@ -721,7 +736,7 @@ public class DocumentService(
                 PaymentType = paymentType,
                 Amount = Math.Round(line.Amount, 2),
                 Currency = string.IsNullOrWhiteSpace(line.Currency) ? "ILS" : line.Currency.Trim(),
-                LineDate = line.LineDate?.ToUniversalTime(),
+                LineDate = line.LineDate is { } ld ? NormalizeBusinessDate(ld) : null,
                 GeneralDetail = line.GeneralDetail?.Trim(),
                 DetailsJson = string.IsNullOrWhiteSpace(line.DetailsJson) ? null : line.DetailsJson.Trim(),
                 SortOrder = sort++
@@ -736,9 +751,8 @@ public class DocumentService(
         if (total > charge.TotalAmount)
             throw new InvalidOperationException("Total payments exceed the charge invoice amount.");
 
-        receipt.Description = description?.Trim();
         if (issueDate.HasValue)
-            receipt.IssueDate = issueDate.Value.ToUniversalTime();
+            receipt.IssueDate = NormalizeBusinessDate(issueDate.Value);
         receipt.TotalAmount = total;
         receipt.Version++;
         receipt.UpdatedAt = DateTime.UtcNow;
@@ -812,4 +826,9 @@ public class DocumentService(
         doc.TotalAmount = order.Lines.Sum(l => l.LineTotal);
         return doc;
     }
+
+    internal static DateTime NormalizeBusinessDate(DateTime value) =>
+        DateTime.SpecifyKind(
+            value.Kind == DateTimeKind.Utc ? value.Date : value.ToUniversalTime().Date,
+            DateTimeKind.Utc);
 }
