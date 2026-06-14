@@ -12,6 +12,7 @@ import { useDataTablePagination } from '../hooks/useDataTablePagination';
 import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
 import { COGS_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 
 import '../styles/inventory.css';
 
@@ -34,6 +35,7 @@ export function CogsReportPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
   const pdfParamsRef = useRef({ from, to });
 
   const lines = report?.issueLines ?? [];
@@ -85,6 +87,9 @@ export function CogsReportPage() {
     if (!token) return;
     const params = buildPdfParams();
     pdfParamsRef.current = params;
+    setPdfDownloadFileName(
+      buildReportPdfFileName('reports.pdfFileName_cogs', { from: params.from, to: params.to })
+    );
     setPdfOpen(true);
     setPdfLoading(true);
     setPdfError(null);
@@ -100,16 +105,6 @@ export function CogsReportPage() {
       setPdfError(err instanceof Error ? err.message : 'Error');
     } finally {
       setPdfLoading(false);
-    }
-  };
-
-  const onDownloadPdf = async () => {
-    if (!token) return;
-    const params = pdfParamsRef.current ?? buildPdfParams();
-    try {
-      await financialReportsApi.downloadCogsPdf(token, params.from || undefined, params.to || undefined);
-    } catch (err) {
-      setPdfError(err instanceof Error ? err.message : 'Error');
     }
   };
 
@@ -151,7 +146,7 @@ export function CogsReportPage() {
                 disabled={loading || !report}
                 onClick={() => void openPdfPreview()}
               >
-                {t('warehouse.viewReportPdf')}
+                {t('reports.viewPdf')}
               </button>
             </div>
           </div>
@@ -233,7 +228,7 @@ export function CogsReportPage() {
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={() => void onDownloadPdf()}
+        downloadFileName={pdfDownloadFileName}
       />
     </div>
   );

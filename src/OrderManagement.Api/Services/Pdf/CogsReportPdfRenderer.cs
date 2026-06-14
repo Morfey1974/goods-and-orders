@@ -70,8 +70,9 @@ public static class CogsReportPdfRenderer
                     .Text(model.ReportTitle).Style(Bold(15).FontColor(TitleAccentColor));
             });
 
-            col.Item().PaddingTop(4).AlignRight()
-                .Text(model.FilterSubtitle).Style(Regular(8.5f).FontColor(TitleAccentColor));
+            col.Item().PaddingTop(4).Element(c =>
+                PdfMixedScriptText.RenderReportSubtitle(c, model.FilterSubtitle,
+                    Regular(8.5f).FontColor(TitleAccentColor)));
 
             col.Item().PaddingTop(4).LineHorizontal(2f).LineColor(TitleAccentColor);
         });
@@ -81,22 +82,12 @@ public static class CogsReportPdfRenderer
     {
         container.AlignRight().Column(col =>
         {
-            col.Item().Text(text =>
-            {
-                text.Span("מלאי פתיחה: ").Style(Regular(8f));
-                text.Span($"{model.OpeningInventoryIls} ₪").Style(Bold(8f));
-                text.Span("  |  רכישות: ").Style(Regular(8f));
-                text.Span($"{model.PurchasesToInventoryIls} ₪").Style(Bold(8f));
-                text.Span("  |  מלאי סגירה: ").Style(Regular(8f));
-                text.Span($"{model.ClosingInventoryIls} ₪").Style(Bold(8f));
-            });
-            col.Item().PaddingTop(2).Text(text =>
-            {
-                text.Span("COGS (נוסחה): ").Style(Regular(8f));
-                text.Span($"{model.CogsByFormulaIls} ₪").Style(Bold(8f));
-                text.Span("  |  COGS (H-): ").Style(Regular(8f));
-                text.Span($"{model.CogsFromIssuesIls} ₪").Style(Bold(8f));
-            });
+            col.Item().Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                $"מלאי פתיחה: {PdfReportFormat.IlsFromFormatted(model.OpeningInventoryIls)}  |  רכישות: {PdfReportFormat.IlsFromFormatted(model.PurchasesToInventoryIls)}  |  מלאי סגירה: {PdfReportFormat.IlsFromFormatted(model.ClosingInventoryIls)}",
+                Bold(8f)));
+            col.Item().PaddingTop(2).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                $"COGS (נוסחה): {PdfReportFormat.IlsFromFormatted(model.CogsByFormulaIls)}  |  COGS (H-): {PdfReportFormat.IlsFromFormatted(model.CogsFromIssuesIls)}",
+                Bold(8f)));
         });
     }
 

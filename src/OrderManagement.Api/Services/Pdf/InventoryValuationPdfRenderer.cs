@@ -71,8 +71,9 @@ public static class InventoryValuationPdfRenderer
                     .Text(model.ReportTitle).Style(Bold(20).FontColor(TitleAccentColor));
             });
 
-            col.Item().PaddingTop(6).AlignRight()
-                .Text(model.FilterSubtitle).Style(Regular(10).FontColor(TitleAccentColor));
+            col.Item().PaddingTop(6).Element(c =>
+                PdfMixedScriptText.RenderReportSubtitle(c, model.FilterSubtitle,
+                    Regular(10).FontColor(TitleAccentColor)));
 
             col.Item().PaddingTop(6).LineHorizontal(2.5f).LineColor(TitleAccentColor);
         });

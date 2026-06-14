@@ -6,7 +6,7 @@ using QuestPDF.Infrastructure;
 
 namespace OrderManagement.Api.Services.Pdf;
 
-public static class FinancialReportPdfRenderer
+public static class VendorServicesReportPdfRenderer
 {
     private const string FontRegular = PdfFontRegistry.HebrewRegular;
     private const string FontBold = PdfFontRegistry.HebrewBold;
@@ -18,7 +18,7 @@ public static class FinancialReportPdfRenderer
     private static readonly string TableRowAltBg = "#f3f5f7";
     private static readonly string TableRowBg = "#FFFFFF";
 
-    static FinancialReportPdfRenderer()
+    static VendorServicesReportPdfRenderer()
     {
         QuestPDF.Settings.License = LicenseType.Community;
         RegisterFonts();
@@ -31,7 +31,7 @@ public static class FinancialReportPdfRenderer
         _fontsRegistered = true;
     }
 
-    public static byte[] Render(FinancialReportPdfModel model)
+    public static byte[] Render(VendorServicesReportPdfModel model)
     {
         RegisterFonts();
         return Document.Create(container =>
@@ -48,14 +48,8 @@ public static class FinancialReportPdfRenderer
                 {
                     col.Item().Element(c => PdfLetterheadRenderer.Compose(c, model.Letterhead));
                     col.Item().PaddingTop(18).Element(c => ComposeTitleBand(c, model));
-                    col.Item().PaddingTop(12).Element(c =>
-                    {
-                        if (model.Kind == FinancialReportPdfKind.Income)
-                            ComposeIncomeTable(c, model);
-                        else
-                            ComposeExpenseTable(c, model);
-                    });
-                    col.Item().PaddingTop(10).Element(c => ComposeGrandTotal(c, model));
+                    col.Item().PaddingTop(12).Element(c => ComposeTable(c, model));
+                    col.Item().PaddingTop(10).Element(c => ComposeSummary(c, model));
                 });
 
                 page.Footer().PaddingTop(6).Element(c => ComposeFooter(c, model));
@@ -63,7 +57,7 @@ public static class FinancialReportPdfRenderer
         }).GeneratePdf();
     }
 
-    private static void ComposeTitleBand(IContainer container, FinancialReportPdfModel model)
+    private static void ComposeTitleBand(IContainer container, VendorServicesReportPdfModel model)
     {
         container.Column(col =>
         {
@@ -84,11 +78,11 @@ public static class FinancialReportPdfRenderer
         });
     }
 
-    private static void ComposeIncomeTable(IContainer container, FinancialReportPdfModel model)
+    private static void ComposeTable(IContainer container, VendorServicesReportPdfModel model)
     {
-        if (model.IncomeLines.Count == 0)
+        if (model.Lines.Count == 0)
         {
-            container.AlignRight().Text("אין נתונים לתצוגה").Style(Regular(10));
+            container.AlignRight().Text("אין שירותי ספקים לתצוגה").Style(Regular(10));
             return;
         }
 
@@ -96,104 +90,50 @@ public static class FinancialReportPdfRenderer
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.ConstantColumn(52);   // סכום ₪
-                columns.ConstantColumn(52);   // סכום
-                columns.RelativeColumn(2);    // פירוט
-                columns.ConstantColumn(72);   // סוג תשלום
-                columns.RelativeColumn(3);    // לקוח
-                columns.ConstantColumn(58);   // תאריך קבלה
-                columns.ConstantColumn(52);   // מס' קבלה
-                columns.ConstantColumn(58);   // תאריך תשלום
-                columns.ConstantColumn(26);   // מס'
+                columns.ConstantColumn(58);
+                columns.RelativeColumn(4);
+                columns.RelativeColumn(2);
+                columns.RelativeColumn(2);
+                columns.RelativeColumn(3);
+                columns.ConstantColumn(58);
+                columns.ConstantColumn(26);
             });
 
             table.Header(header =>
             {
-                ColumnHeaderCell(header.Cell(), "סכום ₪", compact: true);
                 ColumnHeaderCell(header.Cell(), "סכום", compact: true);
-                ColumnHeaderCell(header.Cell(), "פירוט");
-                ColumnHeaderCell(header.Cell(), "סוג תשלום", compact: true);
-                ColumnHeaderCell(header.Cell(), "לקוח");
-                ColumnHeaderCell(header.Cell(), "תאריך קבלה", compact: true);
-                ColumnHeaderCell(header.Cell(), "קבלה", compact: true);
-                ColumnHeaderCell(header.Cell(), "תאריך תשלום", compact: true);
-                ColumnHeaderCell(header.Cell(), "מס'", compact: true);
-            });
-
-            var rowIndex = 0;
-            foreach (var line in model.IncomeLines)
-            {
-                var zebra = rowIndex % 2 == 1;
-                DataCell(table.Cell(), line.AmountIls, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.Amount, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.Detail, zebra, mixedScript: true);
-                DataCell(table.Cell(), line.PaymentType, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.CustomerName, zebra, mixedScript: true);
-                DataCell(table.Cell(), line.ReceiptDate, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.DocumentNumber, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.PaymentDate, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true, compact: true);
-                rowIndex++;
-            }
-        });
-    }
-
-    private static void ComposeExpenseTable(IContainer container, FinancialReportPdfModel model)
-    {
-        if (model.ExpenseLines.Count == 0)
-        {
-            container.AlignRight().Text("אין נתונים לתצוגה").Style(Regular(10));
-            return;
-        }
-
-        container.Table(table =>
-        {
-            table.ColumnsDefinition(columns =>
-            {
-                columns.ConstantColumn(58);   // סכום ₪
-                columns.ConstantColumn(58);   // סכום מקור
-                columns.RelativeColumn(2);    // חשבונית
-                columns.RelativeColumn(4);    // ספק
-                columns.ConstantColumn(52);   // מס' תעודה
-                columns.ConstantColumn(58);   // תאריך
-                columns.ConstantColumn(26);   // מס'
-            });
-
-            table.Header(header =>
-            {
-                ColumnHeaderCell(header.Cell(), "סכום ₪", compact: true);
-                ColumnHeaderCell(header.Cell(), "סכום", compact: true);
-                ColumnHeaderCell(header.Cell(), "חשבונית ספק");
+                ColumnHeaderCell(header.Cell(), "תיאור");
+                ColumnHeaderCell(header.Cell(), "קטגוריה");
+                ColumnHeaderCell(header.Cell(), "מקור");
                 ColumnHeaderCell(header.Cell(), "ספק");
-                ColumnHeaderCell(header.Cell(), "תעודה", compact: true);
                 ColumnHeaderCell(header.Cell(), "תאריך", compact: true);
                 ColumnHeaderCell(header.Cell(), "מס'", compact: true);
             });
 
             var rowIndex = 0;
-            foreach (var line in model.ExpenseLines)
+            foreach (var line in model.Lines)
             {
                 var zebra = rowIndex % 2 == 1;
                 DataCell(table.Cell(), line.AmountIls, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.AmountOriginal, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.SupplierInvoiceNumber, zebra, mixedScript: true);
-                DataCell(table.Cell(), line.SupplierName, zebra, mixedScript: true);
-                DataCell(table.Cell(), line.ReceiptNumber, zebra, alignCenter: true, compact: true);
-                DataCell(table.Cell(), line.DocumentDate, zebra, alignCenter: true, compact: true);
+                DataCell(table.Cell(), line.Description, zebra, mixedScript: true);
+                DataCell(table.Cell(), line.Category, zebra, mixedScript: true);
+                DataCell(table.Cell(), line.Source, zebra, mixedScript: true);
+                DataCell(table.Cell(), line.VendorName, zebra, mixedScript: true);
+                DataCell(table.Cell(), line.ServiceDate, zebra, alignCenter: true, compact: true);
                 DataCell(table.Cell(), line.RowNumber.ToString(CultureInfo.InvariantCulture), zebra, alignCenter: true, compact: true);
                 rowIndex++;
             }
         });
     }
 
-    private static void ComposeGrandTotal(IContainer container, FinancialReportPdfModel model)
+    private static void ComposeSummary(IContainer container, VendorServicesReportPdfModel model)
     {
         container.Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
             $"סה\"כ: {PdfReportFormat.Ils(model.GrandTotalIls)}",
             Bold(11).FontColor(TitleAccentColor)));
     }
 
-    private static void ComposeFooter(IContainer container, FinancialReportPdfModel model)
+    private static void ComposeFooter(IContainer container, VendorServicesReportPdfModel model)
     {
         container.AlignCenter().Text(text =>
         {
@@ -248,7 +188,4 @@ public static class FinancialReportPdfRenderer
 
     private static string FormatDate(DateTime utc) =>
         utc.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-
-    private static string FormatMoney(decimal value) =>
-        value.ToString("N2", CultureInfo.InvariantCulture);
 }

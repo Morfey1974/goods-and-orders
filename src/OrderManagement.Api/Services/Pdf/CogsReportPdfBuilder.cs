@@ -36,19 +36,8 @@ public static class CogsReportPdfBuilder
             issueLines);
     }
 
-    private static string BuildFilterSubtitle(DateTime? from, DateTime? to, decimal cogsFromIssues, int lineCount)
-    {
-        var period = FormatPeriod(from, to);
-        return $"תקופה: {period} | COGS (הוצאות H-): {FormatMoney(cogsFromIssues)} ₪ | שורות: {lineCount}";
-    }
-
-    private static string FormatPeriod(DateTime? from, DateTime? to)
-    {
-        if (from is null && to is null) return "הכל";
-        if (from is null) return $"עד {FormatDate(to!.Value)}";
-        if (to is null) return $"מ-{FormatDate(from.Value)}";
-        return $"{FormatDate(from.Value)} – {FormatDate(to.Value)}";
-    }
+    private static string BuildFilterSubtitle(DateTime? from, DateTime? to, decimal cogsFromIssues, int lineCount) =>
+        $"{PdfReportFormat.PeriodSubtitle(from, to, FormatDate)} | COGS (הוצאות H-): {PdfReportFormat.Ils(cogsFromIssues)} | {PdfReportFormat.CountSegment("שורות", lineCount)}";
 
     private static string FormatQuantity(decimal value) =>
         value.ToString("0.####", CultureInfo.InvariantCulture);

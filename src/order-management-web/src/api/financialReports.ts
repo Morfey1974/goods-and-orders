@@ -77,9 +77,12 @@ export type OperatingExpenseCategoryLine = {
   amountIls: number;
 };
 
+export type PlCogsMethod = 'CashBasis' | 'InventoryFormula' | 'IssueWriteOffs';
+
 export type ProfitAndLossReport = {
   from?: string | null;
   to?: string | null;
+  cogsMethod: PlCogsMethod;
   revenueIls: number;
   cogsIls: number;
   grossProfitIls: number;
@@ -279,16 +282,27 @@ function mapExpenseReport(raw: Record<string, unknown>): ExpenseReport {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
-function buildQuery(from?: string, to?: string): string {
+function buildQuery(from?: string, to?: string, extra?: Record<string, string>): string {
   const params = new URLSearchParams();
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (value) params.set(key, value);
+    }
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
-async function fetchPdfBlob(token: string, path: string, from?: string, to?: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE}${path}${buildQuery(from, to)}`, {
+async function fetchPdfBlob(
+  token: string,
+  path: string,
+  from?: string,
+  to?: string,
+  extra?: Record<string, string>
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}${path}${buildQuery(from, to, extra)}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });
@@ -373,12 +387,25 @@ export const financialReportsApi = {
     );
   },
 
-  profitAndLoss(token: string, from?: string, to?: string): Promise<ProfitAndLossReport> {
+  profitAndLoss(token: string, from?: string, to?: string, cogsMethod: PlCogsMethod = 'CashBasis'): Promise<ProfitAndLossReport> {
     return request<Record<string, unknown>>(
-      `/api/reports/profit-and-loss${buildQuery(from, to)}`,
+      `/api/reports/profit-and-loss${buildQuery(from, to, { cogsMethod })}`,
       {},
       token
     ).then(mapProfitAndLossReport);
+  },
+
+  fetchProfitAndLossPdfBlob(token: string, from?: string, to?: string, cogsMethod: PlCogsMethod = 'CashBasis') {
+    return fetchPdfBlob(token, '/api/reports/profit-and-loss/pdf', from, to, { cogsMethod });
+  },
+
+  downloadProfitAndLossPdf(token: string, from?: string, to?: string, cogsMethod: PlCogsMethod = 'CashBasis') {
+    return fetchPdfBlob(token, '/api/reports/profit-and-loss/pdf', from, to, { cogsMethod }).then((blob) =>
+      downloadBlob(
+        blob,
+        `profit-and-loss${from ? `-${from}` : ''}${to ? `-to-${to}` : ''}.pdf`
+      )
+    );
   },
 
   vendorServices(token: string, from?: string, to?: string): Promise<VendorServicesReport> {
@@ -387,6 +414,10 @@ export const financialReportsApi = {
       {},
       token
     ).then(mapVendorServicesReport);
+  },
+
+  fetchVendorServicesPdfBlob(token: string, from?: string, to?: string): Promise<Blob> {
+    return fetchPdfBlob(token, '/api/reports/vendor-services/pdf', from, to);
   },
 
   form1342(token: string, taxYear: number): Promise<Form1342Report> {
@@ -491,6 +522,7 @@ function mapProfitAndLossReport(raw: Record<string, unknown>): ProfitAndLossRepo
   return {
     from: from ? String(from).slice(0, 10) : null,
     to: to ? String(to).slice(0, 10) : null,
+    cogsMethod: String(raw.cogsMethod ?? raw.CogsMethod ?? 'CashBasis') as PlCogsMethod,
     revenueIls: Number(raw.revenueIls ?? raw.RevenueIls ?? 0),
     cogsIls: Number(raw.cogsIls ?? raw.CogsIls ?? 0),
     grossProfitIls: Number(raw.grossProfitIls ?? raw.GrossProfitIls ?? 0),

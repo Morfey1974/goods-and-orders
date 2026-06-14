@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { financialReportsApi, type ProfitAndLossReport } from '../api/financialReports';
+import {
+  financialReportsApi,
+  type PlCogsMethod,
+  type ProfitAndLossReport,
+} from '../api/financialReports';
+import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPreviewModal';
 import { ReportDateRangePicker } from '../components/reports/ReportDateRangePicker';
 import { useAuth } from '../context/AuthContext';
 import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { getReportDatePresetRange, type ReportDatePresetId } from '../lib/reportDatePresets';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 
 import '../styles/inventory.css';
+
+const PL_COGS_METHODS: PlCogsMethod[] = ['CashBasis', 'InventoryFormula', 'IssueWriteOffs'];
 
 function formatIls(value: number): string {
   return `${value.toFixed(2)} ₪`;
@@ -21,9 +29,16 @@ export function ProfitAndLossReportPage() {
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [datePreset, setDatePreset] = useState<ReportDatePresetId | ''>('thisYear');
+  const [cogsMethod, setCogsMethod] = useState<PlCogsMethod>('CashBasis');
   const [report, setReport] = useState<ProfitAndLossReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
+  const pdfParamsRef = useRef({ from, to, cogsMethod });
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -35,7 +50,7 @@ export function ProfitAndLossReportPage() {
     setLoading(true);
     setError('');
     try {
-      const r = await financialReportsApi.profitAndLoss(token, from || undefined, to || undefined);
+      const r = await financialReportsApi.profitAndLoss(token, from || undefined, to || undefined, cogsMethod);
       setReport(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -43,11 +58,51 @@ export function ProfitAndLossReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, from, to, t]);
+  }, [token, from, to, cogsMethod, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const revokePdfUrl = useCallback(() => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(null);
+  }, [pdfUrl]);
+
+  const buildPdfParams = useCallback(() => ({ from, to, cogsMethod }), [from, to, cogsMethod]);
+
+  const closePdf = () => {
+    setPdfOpen(false);
+    revokePdfUrl();
+    setPdfError(null);
+    setPdfLoading(false);
+  };
+
+  const openPdfPreview = async () => {
+    if (!token) return;
+    const params = buildPdfParams();
+    pdfParamsRef.current = params;
+    setPdfDownloadFileName(
+      buildReportPdfFileName('reports.pdfFileName_pl', { from: params.from, to: params.to })
+    );
+    setPdfOpen(true);
+    setPdfLoading(true);
+    setPdfError(null);
+    revokePdfUrl();
+    try {
+      const blob = await financialReportsApi.fetchProfitAndLossPdfBlob(
+        token,
+        params.from || undefined,
+        params.to || undefined,
+        params.cogsMethod
+      );
+      setPdfUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   return (
     <div className="page inventory-page">
@@ -62,9 +117,29 @@ export function ProfitAndLossReportPage() {
       <section className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
           <h1 style={{ margin: 0, flex: '1 1 auto' }}>{t('reports.plTitle')}</h1>
-          <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
-            {loading ? t('settings.saving') : t('reports.plRun')}
-          </button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <label className="reports-field" style={{ margin: 0, minWidth: '14rem' }}>
+              <span>{t('reports.plCogsMethod')}</span>
+              <select value={cogsMethod} onChange={(e) => setCogsMethod(e.target.value as PlCogsMethod)}>
+                {PL_COGS_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {t(`reports.plCogsMethod_${method}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
+              {loading ? t('settings.saving') : t('reports.plRun')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={loading || !report}
+              onClick={() => void openPdfPreview()}
+            >
+              {t('reports.viewPdf')}
+            </button>
+          </div>
         </div>
 
         <ReportDateRangePicker
@@ -80,6 +155,9 @@ export function ProfitAndLossReportPage() {
         <p className="muted" style={{ marginTop: '0.75rem' }}>
           {t('reports.plHint')}
         </p>
+        <p className="muted" style={{ marginTop: '0.35rem', fontSize: '0.88rem' }}>
+          {t(`reports.plCogsMethodHint_${cogsMethod}`)}
+        </p>
 
         {report && (
           <div className="inventory-valuation-summary" style={{ marginTop: '1.5rem' }}>
@@ -90,7 +168,12 @@ export function ProfitAndLossReportPage() {
                   <td className="num">{formatIls(report.revenueIls)}</td>
                 </tr>
                 <tr>
-                  <td>{t('reports.cogsTitle')}</td>
+                  <td>
+                    {t('reports.cogsTitle')}
+                    <span className="muted" style={{ marginInlineStart: '0.35rem', fontSize: '0.85em' }}>
+                      ({t(`reports.plCogsMethod_${report.cogsMethod}`)})
+                    </span>
+                  </td>
                   <td className="num">− {formatIls(report.cogsIls)}</td>
                 </tr>
                 <tr className="data-table__total-row">
@@ -98,18 +181,26 @@ export function ProfitAndLossReportPage() {
                   <td className="num">{formatIls(report.grossProfitIls)}</td>
                 </tr>
                 <tr>
-                  <td colSpan={2}><strong>{t('reports.plRecognizedExpenses')}</strong></td>
+                  <td colSpan={2}>
+                    <strong>{t('reports.plRecognizedExpenses')}</strong>
+                  </td>
                 </tr>
                 <tr>
-                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExHomeMixed')}</td>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>
+                    {t('reports.opExHomeMixed')}
+                  </td>
                   <td className="num">− {formatIls(report.homeMixedRecognizedIls)}</td>
                 </tr>
                 <tr>
-                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExDirect')}</td>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>
+                    {t('reports.opExDirect')}
+                  </td>
                   <td className="num">− {formatIls(report.operatingDirectRecognizedIls)}</td>
                 </tr>
                 <tr>
-                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>{t('reports.opExDepreciation')}</td>
+                  <td className="muted" style={{ paddingLeft: '1.5rem' }}>
+                    {t('reports.opExDepreciation')}
+                  </td>
                   <td className="num">− {formatIls(report.depreciationIls)}</td>
                 </tr>
                 <tr className="data-table__total-row">
@@ -143,6 +234,16 @@ export function ProfitAndLossReportPage() {
           </div>
         )}
       </section>
+
+      <DocumentPdfPreviewModal
+        open={pdfOpen}
+        title={t('reports.plPdfTitle')}
+        pdfUrl={pdfUrl}
+        loading={pdfLoading}
+        error={pdfError}
+        onClose={closePdf}
+        downloadFileName={pdfDownloadFileName}
+      />
     </div>
   );
 }

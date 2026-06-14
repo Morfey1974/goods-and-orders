@@ -1008,11 +1008,7 @@ export function DocumentsPage() {
         loading={pdfPreviewLoading}
         error={pdfPreviewError}
         onClose={closePdfPreview}
-        onDownload={
-          pdfPreviewDoc && token
-            ? () => void documentsApi.downloadPdf(token, pdfPreviewDoc.id, documentPdfFileName(pdfPreviewDoc))
-            : undefined
-        }
+        downloadFileName={pdfPreviewDoc ? documentPdfFileName(pdfPreviewDoc) : undefined}
       />
 
       {wizardType && token && (

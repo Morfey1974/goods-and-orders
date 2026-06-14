@@ -114,10 +114,12 @@ public static class BusinessExpenseJournalPdfRenderer
         {
             container.AlignRight().Column(col =>
             {
-                col.Item().Text($"סה\"כ לזיכוי: {FormatMoney(model.TotalRecognizedIls)} ₪")
-                    .Style(Bold(11).FontColor(TitleAccentColor));
-                col.Item().PaddingTop(2).Text($"סה\"כ הוצאות: {FormatMoney(model.TotalAmountIls)} ₪")
-                    .Style(Regular(10).FontColor(TitleAccentColor));
+                col.Item().Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"סה\"כ לזיכוי: {PdfReportFormat.Ils(model.TotalRecognizedIls)}",
+                    Bold(11).FontColor(TitleAccentColor)));
+                col.Item().PaddingTop(2).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"סה\"כ הוצאות: {PdfReportFormat.Ils(model.TotalAmountIls)}",
+                    Regular(10).FontColor(TitleAccentColor)));
             });
         }
     }
@@ -133,8 +135,9 @@ public static class BusinessExpenseJournalPdfRenderer
                 row.AutoItem().AlignRight().AlignMiddle()
                     .Text(model.ReportTitle).Style(Bold(18).FontColor(TitleAccentColor));
             });
-            col.Item().PaddingTop(5).AlignRight()
-                .Text(model.FilterSubtitle).Style(Regular(9).FontColor(TitleAccentColor));
+            col.Item().PaddingTop(5).Element(c =>
+                PdfMixedScriptText.RenderReportSubtitle(c, model.FilterSubtitle,
+                    Regular(9).FontColor(TitleAccentColor)));
             col.Item().PaddingTop(5).LineHorizontal(2f).LineColor(TitleAccentColor);
         });
     }

@@ -103,19 +103,8 @@ public static class OperatingExpensesReportPdfBuilder
             }
             : value;
 
-    private static string BuildFilterSubtitle(DateTime? from, DateTime? to, decimal grandTotal, int lineCount)
-    {
-        var period = FormatPeriod(from, to);
-        return $"תקופה: {period} | סה\"כ לזיכוי: {FormatMoney(grandTotal)} ₪ | שורות: {lineCount}";
-    }
-
-    private static string FormatPeriod(DateTime? from, DateTime? to)
-    {
-        if (from is null && to is null) return "הכל";
-        if (from is null) return $"עד {FormatDate(to!.Value)}";
-        if (to is null) return $"מ-{FormatDate(from.Value)}";
-        return $"{FormatDate(from.Value)} – {FormatDate(to.Value)}";
-    }
+    private static string BuildFilterSubtitle(DateTime? from, DateTime? to, decimal grandTotal, int lineCount) =>
+        $"{PdfReportFormat.PeriodSubtitle(from, to, FormatDate)} | סה\"כ לזיכוי: {PdfReportFormat.Ils(grandTotal)} | {PdfReportFormat.CountSegment("שורות", lineCount)}";
 
     private static string FormatDate(DateTime utc) =>
         utc.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);

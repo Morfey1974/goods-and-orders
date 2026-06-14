@@ -12,7 +12,7 @@ public static class PdfMixedScriptText
     private const string BannerSegmentSeparator = " | ";
 
     private static readonly Regex LatinLetterToken = new(
-        @"[A-Za-z][A-Za-z0-9_\-\.]*",
+        @"[A-Za-z\u0400-\u04FF][A-Za-z0-9_\-\.\u0400-\u04FF]*",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>Keep Latin words / PO codes in reading order inside Hebrew RTL runs (LRM, not LRI).</summary>
@@ -36,6 +36,27 @@ public static class PdfMixedScriptText
         if (ShouldUseRtlLayout(text))
             target = target.ContentFromRightToLeft();
         target.Text(text).Style(UserTextStyle(fontSize, bold));
+    }
+
+    /// <summary>Mixed Hebrew subtitle under report titles (period, totals, COGS method).</summary>
+    public static void RenderReportSubtitle(IContainer container, string? value, TextStyle style)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            container.AlignRight().Text("").Style(style);
+            return;
+        }
+
+        var text = value.Contains(BannerSegmentSeparator, StringComparison.Ordinal)
+            ? string.Join(BannerSegmentSeparator, value.Split(BannerSegmentSeparator, StringSplitOptions.None)
+                .Select(p => p.Trim()))
+            : value;
+
+        container
+            .AlignRight()
+            .ContentFromRightToLeft()
+            .Text(EmbedLatinForRtl(text))
+            .Style(style);
     }
 
     /// <summary>Dark banner above document line tables — mixed Hebrew + Latin, wraps on long lines.</summary>

@@ -73,19 +73,8 @@ public static class FinancialReportPdfBuilder
         DateTime? to,
         decimal grandTotal,
         int count,
-        string countLabel)
-    {
-        var period = FormatPeriod(from, to);
-        return $"תקופה: {period} | סה\"כ: {FormatMoney(grandTotal)} ₪ | {countLabel}: {count}";
-    }
-
-    private static string FormatPeriod(DateTime? from, DateTime? to)
-    {
-        if (from is null && to is null) return "הכל";
-        if (from is null) return $"עד {FormatDate(to!.Value)}";
-        if (to is null) return $"מ-{FormatDate(from.Value)}";
-        return $"{FormatDate(from.Value)} – {FormatDate(to.Value)}";
-    }
+        string countLabel) =>
+        $"{PdfReportFormat.PeriodSubtitle(from, to, FormatDate)} | סה\"כ: {PdfReportFormat.Ils(grandTotal)} | {PdfReportFormat.CountSegment(countLabel, count)}";
 
     private static string PaymentTypeLabel(string paymentType)
     {
@@ -98,15 +87,15 @@ public static class FinancialReportPdfBuilder
     {
         if (amount is not > 0) return "—";
         var cur = string.IsNullOrWhiteSpace(currency) ? "ILS" : currency.Trim().ToUpperInvariant();
-        if (cur is "ILS" or "NIS") return $"{FormatMoney(amount.Value)} ₪";
-        return $"{FormatMoney(amount.Value)} {cur}";
+        if (cur is "ILS" or "NIS") return PdfReportFormat.Ils(amount.Value);
+        return PdfReportFormat.Ltr($"{FormatMoney(amount.Value)} {cur}");
     }
 
     private static string FormatAmount(decimal amount, string currency)
     {
         var cur = string.IsNullOrWhiteSpace(currency) ? "ILS" : currency.Trim().ToUpperInvariant();
-        if (cur is "ILS" or "NIS") return $"{FormatMoney(amount)} ₪";
-        return $"{FormatMoney(amount)} {cur}";
+        if (cur is "ILS" or "NIS") return PdfReportFormat.Ils(amount);
+        return PdfReportFormat.Ltr($"{FormatMoney(amount)} {cur}");
     }
 
     private static string FormatDate(DateTime utc) =>

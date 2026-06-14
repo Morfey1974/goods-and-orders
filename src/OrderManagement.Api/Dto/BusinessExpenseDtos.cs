@@ -144,6 +144,7 @@ public record OperatingExpenseCategoryLineDto(
 public record ProfitAndLossReportDto(
     DateTime? From,
     DateTime? To,
+    string CogsMethod,
     decimal RevenueIls,
     decimal CogsIls,
     decimal GrossProfitIls,

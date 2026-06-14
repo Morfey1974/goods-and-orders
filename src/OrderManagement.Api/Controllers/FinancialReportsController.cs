@@ -17,7 +17,9 @@ public class FinancialReportsController(
     GrossProfitReportService grossProfitReport,
     OperatingExpensesReportService operatingExpensesReport,
     ProfitAndLossReportService profitAndLossReport,
+    ProfitAndLossReportPdfService profitAndLossReportPdf,
     VendorServicesReportService vendorServicesReport,
+    VendorServicesReportPdfService vendorServicesReportPdf,
     Form1342ReportService form1342Report,
     Form1342PdfService form1342Pdf,
     FinancialReportPdfService financialReportPdf,
@@ -161,6 +163,7 @@ public class FinancialReportsController(
     public async Task<ActionResult<ProfitAndLossReportDto>> ProfitAndLoss(
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,
+        [FromQuery] string? cogsMethod,
         CancellationToken ct = default)
     {
         var tenantId = User.GetTenantId();
@@ -170,7 +173,27 @@ public class FinancialReportsController(
         if (validation is not null)
             return BadRequest(new { message = validation });
 
-        return Ok(await profitAndLossReport.BuildAsync(tenantId.Value, from, to, ct));
+        var method = PlCogsMethodParser.Parse(cogsMethod);
+        return Ok(await profitAndLossReport.BuildAsync(tenantId.Value, from, to, method, ct));
+    }
+
+    [HttpGet("profit-and-loss/pdf")]
+    public async Task<IActionResult> ProfitAndLossPdf(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? cogsMethod,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        var method = PlCogsMethodParser.Parse(cogsMethod);
+        var pdf = await profitAndLossReportPdf.GenerateAsync(tenantId.Value, from, to, method, ct);
+        return File(pdf, "application/pdf", "profit-and-loss-report.pdf", enableRangeProcessing: true);
     }
 
     [HttpGet("vendor-services")]
@@ -187,6 +210,23 @@ public class FinancialReportsController(
             return BadRequest(new { message = validation });
 
         return Ok(await vendorServicesReport.BuildAsync(tenantId.Value, from, to, ct));
+    }
+
+    [HttpGet("vendor-services/pdf")]
+    public async Task<IActionResult> VendorServicesPdf(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = User.GetTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var validation = ReportDateRange.Validate(from, to);
+        if (validation is not null)
+            return BadRequest(new { message = validation });
+
+        var pdf = await vendorServicesReportPdf.GenerateAsync(tenantId.Value, from, to, ct);
+        return File(pdf, "application/pdf", "vendor-services-report.pdf", enableRangeProcessing: true);
     }
 
     [HttpGet("form-1342")]

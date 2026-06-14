@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { warehouseApi, type WarehouseReportPdfParams } from '../api/warehouse';
 
 import { WAREHOUSE_MOVEMENTS_RESIZE } from '../lib/resizablePanelKeys';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 
 import { formatStockQuantity } from '../lib/stockQuantity';
 
@@ -67,6 +68,7 @@ export function WarehouseMovementsModal({
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
 
   const pdfParamsRef = useRef<WarehouseReportPdfParams | undefined>(undefined);
 
@@ -139,6 +141,7 @@ export function WarehouseMovementsModal({
     const params = buildPdfParams();
 
     pdfParamsRef.current = params;
+    setPdfDownloadFileName(buildReportPdfFileName('reports.pdfFileName_movements', { from: params.from, to: params.to }));
 
     setPdfOpen(true);
 
@@ -161,24 +164,6 @@ export function WarehouseMovementsModal({
     } finally {
 
       setPdfLoading(false);
-
-    }
-
-  };
-
-
-
-  const onDownloadPdf = async () => {
-
-    if (!token) return;
-
-    try {
-
-      await warehouseApi.downloadMovementsReportPdf(token, pdfParamsRef.current ?? buildPdfParams());
-
-    } catch (err) {
-
-      setPdfError(err instanceof Error ? err.message : 'Error');
 
     }
 
@@ -228,7 +213,7 @@ export function WarehouseMovementsModal({
 
             >
 
-              {t('warehouse.viewReportPdf')}
+              {t('reports.viewPdf')}
 
             </button>
 
@@ -349,8 +334,7 @@ export function WarehouseMovementsModal({
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={onDownloadPdf}
-
+        downloadFileName={pdfDownloadFileName}
       />
 
     </>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { warehouseApi, type WarehouseReportPdfParams } from '../api/warehouse';
@@ -11,6 +11,7 @@ import {
   writeReportsCategory,
   type ReportCategoryId,
 } from '../lib/reportsCategory';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 import '../styles/reports.css';
 
 type ReportDef = {
@@ -123,7 +124,7 @@ export function ReportsPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const downloadParamsRef = useRef<WarehouseReportPdfParams | undefined>(undefined);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
 
   useEffect(() => {
     if (!token) return;
@@ -162,7 +163,12 @@ export function ReportsPage() {
 
   const onPreview = async (params: WarehouseReportPdfParams) => {
     if (!token) return;
-    downloadParamsRef.current = params;
+    setPdfDownloadFileName(
+      buildReportPdfFileName(
+        runKind === 'balances' ? 'reports.pdfFileName_balances' : 'reports.pdfFileName_movements',
+        { from: params.from, to: params.to }
+      )
+    );
     setPdfOpen(true);
     setPdfTitle(runKind === 'balances' ? t('reports.balancesPdfTitle') : t('reports.movementsPdfTitle'));
     setPdfLoading(true);
@@ -177,23 +183,6 @@ export function ReportsPage() {
       setPdfError(err instanceof Error ? err.message : 'Error');
     } finally {
       setPdfLoading(false);
-    }
-  };
-
-  const onDownload = async (params?: WarehouseReportPdfParams) => {
-    if (!token) return;
-    const p = params ?? downloadParamsRef.current;
-    try {
-      if (runKind === 'balances') {
-        await warehouseApi.downloadBalancesReportPdf(token, p);
-      } else {
-        await warehouseApi.downloadMovementsReportPdf(token, p);
-      }
-      if (params) setRunOpen(false);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error';
-      if (pdfOpen) setPdfError(msg);
-      else setError(msg);
     }
   };
 
@@ -239,7 +228,6 @@ export function ReportsPage() {
         warehouses={warehouses}
         onClose={() => setRunOpen(false)}
         onPreview={onPreview}
-        onDownload={onDownload}
       />
 
       <DocumentPdfPreviewModal
@@ -249,7 +237,7 @@ export function ReportsPage() {
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={() => onDownload()}
+        downloadFileName={pdfDownloadFileName}
       />
     </div>
   );

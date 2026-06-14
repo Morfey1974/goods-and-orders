@@ -50,11 +50,11 @@ public static class BusinessExpenseJournalPdfBuilder
     private static string BuildFilterSubtitle(DateTime? from, DateTime? to)
     {
         if (from.HasValue && to.HasValue)
-            return $"תקופה: {from.Value:dd/MM/yyyy} – {to.Value:dd/MM/yyyy}";
+            return $"תקופה: {PdfReportFormat.Ltr($"{from.Value:dd/MM/yyyy} – {to.Value:dd/MM/yyyy}")}";
         if (from.HasValue)
-            return $"מתאריך: {from.Value:dd/MM/yyyy}";
+            return $"מתאריך: {PdfReportFormat.Ltr(from.Value.ToString("dd/MM/yyyy"))}";
         if (to.HasValue)
-            return $"עד תאריך: {to.Value:dd/MM/yyyy}";
+            return $"עד תאריך: {PdfReportFormat.Ltr(to.Value.ToString("dd/MM/yyyy"))}";
         return "כל התקופות";
     }
 }

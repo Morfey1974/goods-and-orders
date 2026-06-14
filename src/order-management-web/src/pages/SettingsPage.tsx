@@ -19,6 +19,7 @@ import { DocumentPdfPreviewModal } from '../components/documents/DocumentPdfPrev
 import { SuppressBrowserAutofill } from '../components/form/SuppressBrowserAutofill';
 import { useAuth } from '../context/AuthContext';
 import { FORM_AUTOCOMPLETE_OFF } from '../lib/browserAutofill';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 import { BANK_MODAL_RESIZE } from '../lib/resizablePanelKeys';
 import '../styles/settings.css';
 
@@ -113,6 +114,7 @@ export function SettingsPage() {
   const [brandingSampleUrl, setBrandingSampleUrl] = useState<string | null>(null);
   const [brandingSampleLoading, setBrandingSampleLoading] = useState(false);
   const [brandingSampleError, setBrandingSampleError] = useState<string | null>(null);
+  const [brandingSampleDownloadFileName, setBrandingSampleDownloadFileName] = useState('');
   const closeBankModal = () => setBankModalOpen(false);
 
   useEffect(() => {
@@ -141,6 +143,7 @@ export function SettingsPage() {
 
   const openBrandingSample = async () => {
     if (!token) return;
+    setBrandingSampleDownloadFileName(buildReportPdfFileName('reports.pdfFileName_brandingSample'));
     setBrandingSampleOpen(true);
     setBrandingSampleLoading(true);
     setBrandingSampleError(null);
@@ -931,6 +934,7 @@ export function SettingsPage() {
         loading={brandingSampleLoading}
         error={brandingSampleError}
         onClose={closeBrandingSample}
+        downloadFileName={brandingSampleDownloadFileName}
       />
     </div>
   );

@@ -39,9 +39,9 @@ public static class InventoryValuationPdfBuilder
 
         var filterParts = new List<string>
         {
-            $"נכון לתאריך: {FormatDate(report.AsOfDate)}",
-            $"שיטה: {report.CostMethod}",
-            $"סה\"כ: {FormatMoney(report.GrandTotalIls)} ₪"
+            $"נכון לתאריך: {PdfReportFormat.Ltr(FormatDate(report.AsOfDate))}",
+            $"שיטה: {PdfReportFormat.Ltr(report.CostMethod)}",
+            $"סה\"כ: {PdfReportFormat.Ils(report.GrandTotalIls)}"
         };
         if (report.Detailed)
             filterParts.Add("פירוט מנות FIFO");

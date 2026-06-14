@@ -94,9 +94,9 @@ public static class WarehouseReportPdfBuilder
         else
             filterParts.Add($"מחסן: {WarehouseDisplayName(warehouseFilterName)}");
         if (from.HasValue)
-            filterParts.Add($"מתאריך: {FormatDate(from.Value)}");
+            filterParts.Add($"מתאריך: {PdfReportFormat.Ltr(FormatDate(from.Value))}");
         if (to.HasValue)
-            filterParts.Add($"עד תאריך: {FormatDate(to.Value)}");
+            filterParts.Add($"עד תאריך: {PdfReportFormat.Ltr(FormatDate(to.Value))}");
 
         var subtitle = filterParts.Count > 0 ? string.Join(" | ", filterParts) : null;
 

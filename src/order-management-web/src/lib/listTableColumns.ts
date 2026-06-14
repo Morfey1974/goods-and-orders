@@ -226,6 +226,7 @@ export const BUSINESS_EXPENSES_COLUMN_KEYS = [
   'type',
   'notes',
   'vendor',
+  'invoice',
   'amount',
   'recognized',
   'docs',
@@ -235,8 +236,9 @@ export type BusinessExpensesColumnKey = (typeof BUSINESS_EXPENSES_COLUMN_KEYS)[n
 export const BUSINESS_EXPENSES_DEFAULT_WIDTHS: Record<BusinessExpensesColumnKey, number> = {
   date: 110,
   type: 140,
-  notes: 180,
-  vendor: 200,
+  notes: 160,
+  vendor: 180,
+  invoice: 110,
   amount: 100,
   recognized: 120,
   docs: 56,
@@ -247,6 +249,7 @@ export const BUSINESS_EXPENSES_COLUMN_CLASS: Record<BusinessExpensesColumnKey, s
   type: 'dt-col-type',
   notes: 'dt-col-notes',
   vendor: 'dt-col-vendor',
+  invoice: 'dt-col-invoice',
   amount: 'dt-col-amount',
   recognized: 'dt-col-recognized',
   docs: 'dt-col-docs',
@@ -256,6 +259,7 @@ export const BUSINESS_EXPENSES_TEXT_START_COLUMNS = new Set<BusinessExpensesColu
   'type',
   'notes',
   'vendor',
+  'invoice',
 ]);
 
 export const FIXED_ASSETS_COLUMN_WIDTHS_KEY = RESIZABLE_PANEL_KEYS.fixedAssetsColumns;

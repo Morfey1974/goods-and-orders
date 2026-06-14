@@ -41,9 +41,9 @@ public static class Form1342PdfRenderer
                     col.Item().Element(c => PdfLetterheadRenderer.Compose(c, model.Letterhead));
                     col.Item().PaddingTop(10).Element(c => ComposeHeader(c, model));
                     col.Item().PaddingTop(8).Element(c => ComposeTable(c, model));
-                    col.Item().PaddingTop(6).AlignRight()
-                        .Text($"סה\"כ פחת לשנה {model.TaxYear}: {model.TotalCurrentYearDepreciation} ₪")
-                        .Style(Bold(9));
+                    col.Item().PaddingTop(6).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                        $"סה\"כ פחת לשנה {PdfReportFormat.Ltr(model.TaxYear.ToString())}: {PdfReportFormat.IlsFromFormatted(model.TotalCurrentYearDepreciation)}",
+                        Bold(9)));
                 });
 
                 page.Footer().AlignCenter()

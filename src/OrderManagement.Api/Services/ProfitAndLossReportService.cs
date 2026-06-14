@@ -13,9 +13,17 @@ public class ProfitAndLossReportService(
         Guid tenantId,
         DateTime? from,
         DateTime? to,
+        CancellationToken ct) =>
+        await BuildAsync(tenantId, from, to, PlCogsMethod.CashBasis, ct);
+
+    public async Task<ProfitAndLossReportDto> BuildAsync(
+        Guid tenantId,
+        DateTime? from,
+        DateTime? to,
+        PlCogsMethod cogsMethod,
         CancellationToken ct)
     {
-        var gp = await grossProfit.BuildAsync(tenantId, from, to, ct);
+        var gp = await grossProfit.BuildAsync(tenantId, from, to, cogsMethod, ct);
         var opEx = await operatingExpenses.BuildAsync(tenantId, from, to, ct);
 
         var byCategory = opEx.ExpenseLines
@@ -35,6 +43,7 @@ public class ProfitAndLossReportService(
         return new ProfitAndLossReportDto(
             from?.Date,
             to?.Date,
+            cogsMethod.ToString(),
             gp.RevenueIls,
             gp.CogsIls,
             gp.GrossProfitIls,

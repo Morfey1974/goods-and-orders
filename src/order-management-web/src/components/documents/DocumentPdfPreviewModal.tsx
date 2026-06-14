@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DOCUMENT_PDF_PREVIEW_RESIZE } from '../../lib/resizablePanelKeys';
+import { pdfPreviewFrameSrc, saveUrlAsFile } from '../../lib/pdfDownload';
 import { AppModal } from '../ui/AppModal';
 
 type Props = {
@@ -9,7 +11,10 @@ type Props = {
   loading: boolean;
   error: string | null;
   onClose: () => void;
-  onDownload?: () => void;
+  /** Preferred save name, e.g. "דוח רווח והפסד 01/01/2025 – 31/12/2025.pdf" */
+  downloadFileName?: string;
+  /** Optional override; default saves the preview blob via the system save dialog. */
+  onDownload?: () => void | Promise<void>;
   /** When true, show image instead of PDF iframe. */
   isImage?: boolean;
   downloadLabel?: string;
@@ -22,11 +27,31 @@ export function DocumentPdfPreviewModal({
   loading,
   error,
   onClose,
+  downloadFileName,
   onDownload,
   isImage = false,
   downloadLabel,
 }: Props) {
   const { t } = useTranslation();
+  const [saving, setSaving] = useState(false);
+
+  const canSave = Boolean(pdfUrl && (downloadFileName || onDownload));
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (onDownload) {
+        await onDownload();
+        return;
+      }
+      if (pdfUrl && downloadFileName) {
+        await saveUrlAsFile(pdfUrl, downloadFileName);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppModal
@@ -41,9 +66,14 @@ export function DocumentPdfPreviewModal({
       <header className="doc-pdf-preview-header">
         <h2>{title}</h2>
         <div className="doc-pdf-preview-actions">
-          {onDownload && pdfUrl && (
-            <button type="button" className="btn btn-secondary" onClick={onDownload}>
-              {downloadLabel ?? t('documents.downloadPdf')}
+          {canSave && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={saving}
+              onClick={() => void handleSave()}
+            >
+              {saving ? t('settings.saving') : (downloadLabel ?? t('documents.savePdf'))}
             </button>
           )}
           <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
@@ -58,7 +88,7 @@ export function DocumentPdfPreviewModal({
           <img src={pdfUrl} alt={title} className="doc-pdf-preview-image" />
         )}
         {!loading && !error && pdfUrl && !isImage && (
-          <iframe title={title} src={pdfUrl} className="doc-pdf-preview-frame" />
+          <iframe title={title} src={pdfPreviewFrameSrc(pdfUrl)} className="doc-pdf-preview-frame" />
         )}
       </div>
     </AppModal>

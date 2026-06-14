@@ -19,7 +19,6 @@ type Props = {
   warehouses: { id: string; name: string }[];
   onClose: () => void;
   onPreview: (params: WarehouseReportPdfParams) => void;
-  onDownload: (params: WarehouseReportPdfParams) => void;
 };
 
 export function ReportRunModal({
@@ -28,7 +27,6 @@ export function ReportRunModal({
   warehouses,
   onClose,
   onPreview,
-  onDownload,
 }: Props) {
   const { t } = useTranslation();
   const [warehouseId, setWarehouseId] = useState(ALL_WAREHOUSES);
@@ -147,10 +145,7 @@ export function ReportRunModal({
 
         <div className="report-run-actions">
           <button type="button" className="btn btn-primary" onClick={() => onPreview(buildParams())}>
-            {t('reports.preview')}
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => onDownload(buildParams())}>
-            {t('reports.download')}
+            {t('reports.viewPdf')}
           </button>
           <button type="button" className="btn btn-ghost-inline" onClick={onClose}>
             {t('settings.cancel')}

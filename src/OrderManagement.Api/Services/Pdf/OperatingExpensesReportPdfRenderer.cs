@@ -147,15 +147,18 @@ public static class OperatingExpensesReportPdfRenderer
         {
             container.AlignRight().Column(col =>
             {
-                col.Item().Text(
-                        $"בית (מעורב): {FormatMoney(model.HomeMixedTotalIls)} → {FormatMoney(model.HomeMixedRecognizedIls)} ₪")
-                    .Style(Regular(10).FontColor(TitleAccentColor));
-                col.Item().PaddingTop(2).Text($"הוצאות ישירות: {FormatMoney(model.OperatingDirectTotalIls)} ₪")
-                    .Style(Regular(10).FontColor(TitleAccentColor));
-                col.Item().PaddingTop(2).Text($"פחת: {FormatMoney(model.DepreciationIls)} ₪")
-                    .Style(Regular(10).FontColor(TitleAccentColor));
-                col.Item().PaddingTop(4).Text($"סה\"כ לזיכוי: {FormatMoney(model.GrandTotalRecognizedIls)} ₪")
-                    .Style(Bold(11).FontColor(TitleAccentColor));
+                col.Item().Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"בית (מעורב): {PdfReportFormat.Ils(model.HomeMixedTotalIls)} → {PdfReportFormat.Ils(model.HomeMixedRecognizedIls)}",
+                    Regular(10).FontColor(TitleAccentColor)));
+                col.Item().PaddingTop(2).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"הוצאות ישירות: {PdfReportFormat.Ils(model.OperatingDirectTotalIls)}",
+                    Regular(10).FontColor(TitleAccentColor)));
+                col.Item().PaddingTop(2).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"פחת: {PdfReportFormat.Ils(model.DepreciationIls)}",
+                    Regular(10).FontColor(TitleAccentColor)));
+                col.Item().PaddingTop(4).Element(c => PdfMixedScriptText.RenderReportSubtitle(c,
+                    $"סה\"כ לזיכוי: {PdfReportFormat.Ils(model.GrandTotalRecognizedIls)}",
+                    Bold(11).FontColor(TitleAccentColor)));
             });
         }
     }
@@ -173,8 +176,9 @@ public static class OperatingExpensesReportPdfRenderer
                     .Text(model.ReportTitle).Style(Bold(18).FontColor(TitleAccentColor));
             });
 
-            col.Item().PaddingTop(5).AlignRight()
-                .Text(model.FilterSubtitle).Style(Regular(9).FontColor(TitleAccentColor));
+            col.Item().PaddingTop(5).Element(c =>
+                PdfMixedScriptText.RenderReportSubtitle(c, model.FilterSubtitle,
+                    Regular(9).FontColor(TitleAccentColor)));
 
             col.Item().PaddingTop(5).LineHorizontal(2f).LineColor(TitleAccentColor);
         });

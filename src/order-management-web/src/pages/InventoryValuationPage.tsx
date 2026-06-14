@@ -23,6 +23,7 @@ import {
 } from '../lib/inventoryValuationColumns';
 import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
 import { INVENTORY_VALUATION_REPORT_RESIZE } from '../lib/resizablePanelKeys';
+import { buildReportPdfFileName, tHe } from '../lib/pdfDownload';
 import type { InventoryValuationLine } from '../api/inventory';
 
 import '../styles/purchase-receipts.css';
@@ -41,6 +42,7 @@ export function InventoryValuationPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
   const pdfParamsRef = useRef<{ asOfDate: string; detailed: boolean } | undefined>(undefined);
 
   const showLotColumns = report?.detailed ?? detailed;
@@ -81,6 +83,12 @@ export function InventoryValuationPage() {
     if (!token) return;
     const params = buildPdfParams();
     pdfParamsRef.current = params;
+    setPdfDownloadFileName(
+      buildReportPdfFileName('reports.pdfFileName_valuation', {
+        asOf: params.asOfDate,
+        suffix: params.detailed ? tHe('inventory.valuationDetailed') : undefined,
+      })
+    );
     setPdfOpen(true);
     setPdfLoading(true);
     setPdfError(null);
@@ -95,15 +103,6 @@ export function InventoryValuationPage() {
     }
   };
 
-  const onDownloadPdf = async () => {
-    if (!token) return;
-    const params = pdfParamsRef.current ?? buildPdfParams();
-    try {
-      await inventoryApi.downloadValuationPdf(token, params.asOfDate, params.detailed);
-    } catch (err) {
-      setPdfError(err instanceof Error ? err.message : 'Error');
-    }
-  };
 
   const load = async () => {
     if (!token) return;
@@ -245,15 +244,7 @@ export function InventoryValuationPage() {
                     disabled={loading || !report}
                     onClick={() => void openPdfPreview()}
                   >
-                    {t('reports.preview')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={loading || !report}
-                    onClick={() => void onDownloadPdf()}
-                  >
-                    {t('reports.download')}
+                    {t('reports.viewPdf')}
                   </button>
                 </div>
               </div>
@@ -383,7 +374,7 @@ export function InventoryValuationPage() {
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={() => void onDownloadPdf()}
+        downloadFileName={pdfDownloadFileName}
       />
     </div>
   );

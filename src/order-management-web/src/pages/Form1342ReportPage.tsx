@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDataTablePagination } from '../hooks/useDataTablePagination';
 import { usePersistReportsCategory } from '../hooks/usePersistReportsCategory';
 import { FORM1342_REPORT_PANEL_RESIZE } from '../lib/resizablePanelKeys';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 
 import '../styles/inventory.css';
 import '../styles/reports.css';
@@ -40,6 +41,7 @@ export function Form1342ReportPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
   const taxYearOptions = useMemo(() => buildTaxYearOptions(), []);
 
   const lines = report?.lines ?? [];
@@ -69,6 +71,7 @@ export function Form1342ReportPage() {
 
   const openPdf = async () => {
     if (!token) return;
+    setPdfDownloadFileName(buildReportPdfFileName('reports.pdfFileName_form1342', { year: taxYear }));
     setPdfOpen(true);
     setPdfLoading(true);
     setPdfError(null);
@@ -124,7 +127,7 @@ export function Form1342ReportPage() {
                 {loading ? t('settings.saving') : t('reports.form1342Run')}
               </button>
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void openPdf()}>
-                {t('reports.form1342Pdf')}
+                {t('reports.viewPdf')}
               </button>
             </div>
           </div>
@@ -202,7 +205,7 @@ export function Form1342ReportPage() {
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={() => token && void financialReportsApi.downloadForm1342Pdf(token, taxYear)}
+        downloadFileName={pdfDownloadFileName}
       />
     </div>
   );

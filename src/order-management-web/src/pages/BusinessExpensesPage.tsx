@@ -32,6 +32,7 @@ import {
 import { renderDataTableHeaderCell } from '../lib/renderDataTableHeader';
 import { isImageAttachment, isPreviewableAttachment } from '../lib/attachmentPreview';
 import { BUSINESS_EXPENSE_MODAL_RESIZE, BUSINESS_EXPENSES_PANEL_RESIZE } from '../lib/resizablePanelKeys';
+import { buildReportPdfFileName } from '../lib/pdfDownload';
 
 import '../styles/purchase-receipts.css';
 import '../styles/settings.css';
@@ -115,6 +116,10 @@ export function BusinessExpensesPage() {
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [datePreset, setDatePreset] = useState<ReportDatePresetId | ''>('thisYear');
+  const [search, setSearch] = useState('');
+  const [filterKind, setFilterKind] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterVendor, setFilterVendor] = useState('');
   const [list, setList] = useState<BusinessExpense[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -127,6 +132,7 @@ export function BusinessExpensesPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDownloadFileName, setPdfDownloadFileName] = useState('');
   const pdfParamsRef = useRef({ from, to });
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<ExpenseForm>(emptyForm(true));
@@ -165,20 +171,92 @@ export function BusinessExpensesPage() {
     }).catch(() => {});
   }, [token]);
 
-  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(list, [
+  useEffect(() => {
+    if (!token) return;
+    suppliersApi.list(token).then(setSuppliers).catch(() => setSuppliers([]));
+  }, [token]);
+
+  const getExpenseTypeLabel = useCallback(
+    (row: BusinessExpense) => {
+      if (row.isHomeMixed && row.homeExpenseType) {
+        return t(`homeExpenseType.${row.homeExpenseType}`);
+      }
+      if (!row.isHomeMixed && row.operatingExpenseType) {
+        return t(`operatingExpenseType.${row.operatingExpenseType}`);
+      }
+      return '—';
+    },
+    [t]
+  );
+
+  const typeFilterOptions = useMemo(() => {
+    if (filterKind === 'home') return [...HOME_EXPENSE_TYPES];
+    if (filterKind === 'operating') return [...OPERATING_EXPENSE_TYPES];
+    return [...new Set([...HOME_EXPENSE_TYPES, ...OPERATING_EXPENSE_TYPES])];
+  }, [filterKind]);
+
+  const typeFilterLabel = useCallback(
+    (typeKey: string) => {
+      if (filterKind === 'home') return t(`homeExpenseType.${typeKey}`);
+      if (filterKind === 'operating') return t(`operatingExpenseType.${typeKey}`);
+      if (HOME_EXPENSE_TYPES.includes(typeKey as (typeof HOME_EXPENSE_TYPES)[number])) {
+        return t(`homeExpenseType.${typeKey}`);
+      }
+      return t(`operatingExpenseType.${typeKey}`);
+    },
+    [filterKind, t]
+  );
+
+  const vendorFilterOptions = useMemo(() => {
+    const supplierNames = suppliers
+      .filter((s) => s.isActive)
+      .map((s) => s.name.trim())
+      .filter(Boolean);
+    const names = new Set(supplierNames);
+    for (const row of list) {
+      const legacy = row.vendorName?.trim();
+      if (legacy && !names.has(legacy)) names.add(legacy);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [list, suppliers]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return list.filter((row) => {
+      if (filterKind === 'home' && !row.isHomeMixed) return false;
+      if (filterKind === 'operating' && row.isHomeMixed) return false;
+      if (filterType) {
+        const rowType = row.isHomeMixed ? row.homeExpenseType : row.operatingExpenseType;
+        if (rowType !== filterType) return false;
+      }
+      if (filterVendor && (row.vendorName?.trim() ?? '') !== filterVendor) return false;
+      if (!q) return true;
+      const haystack = [row.notes, row.invoiceReference, getExpenseTypeLabel(row)]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [list, search, filterKind, filterType, filterVendor, getExpenseTypeLabel]);
+
+  const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(filtered, [
     from,
     to,
+    search,
+    filterKind,
+    filterType,
+    filterVendor,
   ]);
   const totals = useMemo(
     () =>
-      list.reduce(
+      filtered.reduce(
         (acc, row) => ({
           amountIls: acc.amountIls + row.amountIls,
           recognizedIls: acc.recognizedIls + row.recognizedAmountIls,
         }),
         { amountIls: 0, recognizedIls: 0 }
       ),
-    [list]
+    [filtered]
   );
   const { widths, onResizeHandleMouseDown, tableMinWidth } = useResizableTableColumns(
     BUSINESS_EXPENSES_COLUMN_WIDTHS_KEY,
@@ -198,6 +276,8 @@ export function BusinessExpensesPage() {
         return t('businessExpenses.notes');
       case 'vendor':
         return t('businessExpenses.colVendor');
+      case 'invoice':
+        return t('businessExpenses.colInvoice');
       case 'amount':
         return t('businessExpenses.colAmount');
       case 'recognized':
@@ -443,6 +523,9 @@ export function BusinessExpensesPage() {
     if (!token) return;
     const params = buildPdfParams();
     pdfParamsRef.current = params;
+    setPdfDownloadFileName(
+      buildReportPdfFileName('reports.pdfFileName_businessExpenses', { from: params.from, to: params.to })
+    );
     setPdfOpen(true);
     setPdfLoading(true);
     setPdfError(null);
@@ -458,16 +541,6 @@ export function BusinessExpensesPage() {
       setPdfError(err instanceof Error ? err.message : 'Error');
     } finally {
       setPdfLoading(false);
-    }
-  };
-
-  const onDownloadPdf = async () => {
-    if (!token) return;
-    const params = pdfParamsRef.current ?? buildPdfParams();
-    try {
-      await businessExpensesApi.downloadJournalPdf(token, params.from || undefined, params.to || undefined);
-    } catch (err) {
-      setPdfError(err instanceof Error ? err.message : 'Error');
     }
   };
 
@@ -589,14 +662,6 @@ export function BusinessExpensesPage() {
     }
   };
 
-  const onDownloadAttachment = () => {
-    if (!attachmentUrlRef.current || !attachmentPreview.downloadFileName) return;
-    const a = document.createElement('a');
-    a.href = attachmentUrlRef.current;
-    a.download = attachmentPreview.downloadFileName;
-    a.click();
-  };
-
   const onPickDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -677,14 +742,19 @@ export function BusinessExpensesPage() {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const expenseTypeLabel = (row: BusinessExpense) => {
-    if (row.isHomeMixed && row.homeExpenseType) {
-      return t(`homeExpenseType.${row.homeExpenseType}`);
-    }
-    if (!row.isHomeMixed && row.operatingExpenseType) {
-      return t(`operatingExpenseType.${row.operatingExpenseType}`);
-    }
-    return '—';
+  const expenseTypeLabel = getExpenseTypeLabel;
+
+  const onFilterKindChange = (value: string) => {
+    setFilterKind(value);
+    if (!filterType) return;
+    const allowed = new Set<string>(
+      value === 'home'
+        ? HOME_EXPENSE_TYPES
+        : value === 'operating'
+          ? OPERATING_EXPENSE_TYPES
+          : [...HOME_EXPENSE_TYPES, ...OPERATING_EXPENSE_TYPES]
+    );
+    if (!allowed.has(filterType)) setFilterType('');
   };
 
   const allDocs = documents;
@@ -692,7 +762,7 @@ export function BusinessExpensesPage() {
   const canManageDocs = !saving;
 
   return (
-    <div className="page">
+    <div className="page business-expenses-page">
       {error && <div className="error-banner">{error}</div>}
       {message && <div className="success-banner">{message}</div>}
 
@@ -711,7 +781,7 @@ export function BusinessExpensesPage() {
                 disabled={loading}
                 onClick={() => void openPdfPreview()}
               >
-                {t('businessExpenses.exportPdf')}
+                {t('reports.viewPdf')}
               </button>
               <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>
                 {loading ? t('settings.saving') : t('businessExpenses.refresh')}
@@ -720,7 +790,51 @@ export function BusinessExpensesPage() {
           </div>
         }
         toolbarSecondary={
-          <>
+          <div className="be-list-toolbar">
+            <div className="dt-panel-filters be-list-filters">
+              <label className="be-list-filter be-list-filter--search">
+                <span>{t('businessExpenses.search')}</span>
+                <input
+                  type="search"
+                  autoComplete="off"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t('businessExpenses.searchPlaceholder')}
+                />
+              </label>
+              {homeOffice && (
+                <label className="be-list-filter be-list-filter--kind">
+                  <span>{t('businessExpenses.filterKind')}</span>
+                  <select value={filterKind} onChange={(e) => onFilterKindChange(e.target.value)}>
+                    <option value="">{t('businessExpenses.allKinds')}</option>
+                    <option value="home">{t('businessExpenses.kindHome')}</option>
+                    <option value="operating">{t('businessExpenses.kindOperating')}</option>
+                  </select>
+                </label>
+              )}
+              <label className="be-list-filter be-list-filter--type">
+                <span>{t('businessExpenses.filterType')}</span>
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                  <option value="">{t('businessExpenses.allTypes')}</option>
+                  {typeFilterOptions.map((typeKey) => (
+                    <option key={typeKey} value={typeKey}>
+                      {typeFilterLabel(typeKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="be-list-filter be-list-filter--vendor">
+                <span>{t('businessExpenses.filterVendor')}</span>
+                <select value={filterVendor} onChange={(e) => setFilterVendor(e.target.value)}>
+                  <option value="">{t('businessExpenses.allVendors')}</option>
+                  {vendorFilterOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <ReportDateRangePicker
               from={from}
               to={to}
@@ -731,10 +845,8 @@ export function BusinessExpensesPage() {
                 setDatePreset(preset);
               }}
             />
-            <p className="muted dt-panel__hint" style={{ margin: 0, width: '100%' }}>
-              {homeOffice ? t('businessExpenses.hintHome') : t('businessExpenses.hintOffice')}
-            </p>
-          </>
+            <p className="muted be-list-hint">{homeOffice ? t('businessExpenses.hintHome') : t('businessExpenses.hintOffice')}</p>
+          </div>
         }
         summary={
           total > 0 ? (
@@ -793,6 +905,7 @@ export function BusinessExpensesPage() {
                   <td className={cellClass('type')}>{expenseTypeLabel(row)}</td>
                   <td className={cellClass('notes')}>{row.notes ?? '—'}</td>
                   <td className={`${cellClass('vendor')} bidi-auto`}>{row.vendorName ?? '—'}</td>
+                  <td className={`${cellClass('invoice')} bidi-auto`}>{row.invoiceReference ?? '—'}</td>
                   <td className={cellClass('amount')}>{formatIls(row.amountIls)}</td>
                   <td className={cellClass('recognized')}>
                     {formatIls(row.recognizedAmountIls)}
@@ -1134,7 +1247,7 @@ export function BusinessExpensesPage() {
         loading={pdfLoading}
         error={pdfError}
         onClose={closePdf}
-        onDownload={() => void onDownloadPdf()}
+        downloadFileName={pdfDownloadFileName}
       />
 
       <DocumentPdfPreviewModal
@@ -1145,8 +1258,8 @@ export function BusinessExpensesPage() {
         error={attachmentPreview.error}
         isImage={attachmentPreview.isImage}
         downloadLabel={t('settings.downloadFile')}
+        downloadFileName={attachmentPreview.downloadFileName}
         onClose={closeAttachmentPreview}
-        onDownload={attachmentPreview.url ? onDownloadAttachment : undefined}
       />
 
       <ConfirmDialog

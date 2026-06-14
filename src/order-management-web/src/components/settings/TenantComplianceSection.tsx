@@ -36,6 +36,7 @@ export function TenantComplianceSection({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewDownloadFileName, setPreviewDownloadFileName] = useState('');
 
   const uploadedCount = summary?.complianceDocuments.length ?? 0;
 
@@ -49,6 +50,8 @@ export function TenantComplianceSection({
   }, []);
 
   const openPreview = async (kind: ComplianceDocumentKind) => {
+    const doc = findComplianceDoc(summary, kind);
+    setPreviewDownloadFileName(doc?.originalFileName ?? `${kind}.pdf`);
     setPreviewKind(kind);
     setPreviewLoading(true);
     setPreviewError(null);
@@ -222,15 +225,7 @@ export function TenantComplianceSection({
         loading={previewLoading}
         error={previewError}
         onClose={closePreview}
-        onDownload={
-          previewKind && findComplianceDoc(summary, previewKind)
-            ? () =>
-                void download(
-                  previewKind,
-                  findComplianceDoc(summary, previewKind)!.originalFileName
-                )
-            : undefined
-        }
+        downloadFileName={previewDownloadFileName}
       />
 
       <ConfirmDialog
