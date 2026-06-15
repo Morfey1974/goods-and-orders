@@ -51,6 +51,11 @@
   border-radius: 6px;
 }
 
+.documents-toolbar select.documents-filter-customer {
+  min-width: 10rem;
+  max-width: 16rem;
+}
+
 .documents-import-input {
   display: none;
 }

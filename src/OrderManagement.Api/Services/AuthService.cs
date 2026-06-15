@@ -29,7 +29,7 @@ public class AuthService(
             Email = email,
             DefaultLanguage = NormalizeLanguage(request.DefaultLanguage),
             TaxRegime = TaxRegime.Patur,
-            SubscriptionStatus = SubscriptionStatus.Trial,
+            SubscriptionStatus = SubscriptionStatus.Active,
             RegisteredAt = now,
             TrialEndsAt = now.AddDays(_subscriptionSettings.TrialDays),
             CreatedAt = now,

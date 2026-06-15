@@ -1,0 +1,137 @@
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.dashboard-centered {
+  width: 100%;
+  max-width: 72rem;
+  text-align: center;
+}
+
+.dashboard-welcome-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  max-width: 100%;
+  margin-bottom: 0.25rem;
+  direction: ltr;
+}
+
+.dashboard-logo {
+  width: 3.75rem;
+  height: 3.75rem;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.dashboard-welcome {
+  margin: 0;
+  font-size: 1.15rem;
+  text-align: start;
+}
+
+.dashboard-period {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.dashboard-kpi-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 5.5rem;
+  padding: 1rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.dashboard-kpi-card .label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.dashboard-kpi-card .value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dashboard-page .dashboard-open-docs-panel {
+  align-self: stretch;
+  flex: 0 0 auto;
+  margin-top: 0.75rem;
+  margin-inline: auto;
+  min-height: 220px;
+}
+
+.dashboard-page .dashboard-open-docs-panel .dt-panel__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.dashboard-receivable {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dashboard-receivable strong {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.dashboard-open-docs-empty {
+  margin: 0.5rem 0.25rem 2rem;
+  padding: 0 0.25rem;
+}
+
+.dashboard-open-table {
+  width: 100%;
+}
+
+.dashboard-open-table .num {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.dashboard-open-table .doc-status {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.dashboard-open-table .doc-status.draft {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.dashboard-open-table .doc-status.sent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.dashboard-open-table .doc-status.open {
+  background: #fee2e2;
+  color: var(--open);
+}

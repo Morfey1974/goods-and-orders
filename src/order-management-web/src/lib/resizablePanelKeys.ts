@@ -48,6 +48,7 @@ export const RESIZABLE_PANEL_KEYS = {
   operatingExpensesReportPanel: 'ordermgmt.operating-expenses-report-panel-size',
   form1342ReportPanel: 'ordermgmt.form1342-report-panel-size',
   vendorServicesReportPanel: 'ordermgmt.vendor-services-report-panel-size',
+  dashboardOpenDocsPanel: 'ordermgmt.dashboard-open-docs-panel-size',
 } as const;
 
 export const DOCUMENT_WIZARD_RESIZE: ResizablePanelConfig = {
@@ -287,4 +288,13 @@ export const VENDOR_SERVICES_REPORT_PANEL_RESIZE: ResizablePanelConfig = {
   storageKey: RESIZABLE_PANEL_KEYS.vendorServicesReportPanel,
   ...LIST_PANEL_DEFAULT,
   defaultSize: { width: 1280, height: 600 },
+};
+
+export const DASHBOARD_OPEN_DOCS_PANEL_RESIZE: ResizablePanelConfig = {
+  storageKey: RESIZABLE_PANEL_KEYS.dashboardOpenDocsPanel,
+  minWidth: 560,
+  minHeight: 220,
+  defaultSize: { width: 2400, height: 420 },
+  expandToParent: true,
+  resizeWidthFromCenter: true,
 };

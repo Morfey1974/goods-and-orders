@@ -6,6 +6,7 @@ import {
   loadModalSize,
   saveModalSize,
   resolveMaxPanelWidth,
+  resolveMaxPanelHeight,
   type ModalSizeLimits,
   type ResizablePanelConfig,
 } from '../lib/modalSize';
@@ -33,7 +34,8 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
     const el = panelRef.current;
     if (!el) return;
     const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
-    saveModalSize(config.storageKey, el.offsetWidth, el.offsetHeight, limits, { maxWidthPx });
+    const maxHeightPx = resolveMaxPanelHeight(el, limits, config.expandToParent);
+    saveModalSize(config.storageKey, el.offsetWidth, el.offsetHeight, limits, { maxWidthPx, maxHeightPx });
   }, [config, limits]);
 
   useLayoutEffect(() => {
@@ -42,7 +44,8 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
     if (!el) return;
 
     const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
-    const sizeOverrides = { maxWidthPx };
+    const maxHeightPx = resolveMaxPanelHeight(el, limits, config.expandToParent);
+    const sizeOverrides = { maxWidthPx, maxHeightPx };
     const saved = loadModalSize(config.storageKey, limits, config.defaultSize, sizeOverrides);
     const hasStored = (() => {
       try {
@@ -96,11 +99,12 @@ export function useResizablePanel(open: boolean, config: ResizablePanelConfig | 
         config.resizeWidthFromCenter ?? config.expandToParent ?? false;
       const widthDelta = widthFromCenter ? dx * 2 : dx;
       const maxWidthPx = resolveMaxPanelWidth(el, limits, config.expandToParent);
+      const maxHeightPx = resolveMaxPanelHeight(el, limits, config.expandToParent);
       const next = clampModalSize(
         resizeStartRef.current.w + widthDelta,
         resizeStartRef.current.h + dy,
         limits,
-        { maxWidthPx }
+        { maxWidthPx, maxHeightPx }
       );
       el.style.width = `${next.width}px`;
       el.style.height = `${next.height}px`;

@@ -49,6 +49,19 @@ export function resolveMaxPanelWidth(
   return window.innerWidth * (limits.maxWidthRatio ?? DEFAULT_MAX_W);
 }
 
+export function resolveMaxPanelHeight(
+  el: HTMLElement | null,
+  limits: ModalSizeLimits,
+  expandToParent?: boolean
+): number {
+  if (expandToParent && el) {
+    const top = el.getBoundingClientRect().top;
+    const available = window.innerHeight - top - 24;
+    return Math.max(limits.minHeight, Math.floor(available));
+  }
+  return window.innerHeight * (limits.maxHeightRatio ?? DEFAULT_MAX_H);
+}
+
 export function loadModalSize(
   storageKey: string,
   limits: ModalSizeLimits,

@@ -166,6 +166,8 @@ export function DocumentsPage() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterCustomerId, setFilterCustomerId] = useState('');
+  const [customerFilterOptions, setCustomerFilterOptions] = useState<{ id: string; name: string }[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pdfPreviewDoc, setPdfPreviewDoc] = useState<Document | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
@@ -182,17 +184,20 @@ export function DocumentsPage() {
     if (search.trim()) params.search = search.trim();
     if (filterType) params.documentType = filterType;
     if (filterStatus) params.status = filterStatus;
+    if (filterCustomerId) params.customerId = filterCustomerId;
     documentsApi
       .list(token, params)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [token, search, filterType, filterStatus]);
+  }, [token, search, filterType, filterStatus, filterCustomerId]);
 
   useEffect(() => {
     if (!token) return;
-    catalogApi.customers.list(token, true).then((c) =>
-      setCustomers(c.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })))
-    );
+    catalogApi.customers.list(token, true).then((c) => {
+      const sorted = [...c].sort((a, b) => a.name.localeCompare(b.name, i18n.language));
+      setCustomerFilterOptions(sorted.map((x) => ({ id: x.id, name: x.name })));
+      setCustomers(sorted.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })));
+    });
     catalogApi.products.list(token, undefined, true).then((p) =>
       setProducts(p.filter((x) => x.isActive))
     );
@@ -200,9 +205,11 @@ export function DocumentsPage() {
 
   const reloadCustomers = useCallback(() => {
     if (!token) return;
-    catalogApi.customers.list(token, true).then((c) =>
-      setCustomers(c.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })))
-    );
+    catalogApi.customers.list(token, true).then((c) => {
+      const sorted = [...c].sort((a, b) => a.name.localeCompare(b.name, i18n.language));
+      setCustomerFilterOptions(sorted.map((x) => ({ id: x.id, name: x.name })));
+      setCustomers(sorted.filter((x) => x.isActive).map((x) => ({ id: x.id, name: x.name })));
+    });
   }, [token]);
 
   useEffect(() => {
@@ -316,7 +323,7 @@ export function DocumentsPage() {
 
   const { page, setPage, pageSize, setPageSize, pageCount, pageItems, total } = useDataTablePagination(
     documentsWithMonth,
-    [search, filterType, filterStatus]
+    [search, filterType, filterStatus, filterCustomerId]
   );
 
   const pageGroups = useMemo(() => {
@@ -749,6 +756,18 @@ export function DocumentsPage() {
               <option value="Quote">{t('documents.types.Quote')}</option>
               <option value="ChargeInvoice">{t('documents.types.ChargeInvoice')}</option>
               <option value="Receipt">{t('documents.types.Receipt')}</option>
+            </select>
+            <select
+              className="documents-filter-customer"
+              value={filterCustomerId}
+              onChange={(e) => setFilterCustomerId(e.target.value)}
+            >
+              <option value="">{t('documents.allCustomers')}</option>
+              {customerFilterOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">{t('documents.allStatuses')}</option>

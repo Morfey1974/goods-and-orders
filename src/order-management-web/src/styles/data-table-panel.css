@@ -541,7 +541,8 @@
 .documents-page,
 .products-catalog-page,
 .inventory-page,
-.warehouse-page {
+.warehouse-page,
+.dashboard-page {
   width: 100%;
   max-width: none;
   box-sizing: border-box;
